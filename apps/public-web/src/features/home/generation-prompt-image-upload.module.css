@@ -1,0 +1,82 @@
+.uploadBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-top: 1px solid #f1f2f4;
+  padding-top: 0.7rem;
+}
+.uploadCopy {
+  display: grid;
+  min-width: 0;
+  gap: 0.15rem;
+}
+.uploadTitle {
+  color: #111827;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.uploadText {
+  overflow: hidden;
+  color: #9ca3af;
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.uploadActionGroup {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.45rem;
+}
+.iconButton {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  cursor: pointer;
+  place-items: center;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.8rem;
+  background: #ffffff;
+  color: #374151;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+.iconButton:hover {
+  border-color: #d1d5db;
+  background: #f9fafb;
+  color: #111827;
+}
+.iconButton svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+.sourceThumb {
+  position: relative;
+  width: 2.25rem;
+  height: 2.25rem;
+}
+.sourceThumb img {
+  width: 100%;
+  height: 100%;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.8rem;
+  object-fit: cover;
+}
+.sourceThumb button {
+  position: absolute;
+  top: -0.35rem;
+  right: -0.35rem;
+  display: grid;
+  width: 1rem;
+  height: 1rem;
+  place-items: center;
+  border-radius: 999px;
+  background: #111827;
+  color: #ffffff;
+  font-size: 0.7rem;
+  line-height: 1;
+}
+@media (max-width: 640px) {
+  .uploadBar { align-items: flex-start; }
+  .uploadText { white-space: normal; }
+}

@@ -1,19 +1,25 @@
 import type { Metadata } from "next";
+import { connection } from "next/server";
 import "./globals.css";
+import { buildPublicMetadata } from "@/lib/site-metadata";
 
-export const metadata: Metadata = {
-  title: "Commercial Studio",
-  description: "用户端生图与漫画创作工作台",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  return buildPublicMetadata();
+}
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  await connection();
   return (
-    <html lang="zh-CN" className="h-full antialiased">
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html
+      lang="zh-CN"
+      className="h-full antialiased"
+      suppressHydrationWarning
+    >
+      <body className="min-h-full">{children}</body>
     </html>
   );
 }

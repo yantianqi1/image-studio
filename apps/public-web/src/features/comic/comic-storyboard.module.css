@@ -1,0 +1,154 @@
+.stepTrack {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 14px 20px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.stepItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: #9ca3af;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.stepItem span {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: #f3f4f6;
+  color: #9ca3af;
+  font-size: 11px;
+}
+
+.stepItem[data-state="active"],
+.stepItem[data-state="done"] {
+  color: #111827;
+}
+
+.stepItem[data-state="active"] span,
+.stepItem[data-state="done"] span {
+  background: #111827;
+  color: #fff;
+}
+
+.stepItem p {
+  overflow: hidden;
+  margin: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.storyboardList {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  align-content: start;
+  gap: 12px;
+  overflow-y: auto;
+  padding: 18px;
+}
+
+.shotCard {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  border: 1px solid #edf2f7;
+  border-radius: 18px;
+  background: #fff;
+  padding: 10px;
+  text-align: left;
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.shotCard:hover,
+.shotCardActive {
+  border-color: #c7d2fe;
+  background: #f8fafc;
+}
+
+.shotPrompt {
+  display: grid;
+  overflow: hidden;
+  gap: 6px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #0f172a;
+  padding: 10px 12px;
+}
+
+.shotPrompt span {
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.shotPrompt p {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  color: #f8fafc;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.shotCopy {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 7px;
+}
+
+.shotTitleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.shotTitleRow span {
+  color: #9ca3af;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.shotTitleRow strong {
+  margin-right: auto;
+  color: #111827;
+  font-size: 13px;
+}
+
+.shotCopy p {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  color: #4b5563;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.shotCopy small {
+  color: #6b7280;
+}
+
+.panelFooter {
+  padding: 14px 20px 18px;
+  border-top: 1px solid #f1f5f9;
+}
+
+@media (max-width: 760px) {
+  .stepTrack {
+    grid-template-columns: 1fr;
+  }
+}

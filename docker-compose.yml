@@ -10,7 +10,211 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d commercial_studio"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  api:
+    image: python:3.11-slim
+    container_name: commercial-studio-api
+    working_dir: /workspace
+    env_file:
+      - path: .env.example
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/commercial_studio
+      GENERATED_ASSETS_DIR: /workspace/generated-assets
+    command:
+      - /bin/sh
+      - -lc
+      - |
+        pip install --no-cache-dir -r apps/api/requirements.txt -r apps/worker/requirements.txt \
+        && uvicorn apps.api.app.main:app --host 0.0.0.0 --port 7800
+    volumes:
+      - ./:/workspace
+      - generated_assets_data:/workspace/generated-assets
+    ports:
+      - "7800:7800"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker:
+    image: python:3.11-slim
+    container_name: commercial-studio-worker
+    working_dir: /workspace
+    env_file:
+      - path: .env.example
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/commercial_studio
+      GENERATED_ASSETS_DIR: /workspace/generated-assets
+    command:
+      - /bin/sh
+      - -lc
+      - |
+        pip install --no-cache-dir -r apps/api/requirements.txt -r apps/worker/requirements.txt \
+        && python -m apps.worker.worker.main
+    volumes:
+      - ./:/workspace
+      - generated_assets_data:/workspace/generated-assets
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_started
+
+  public-web:
+    image: node:20-bookworm
+    container_name: commercial-studio-public-web
+    working_dir: /workspace
+    environment:
+      API_BASE_URL: http://api:7800
+    command:
+      - /bin/sh
+      - -lc
+      - |
+        corepack enable \
+        && pnpm install \
+        && pnpm --filter public-web dev --port 7700 --hostname 0.0.0.0
+    volumes:
+      - ./:/workspace
+      - pnpm_store:/root/.local/share/pnpm/store
+    ports:
+      - "7700:7700"
+    depends_on:
+      api:
+        condition: service_started
+
+  admin-web:
+    image: node:20-bookworm
+    container_name: commercial-studio-admin-web
+    working_dir: /workspace
+    environment:
+      API_BASE_URL: http://api:7800
+    command:
+      - /bin/sh
+      - -lc
+      - |
+        corepack enable \
+        && pnpm install \
+        && pnpm --filter admin-web dev --port 7701 --hostname 0.0.0.0
+    volumes:
+      - ./:/workspace
+      - pnpm_store:/root/.local/share/pnpm/store
+    ports:
+      - "7701:7701"
+    depends_on:
+      api:
+        condition: service_started
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: commercial-studio-nginx
+    command:
+      - /bin/sh
+      - -lc
+      - |
+        cat <<'EOF' >/etc/nginx/conf.d/default.conf
+        server {
+          listen 80;
+          server_name _;
+
+          location = /health {
+            proxy_pass http://api:7800/health;
+            proxy_set_header Host $$host;
+            proxy_set_header X-Real-IP $$remote_addr;
+            proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $$scheme;
+          }
+
+          location /api/public/ {
+            proxy_pass http://api:7800/api/public/;
+            proxy_set_header Host $$host;
+            proxy_set_header X-Real-IP $$remote_addr;
+            proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $$scheme;
+          }
+
+          location /api/admin/ {
+            proxy_pass http://api:7800/api/admin/;
+            proxy_set_header Host $$host;
+            proxy_set_header X-Real-IP $$remote_addr;
+            proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $$scheme;
+          }
+
+          location /_next/ {
+            proxy_pass http://public-web:7700/_next/;
+            proxy_set_header Host $$host;
+            proxy_set_header X-Real-IP $$remote_addr;
+            proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $$scheme;
+          }
+
+          location / {
+            proxy_pass http://public-web:7700/;
+            proxy_set_header Host $$host;
+            proxy_set_header X-Real-IP $$remote_addr;
+            proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $$scheme;
+          }
+        }
+
+        server {
+          listen 81;
+          server_name _;
+
+          location /api/admin/ {
+            proxy_pass http://api:7800/api/admin/;
+            proxy_set_header Host $$host;
+            proxy_set_header X-Real-IP $$remote_addr;
+            proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $$scheme;
+          }
+
+          location /health {
+            proxy_pass http://api:7800/health;
+            proxy_set_header Host $$host;
+            proxy_set_header X-Real-IP $$remote_addr;
+            proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $$scheme;
+          }
+
+          location /_next/ {
+            proxy_pass http://admin-web:7701/_next/;
+            proxy_set_header Host $$host;
+            proxy_set_header X-Real-IP $$remote_addr;
+            proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $$scheme;
+          }
+
+          location / {
+            proxy_pass http://admin-web:7701/;
+            proxy_set_header Host $$host;
+            proxy_set_header X-Real-IP $$remote_addr;
+            proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $$scheme;
+          }
+        }
+        EOF
+        nginx -g 'daemon off;'
+    ports:
+      - "8080:80"
+      - "8081:81"
+    depends_on:
+      public-web:
+        condition: service_started
+      admin-web:
+        condition: service_started
+      api:
+        condition: service_started
 
 volumes:
   postgres_data:
-
+  generated_assets_data:
+  pnpm_store:

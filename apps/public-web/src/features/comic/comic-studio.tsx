@@ -1,0 +1,263 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+
+import { AppShell } from "@/features/shell/app-shell";
+import { publicApi, type ComicProject, type ComicTaskImageResult, type TaskItem } from "@/lib/public-api";
+import { type ResourceState, useApiResource } from "@/lib/use-api-resource";
+
+import { DEFAULT_COMIC_STYLE_PRESET, type ComicStylePresetId } from "./comic-style-presets";
+import { deriveComicWorkspaceStatus, deriveComicWorkspaceStatusFromTask, type ComicWorkspaceStatus } from "./comic-state";
+import { latestProject, type StoryboardShot } from "./comic-utils";
+import {
+  buildShots,
+  buildPersistedWorkflowEvents,
+  buildTaskInputPayload,
+  derivePersistentWorkspaceStatus,
+  getPreviewError,
+  selectLatestTask,
+  shouldAutoRefreshComic,
+  TASK_TYPE_SCENE_RENDER,
+  taskStageEventKey,
+  taskStageEventDescription,
+  useComicTaskImageResults,
+  waitForCharacterReferences,
+  waitForComicTask,
+  waitForPageImages,
+} from "./comic-studio-helpers";
+import { buildWorkflowEvent, type ComicWorkflowEvent, type ComicWorkflowEventKey } from "./comic-workflow-events";
+import { MangaPreviewPanel } from "./manga-preview-panel";
+import { MangaProjectPanel } from "./manga-project-panel";
+import { StoryboardPlanningPanel } from "./storyboard-planning-panel";
+import styles from "./comic-workspace.module.css";
+
+const AUTO_REFRESH_INTERVAL_MS = 3000;
+
+type CreateState =
+  | Readonly<{ status: "idle" }>
+  | Readonly<{ status: "submitting" }>
+  | Readonly<{ status: "error"; message: string }>
+  | Readonly<{ status: "success"; title: string; projectId: string }>;
+
+type StudioModel = Readonly<{
+  title: string;
+  premise: string;
+  stylePresetId: ComicStylePresetId;
+  workflowEvents: readonly ComicWorkflowEvent[];
+  createState: CreateState;
+  projectsState: ResourceState<readonly ComicProject[]>;
+  tasksState: ResourceState<readonly TaskItem[]>;
+  imageResultsState: ResourceState<readonly ComicTaskImageResult[]>;
+  shots: readonly StoryboardShot[];
+  selectedShotId: string | null;
+  selectedShot: StoryboardShot | null;
+  projectTitle: string;
+  workspaceStatus: string;
+  previewError?: string;
+  setTitle: (value: string) => void;
+  setPremise: (value: string) => void;
+  setStylePresetId: (value: ComicStylePresetId) => void;
+  setSelectedShotId: (value: string | null) => void;
+  handleCreateProject: (event: React.FormEvent<HTMLFormElement>) => Promise<void>;
+  handleRefresh: () => void;
+}>;
+
+export function ComicStudio() {
+  const studio = useComicStudio();
+
+  return (
+    <AppShell activeHref="/comic" title="漫画工作室" workspaceMode>
+      <div className={styles.workspace}>
+        <MangaProjectPanel
+          title={studio.title}
+          premise={studio.premise}
+          stylePresetId={studio.stylePresetId}
+          workflowStatus={studio.workspaceStatus}
+          workflowError={studio.previewError}
+          workflowEvents={studio.workflowEvents}
+          createState={studio.createState}
+          onTitleChange={studio.setTitle}
+          onPremiseChange={studio.setPremise}
+          onStylePresetChange={studio.setStylePresetId}
+          onCreateProject={studio.handleCreateProject}
+        />
+        <StoryboardPlanningPanel
+          shots={studio.shots}
+          selectedShotId={studio.selectedShotId}
+          status={studio.workspaceStatus}
+          onSelectShot={studio.setSelectedShotId}
+        />
+        <MangaPreviewPanel
+          shots={studio.shots}
+          selectedShot={studio.selectedShot}
+          projectTitle={studio.projectTitle}
+          status={studio.workspaceStatus}
+          errorMessage={studio.previewError}
+          onSelectShot={studio.setSelectedShotId}
+          onRetry={studio.handleRefresh}
+        />
+      </div>
+    </AppShell>
+  );
+}
+
+function useComicStudio(): StudioModel {
+  const [title, setTitle] = useState("");
+  const [premise, setPremise] = useState("");
+  const [stylePresetId, setStylePresetId] = useState<ComicStylePresetId>(DEFAULT_COMIC_STYLE_PRESET);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [selectedShotId, setSelectedShotId] = useState<string | null>(null);
+  const [createState, setCreateState] = useState<CreateState>({ status: "idle" });
+  const [workflowStatus, setWorkflowStatus] = useState<ComicWorkspaceStatus | null>(null);
+  const [workflowError, setWorkflowError] = useState<string | undefined>();
+  const [workflowEvents, setWorkflowEvents] = useState<readonly ComicWorkflowEvent[]>([]);
+
+  const projectsState = useApiResource(() => publicApi.getComicProjects(), refreshKey);
+  const tasksState = useApiResource(() => publicApi.getComicTasks(), refreshKey);
+  const latestTask = useMemo(() => selectLatestTask(tasksState), [tasksState]);
+  const imageResultsState = useComicTaskImageResults(latestTask?.id ?? null, refreshKey);
+  const shots = useMemo(
+    () => buildShots(tasksState, imageResultsState),
+    [tasksState, imageResultsState],
+  );
+  const selectedShot = shots.find((shot) => shot.id === selectedShotId) ?? shots[0] ?? null;
+  const projectTitle = resolveProjectTitleForExport(projectsState, createState, title);
+  const baseWorkspaceStatus = deriveComicWorkspaceStatus(projectsState, tasksState, createState.status);
+  const persistedWorkspaceStatus = derivePersistentWorkspaceStatus(baseWorkspaceStatus, latestTask, imageResultsState);
+  const workspaceStatus = workflowStatus ?? persistedWorkspaceStatus;
+  const persistedWorkflowEvents = useMemo(
+    () => buildPersistedWorkflowEvents(latestTask, imageResultsState),
+    [latestTask, imageResultsState],
+  );
+  const visibleWorkflowEvents = workflowEvents.length > 0 ? workflowEvents : persistedWorkflowEvents;
+  const previewError = workflowError ?? getPreviewError(projectsState, tasksState, imageResultsState);
+
+  useEffect(() => {
+    if (!shouldAutoRefreshComic(workspaceStatus)) {
+      return undefined;
+    }
+    const timer = window.setInterval(handleRefresh, AUTO_REFRESH_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [workspaceStatus]);
+
+  async function handleCreateProject(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setCreateState({ status: "submitting" });
+    setWorkflowError(undefined);
+    setWorkflowStatus("submitting");
+    setWorkflowEvents([buildWorkflowEvent("submit_project", 1)]);
+
+    try {
+      const result = await publicApi.createComicProject({
+        title,
+        sourceText: premise,
+        stylePrompt: stylePresetId,
+      });
+      setWorkflowStatus("project_created_no_task");
+      appendWorkflowEvent("project_created");
+      const task = await publicApi.createComicTask({
+        project_id: result.id,
+        task_type: TASK_TYPE_SCENE_RENDER,
+        input_payload: buildTaskInputPayload(premise, stylePresetId),
+      });
+      setTitle("");
+      setPremise("");
+      setStylePresetId(DEFAULT_COMIC_STYLE_PRESET);
+      setCreateState({ status: "success", title: result.title, projectId: result.id });
+      handleRefresh();
+      await runComicWorkflow(String(task.id));
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "漫创流程失败";
+      setWorkflowStatus("failed");
+      setWorkflowError(message);
+      appendWorkflowEvent("failed", message);
+      setCreateState({ status: "error", message });
+    }
+  }
+
+  async function runComicWorkflow(taskId: string) {
+    setWorkflowStatus("task_queued");
+    appendWorkflowEvent("task_queued");
+    await waitForComicTask(taskId, appendTaskStageEvent);
+    setWorkflowStatus("character_reference_generating");
+    appendWorkflowEvent("reference_generating", "后端 worker 正在自动创建并处理角色参考图任务。");
+    await waitForCharacterReferences(taskId);
+    setWorkflowStatus("character_reference_ready");
+    appendWorkflowEvent("reference_ready");
+    setWorkflowStatus("page_image_generating");
+    appendWorkflowEvent("page_generating", "后端 worker 正在自动创建并处理漫画页面图片任务。");
+    await waitForPageImages(taskId);
+    setWorkflowStatus("completed");
+    appendWorkflowEvent("completed");
+    handleRefresh();
+  }
+
+  function appendWorkflowEvent(key: ComicWorkflowEventKey, description?: string) {
+    setWorkflowEvents((current) => {
+      const existingIndex = current.findIndex((event) => event.key === key);
+      if (key !== "failed" && existingIndex >= 0 && !description) {
+        return current;
+      }
+      if (key !== "failed" && existingIndex >= 0) return replaceWorkflowEvent(current, existingIndex, description);
+      return [...current, buildWorkflowEvent(key, current.length + 1, description)];
+    });
+  }
+
+  function appendTaskStageEvent(task: TaskItem) {
+    setWorkflowStatus(deriveComicWorkspaceStatusFromTask(task));
+    const eventKey = taskStageEventKey(task);
+    if (eventKey) appendWorkflowEvent(eventKey, taskStageEventDescription(task));
+  }
+
+  function handleRefresh() {
+    setRefreshKey((current) => current + 1);
+  }
+
+  return {
+    title,
+    premise,
+    stylePresetId,
+    workflowEvents: visibleWorkflowEvents,
+    createState,
+    projectsState,
+    tasksState,
+    imageResultsState,
+    shots,
+    selectedShotId: selectedShot?.id ?? null,
+    selectedShot,
+    projectTitle,
+    workspaceStatus,
+    previewError,
+    setTitle,
+    setPremise,
+    setStylePresetId,
+    setSelectedShotId,
+    handleCreateProject,
+    handleRefresh,
+  };
+}
+
+function resolveProjectTitleForExport(
+  projectsState: ResourceState<readonly ComicProject[]>,
+  createState: CreateState,
+  draftTitle: string,
+): string {
+  if (projectsState.status === "ready") {
+    const project = latestProject(projectsState.data);
+    if (project) return project.title;
+  }
+  if (createState.status === "success") return createState.title;
+  return draftTitle;
+}
+
+function replaceWorkflowEvent(
+  events: readonly ComicWorkflowEvent[],
+  index: number,
+  description?: string,
+): readonly ComicWorkflowEvent[] {
+  const event = events[index];
+  if (!event || !description || event.description === description) {
+    return events;
+  }
+  return events.map((item, itemIndex) => (itemIndex === index ? { ...item, description } : item));
+}

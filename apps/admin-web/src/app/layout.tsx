@@ -1,19 +1,25 @@
 import type { Metadata } from "next";
+import { connection } from "next/server";
 import "./globals.css";
+import { buildAdminMetadata } from "@/lib/site-metadata";
 
-export const metadata: Metadata = {
-  title: "Commercial Studio Admin",
-  description: "商业化后台运营系统",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  return buildAdminMetadata();
+}
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  await connection();
   return (
-    <html lang="zh-CN" className="h-full antialiased">
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html
+      lang="zh-CN"
+      className="h-full antialiased"
+      suppressHydrationWarning
+    >
+      <body className="min-h-full">{children}</body>
     </html>
   );
 }

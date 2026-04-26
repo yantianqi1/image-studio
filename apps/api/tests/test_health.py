@@ -1,10 +1,5 @@
-from fastapi.testclient import TestClient
-
-from apps.api.app.main import app
-
-
-def test_health_returns_standard_response():
-    response = TestClient(app).get("/health")
+def test_health_returns_standard_response(client):
+    response = client.get("/health")
 
     assert response.status_code == 200
     assert response.json() == {
@@ -17,10 +12,8 @@ def test_health_returns_standard_response():
         "error": None,
         "meta": {},
     }
-
-
-def test_ready_returns_standard_response():
-    response = TestClient(app).get("/ready")
+def test_ready_returns_standard_response(client):
+    response = client.get("/ready")
 
     assert response.status_code == 200
     assert response.json()["data"]["status"] == "ok"

@@ -3,15 +3,15 @@
   "private": true,
   "packageManager": "pnpm@10.8.1",
   "scripts": {
-    "dev:public": "pnpm --filter public-web dev -- --port 7700",
-    "dev:admin": "pnpm --filter admin-web dev -- --port 7701",
+    "dev:public": "pnpm --filter public-web dev --port 7700",
+    "dev:admin": "pnpm --filter admin-web dev --port 7701",
     "build:public": "pnpm --filter public-web build",
     "build:admin": "pnpm --filter admin-web build",
     "lint:public": "pnpm --filter public-web exec eslint .",
     "lint:admin": "pnpm --filter admin-web exec eslint .",
+    "test:e2e": "python3 tests/e2e/connectivity_e2e.py",
     "typecheck:public": "pnpm --filter public-web exec tsc --noEmit",
     "typecheck:admin": "pnpm --filter admin-web exec tsc --noEmit",
     "typecheck:packages": "pnpm --filter @commercial-studio/types build && pnpm --filter @commercial-studio/sdk build && pnpm --filter @commercial-studio/ui build"
   }
 }
-

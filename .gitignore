@@ -4,6 +4,7 @@ dist
 .turbo
 .pnpm-store
 *.tsbuildinfo
+*.db
 
 .env
 .env.local
