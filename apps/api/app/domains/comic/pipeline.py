@@ -19,13 +19,12 @@ from apps.api.app.domains.comic.prompt_composer import compose_panel_prompts
 from apps.api.app.domains.comic.repository import create_character_cards, create_panel_prompts, create_story_analysis, create_storyboard, mark_task_completed, update_task_stage
 from apps.api.app.domains.comic.structured_outputs import CharacterBible, StoryAnalysis, Storyboard
 from apps.api.app.domains.comic.story_segments import build_story_segments, parse_target_image_count
-from apps.api.app.domains.comic.style_presets import get_style_preset
+from apps.api.app.domains.comic.style_presets import DEFAULT_STYLE_PRESET_ID, normalize_style_preset_id
 from apps.api.app.domains.llm import openai_chat
 from apps.api.app.domains.llm.client_provider import ClientProviderConfig, client_provider_config_from_mapping
 
 COMIC_LLM_SCHEMA_INVALID_ERROR_CODE = "comic_llm_schema_invalid"
 COMIC_LLM_NOT_CONFIGURED_ERROR_CODE = "comic_llm_not_configured"
-DEFAULT_STYLE_PRESET = "neo_chinese"
 DEFAULT_PANELS_PER_IMAGE = 4
 DEFAULT_TARGET_IMAGE_COUNT = 1
 DEFAULT_IMAGE_MODEL_CODE = "gpt-image-2"
@@ -75,8 +74,7 @@ def parse_pipeline_inputs(task: ComicTask) -> PipelineInputs:
     source_text = str(payload.get("source_text") or "").strip()
     if not source_text:
         raise AppError(code="comic_source_text_required", message="comic source_text is required", status_code=422)
-    style_preset = str(payload.get("style_preset") or DEFAULT_STYLE_PRESET).strip()
-    get_style_preset(style_preset)
+    style_preset = normalize_style_preset_id(payload.get("style_preset") or DEFAULT_STYLE_PRESET_ID)
     target_image_count = parse_target_image_count(payload.get("target_image_count"), source_text=source_text)
     story_segments = build_story_segments(source_text, target_image_count=target_image_count)
     return PipelineInputs(

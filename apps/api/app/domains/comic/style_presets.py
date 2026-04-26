@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from apps.api.app.core.errors import AppError
@@ -13,6 +14,10 @@ class ComicStylePreset:
     best_for: str
     base_prompt: str
     negative_prompt: str
+
+
+DEFAULT_STYLE_PRESET_ID = "neo_chinese"
+ALIAS_SEPARATOR_PATTERN = re.compile(r"[\s\-_]+")
 
 
 STYLE_PRESETS = {
@@ -132,8 +137,40 @@ STYLE_PRESETS = {
 }
 
 
+def normalize_style_preset_id(style_preset_id: object | None) -> str:
+    raw_value = normalize_raw_style_value(style_preset_id)
+    if not raw_value:
+        return DEFAULT_STYLE_PRESET_ID
+    preset_id = build_style_preset_aliases().get(normalize_style_alias(raw_value))
+    if preset_id is None:
+        raise_invalid_style_preset(raw_value)
+    return preset_id
+
+
 def get_style_preset(style_preset_id: str) -> ComicStylePreset:
-    preset = STYLE_PRESETS.get(style_preset_id)
-    if preset is None:
-        raise AppError(code="comic_style_preset_invalid", message="comic style preset invalid", status_code=422)
-    return preset
+    return STYLE_PRESETS[normalize_style_preset_id(style_preset_id)]
+
+
+def build_style_preset_aliases() -> dict[str, str]:
+    aliases: dict[str, str] = {}
+    for preset in STYLE_PRESETS.values():
+        for alias in (preset.id, preset.label_zh, preset.label_en):
+            aliases[normalize_style_alias(alias)] = preset.id
+    return aliases
+
+
+def normalize_raw_style_value(value: object | None) -> str:
+    return "" if value is None else str(value).strip()
+
+
+def normalize_style_alias(value: str) -> str:
+    return ALIAS_SEPARATOR_PATTERN.sub("_", value.strip().lower())
+
+
+def raise_invalid_style_preset(raw_value: str) -> None:
+    supported = ", ".join(STYLE_PRESETS.keys())
+    raise AppError(
+        code="comic_style_preset_invalid",
+        message=f"unknown comic style preset: {raw_value}. Supported style presets: {supported}",
+        status_code=422,
+    )

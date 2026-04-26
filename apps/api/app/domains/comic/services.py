@@ -34,6 +34,7 @@ from apps.api.app.domains.comic.schemas import (
     ComicSceneWrite,
     ComicTaskCreate,
 )
+from apps.api.app.domains.comic.task_inputs import normalize_comic_task_input_payload
 from apps.api.app.domains.llm.client_provider import ClientProviderConfig, serialize_client_provider_config
 
 
@@ -171,6 +172,7 @@ def create_task(
     require_project(session, payload.project_id)
     chapter = validate_task_chapter(session, payload.project_id, payload.chapter_id)
     validate_task_scene(session, chapter, payload.scene_id)
+    input_payload = normalize_comic_task_input_payload(payload.input_payload)
     provider_config = serialize_client_provider_config(
         config=client_provider_config,
         provider_type=client_provider_type or "",
@@ -187,7 +189,7 @@ def create_task(
         status=TASK_STATUS_PENDING,
         stage="queued",
         progress_percent=0,
-        input_payload=dict(payload.input_payload),
+        input_payload=input_payload,
         output_payload={},
         error_code=None,
         error_message=None,

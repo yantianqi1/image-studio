@@ -96,6 +96,29 @@ def test_delete_task_removes_task_without_deleting_project() -> None:
     assert project_response.json()["data"]["id"] == project_id
 
 
+def test_create_task_normalizes_comic_style_preset_alias() -> None:
+    client = create_comic_client()
+    project_id = create_project(client)
+    save_chapter(client, project_id)
+    save_scene(client, project_id)
+
+    task = create_scene_render_task(client, project_id, style_preset="线性新国风漫画")
+
+    assert task["input_payload"]["style_preset"] == "neo_chinese"
+
+
+def test_create_task_rejects_invalid_comic_style_preset_before_queueing() -> None:
+    client = create_comic_client()
+    project_id = create_project(client)
+    save_chapter(client, project_id)
+    save_scene(client, project_id)
+
+    response = post_scene_render_task(client, project_id, style_preset="direct")
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "comic_style_preset_invalid"
+
+
 def test_save_characters_chapter_and_scene() -> None:
     client = create_comic_client()
     project_id = create_project(client)
@@ -159,8 +182,14 @@ def test_save_characters_chapter_and_scene() -> None:
     assert detail["chapters"][0]["scenes"][0]["id"] == "scene-001"
 
 
-def create_scene_render_task(client: TestClient, project_id: str) -> dict:
-    response = client.post(
+def create_scene_render_task(client: TestClient, project_id: str, *, style_preset: str = "ink_wash") -> dict:
+    response = post_scene_render_task(client, project_id, style_preset=style_preset)
+    assert response.status_code == 201
+    return response.json()["data"]
+
+
+def post_scene_render_task(client: TestClient, project_id: str, *, style_preset: str):
+    return client.post(
         "/api/public/comic/tasks",
         headers=client_provider_headers(),
         json={
@@ -170,15 +199,13 @@ def create_scene_render_task(client: TestClient, project_id: str) -> dict:
             "task_type": "scene-render",
             "input_payload": {
                 "source_text": "A courier reaches the dock.",
-                "style_preset": "ink_wash",
+                "style_preset": style_preset,
                 "panels_per_image": 4,
                 "target_image_count": 1,
                 "generate_images": False,
             },
         },
     )
-    assert response.status_code == 201
-    return response.json()["data"]
 
 
 def create_project(client: TestClient) -> str:
