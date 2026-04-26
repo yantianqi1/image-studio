@@ -63,10 +63,11 @@ export function buildStoryboardShots(
     return [];
   }
   const storyboardItems = extractStoryboardItems(task);
+  const imageResultMap = buildImageResultMap(imageResults);
   if (storyboardItems.length > 0) {
-    return storyboardItems.map((item, index) => buildStoryboardShot(task, item, index, imageResults[index]));
+    return storyboardItems.map((item, index) => buildStoryboardShot(task, item, index, imageResultMap.get(index + 1)));
   }
-  return buildFallbackShots(task, imageResults);
+  return buildFallbackShots(task, imageResultMap);
 }
 
 function buildStoryboardShot(
@@ -93,17 +94,18 @@ function buildStoryboardShot(
 
 function buildFallbackShots(
   task: TaskItem,
-  imageResults: readonly ComicTaskImageResult[],
+  imageResultMap: ReadonlyMap<number, ComicTaskImageResult>,
 ): readonly StoryboardShot[] {
-  const count = Math.max(imageResults.length, readPromptCount(task));
+  const count = Math.max(readImageResultPageCount(imageResultMap), readPromptCount(task));
   return Array.from({ length: count }, (_, index) => {
-    const result = imageResults[index];
+    const pageIndex = index + 1;
+    const result = imageResultMap.get(pageIndex);
     return {
-      id: `${task.id}-page-${index + 1}`,
-      index: index + 1,
-      title: `漫画页面 ${index + 1}`,
+      id: `${task.id}-page-${pageIndex}`,
+      index: pageIndex,
+      title: `漫画页面 ${pageIndex}`,
       description: result?.result ? "真实页面图片已生成，可直接预览。" : "分镜已完成，等待页面图片结果。",
-      shotType: `第 ${index + 1} 页`,
+      shotType: `第 ${pageIndex} 页`,
       scene: String(task.task_type ?? task.type ?? "scene-render"),
       duration: `Job ${result?.image_job_id ?? "待创建"}`,
       status: result?.image_status ?? task.status,
@@ -113,6 +115,15 @@ function buildFallbackShots(
       errorMessage: result?.error_message ?? null,
     };
   });
+}
+
+function buildImageResultMap(imageResults: readonly ComicTaskImageResult[]): ReadonlyMap<number, ComicTaskImageResult> {
+  const orderedResults = [...imageResults].sort((left, right) => left.image_index - right.image_index);
+  return new Map(orderedResults.map((result) => [result.image_index, result]));
+}
+
+function readImageResultPageCount(imageResultMap: ReadonlyMap<number, ComicTaskImageResult>): number {
+  return Math.max(0, ...imageResultMap.keys());
 }
 
 function readPromptCount(task: TaskItem): number {

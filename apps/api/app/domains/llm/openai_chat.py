@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import json
 import os
+import time
 from typing import Any
 
 import httpx
@@ -17,32 +19,41 @@ from apps.api.app.domains.llm.provider_validation import OPENAI_CHAT_COMPATIBLE_
 
 OPENAI_CHAT_ENDPOINT = "/chat/completions"
 OPENAI_CHAT_TIMEOUT_SECONDS = 60.0
+OPENAI_CHAT_MAX_ATTEMPTS = 3
+OPENAI_CHAT_RETRY_DELAY_SECONDS = 1.0
 JSON_OPENERS = ("{", "[")
+RETRYABLE_CHAT_STATUS_CODES = frozenset({408, 429, 500, 502, 503, 504})
+
+
+@dataclass(frozen=True)
+class ChatTarget:
+    base_url: str
+    api_key: str
+    provider_model: str
 
 
 def generate_structured_chat(
-    session: Session,
+    session: Session | None,
     *,
     system_prompt: str,
     user_payload: dict,
     schema_name: str,
     response_schema: dict | None = None,
     client_provider_config: ClientProviderConfig | None = None,
+    chat_target: ChatTarget | None = None,
 ) -> dict:
-    target = resolve_client_chat_target(client_provider_config) if client_provider_config else resolve_chat_target(session)
-    response = httpx.post(
-        build_provider_url(target.provider.base_url),
-        headers=build_auth_headers(target.provider),
-        json=build_chat_payload(target.provider_model, system_prompt, user_payload, schema_name, response_schema=response_schema),
-        timeout=OPENAI_CHAT_TIMEOUT_SECONDS,
+    target = chat_target or resolve_chat_target_for_config(session, client_provider_config)
+    response = post_chat_completion(
+        target=target,
+        payload=build_chat_payload(target.provider_model, system_prompt, user_payload, schema_name, response_schema=response_schema),
     )
     return parse_chat_response(response, response_schema=response_schema)
 
 
-class ChatTarget:
-    def __init__(self, *, provider: Provider, provider_model: str) -> None:
-        self.provider = provider
-        self.provider_model = provider_model
+def resolve_chat_target_for_config(session: Session | None, config: ClientProviderConfig | None) -> ChatTarget:
+    if config is not None:
+        return resolve_client_chat_target(config)
+    return resolve_chat_target(require_session(session))
 
 
 def resolve_chat_target(session: Session) -> ChatTarget:
@@ -59,14 +70,66 @@ def resolve_chat_target(session: Session) -> ChatTarget:
     model, provider = row
     if provider.type not in {OPENAI_COMPATIBLE_PROVIDER_TYPE, OPENAI_CHAT_COMPATIBLE_PROVIDER_TYPE}:
         raise AppError(code="comic_llm_not_configured", message="comic LLM provider is not chat compatible", status_code=500)
-    return ChatTarget(provider=provider, provider_model=model.provider_model or provider.default_model)
+    return build_chat_target(provider=provider, provider_model=model.provider_model or provider.default_model)
 
 
 def resolve_client_chat_target(config: ClientProviderConfig) -> ChatTarget:
     settings = get_settings()
     provider = build_runtime_provider(config)
     provider_model = settings.openai_chat_model_provider_model or settings.openai_chat_model_code
-    return ChatTarget(provider=provider, provider_model=provider_model)
+    return build_chat_target(provider=provider, provider_model=provider_model)
+
+
+def build_chat_target(*, provider: Provider, provider_model: str | None) -> ChatTarget:
+    build_provider_url(provider.base_url)
+    return ChatTarget(
+        base_url=provider.base_url or "",
+        api_key=read_provider_api_key(provider),
+        provider_model=str(provider_model or ""),
+    )
+
+
+def require_session(session: Session | None) -> Session:
+    if session is not None:
+        return session
+    raise AppError(code="comic_llm_not_configured", message="comic LLM chat target is not configured", status_code=500)
+
+
+def post_chat_completion(*, target: ChatTarget, payload: dict) -> httpx.Response | object:
+    for attempt in range(1, OPENAI_CHAT_MAX_ATTEMPTS + 1):
+        try:
+            response = send_chat_request(target=target, payload=payload)
+        except httpx.RequestError as exc:
+            if attempt >= OPENAI_CHAT_MAX_ATTEMPTS:
+                raise AppError(code="provider_request_failed", message=str(exc), status_code=502) from exc
+            sleep_before_retry()
+            continue
+        if attempt >= OPENAI_CHAT_MAX_ATTEMPTS or not is_retryable_chat_response(response):
+            return response
+        sleep_before_retry()
+    raise AppError(code="provider_request_failed", message="provider request retry exhausted", status_code=502)
+
+
+def send_chat_request(*, target: ChatTarget, payload: dict) -> httpx.Response:
+    return httpx.post(
+        build_provider_url(target.base_url),
+        headers=build_target_auth_headers(target),
+        json=payload,
+        timeout=OPENAI_CHAT_TIMEOUT_SECONDS,
+    )
+
+
+def is_retryable_chat_response(response: httpx.Response | object) -> bool:
+    return getattr(response, "status_code", 0) in RETRYABLE_CHAT_STATUS_CODES
+
+
+def sleep_before_retry() -> None:
+    if OPENAI_CHAT_RETRY_DELAY_SECONDS > 0:
+        time.sleep(OPENAI_CHAT_RETRY_DELAY_SECONDS)
+
+
+def build_target_auth_headers(target: ChatTarget) -> dict[str, str]:
+    return {"Authorization": f"Bearer {target.api_key}", "Content-Type": "application/json"}
 
 
 def build_chat_payload(

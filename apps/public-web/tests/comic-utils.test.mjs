@@ -70,3 +70,55 @@ test("completed comic task maps explicit storyboard output", () => {
   assert.equal(shots[0].promptText, "Task: Generate one finished comic page.");
   assert.equal(shots[0].assetUrl, "/api/public/image/assets/7");
 });
+
+test("comic image results are matched by image_index instead of response order", () => {
+  const { buildStoryboardShots } = loadComicUtils();
+  const shots = buildStoryboardShots([
+    {
+      id: "task_order",
+      status: "completed",
+      output_payload: {
+        storyboard: [
+          {
+            id: "page_1",
+            title: "第一页",
+            description: "开场",
+            shotType: "第 1 页",
+            scene: "场景 1",
+            duration: "Job 1",
+          },
+          {
+            id: "page_2",
+            title: "第二页",
+            description: "转折",
+            shotType: "第 2 页",
+            scene: "场景 2",
+            duration: "Job 2",
+          },
+        ],
+      },
+    },
+  ], [
+    {
+      id: 8,
+      image_index: 2,
+      image_job_id: 22,
+      prompt: "page two prompt",
+      image_status: "succeeded",
+      result: { asset_url: "/api/public/image/assets/8" },
+    },
+    {
+      id: 7,
+      image_index: 1,
+      image_job_id: 11,
+      prompt: "page one prompt",
+      image_status: "succeeded",
+      result: { asset_url: "/api/public/image/assets/7" },
+    },
+  ]);
+
+  assert.equal(shots[0].assetUrl, "/api/public/image/assets/7");
+  assert.equal(shots[0].imageJobId, 11);
+  assert.equal(shots[1].assetUrl, "/api/public/image/assets/8");
+  assert.equal(shots[1].imageJobId, 22);
+});

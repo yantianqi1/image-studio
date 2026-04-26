@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import threading
+import time
 from types import SimpleNamespace
 
 from fastapi import APIRouter, FastAPI
@@ -134,8 +136,7 @@ def test_storyboard_unknown_character_code_fails_before_prompting(monkeypatch) -
 def test_non_last_storyboard_image_panel_count_mismatch_fails(monkeypatch) -> None:
     client = create_comic_client()
     task = create_task(client, input_payload={**build_input_payload(), "target_image_count": 2})
-    storyboard = build_two_image_storyboard_payload(first_panel_count=2, last_panel_count=2)
-    install_llm_outputs(monkeypatch, storyboard_payload=storyboard)
+    install_segment_storyboard_outputs(monkeypatch, panel_counts={1: 2, 2: 2})
 
     worker_comic_tasks.run_next_comic_task()
 
@@ -182,6 +183,20 @@ def test_storyboard_input_requires_one_image_per_story_segment() -> None:
 
     assert payload["target_image_count"] == len(payload["story_segments"])
     assert "每个 story_segments 条目必须生成 exactly 1 张漫画图片" in payload["storyboard_requirements"][0]
+
+
+def test_storyboard_generation_uses_three_way_segment_concurrency(monkeypatch) -> None:
+    client = create_comic_client()
+    task = create_task(client, input_payload={**build_input_payload(), "source_text": long_story_text(), "target_image_count": 4})
+    calls = install_segment_storyboard_outputs(monkeypatch)
+
+    worker_comic_tasks.run_next_comic_task()
+
+    detail = client.get(f"/api/public/comic/tasks/{task['id']}").json()["data"]
+    assert detail["status"] == "completed"
+    assert detail["output_payload"]["prompt_count"] == 4
+    assert sorted(calls["storyboard_segments"]) == [1, 2, 3, 4]
+    assert calls["max_storyboard_concurrency"] == 3
 
 
 def test_storyboard_image_count_mismatch_fails() -> None:
@@ -262,6 +277,33 @@ def install_llm_outputs(monkeypatch, storyboard_payload: dict | None = None):
     return calls
 
 
+def install_segment_storyboard_outputs(monkeypatch, panel_counts: dict[int, int] | None = None) -> dict:
+    lock = threading.Lock()
+    calls = {"active_storyboards": 0, "max_storyboard_concurrency": 0, "storyboard_segments": []}
+
+    def fake_generate(*args, **kwargs) -> dict:
+        schema_name = kwargs["schema_name"]
+        if schema_name == "StoryAnalysis":
+            return build_story_analysis_payload()
+        if schema_name == "CharacterBible":
+            return build_character_bible_payload()
+        segment_index = kwargs["user_payload"]["story_segments"][0]["segment_index"]
+        with lock:
+            calls["active_storyboards"] += 1
+            calls["storyboard_segments"].append(segment_index)
+            calls["max_storyboard_concurrency"] = max(calls["max_storyboard_concurrency"], calls["active_storyboards"])
+        time.sleep(0.05)
+        with lock:
+            calls["active_storyboards"] -= 1
+        panel_count = (panel_counts or {}).get(segment_index, 3)
+        return build_storyboard_payload(panel_count=panel_count, image_index=segment_index)
+
+    monkeypatch.setenv("APP_ENV", "production")
+    get_settings.cache_clear()
+    monkeypatch.setattr("apps.api.app.domains.llm.openai_chat.generate_structured_chat", fake_generate)
+    return calls
+
+
 def create_comic_client() -> TestClient:
     app = FastAPI()
     api_router = APIRouter(prefix="/api/public")
@@ -332,8 +374,8 @@ def build_character_bible_payload() -> dict:
     return {"characters": [{"character_code": "hero", "name": "Lin", "role_in_story": "protagonist", "personality": "disciplined", "appearance": {"hair": "black high ponytail"}, "costume": {"robe": "short martial robe"}, "color_palette": ["ink black", "jade"], "must_keep_prompt": "Consistent young swordswoman with black high ponytail.", "negative_prompt": "Do not change hairstyle.", "multi_view_prompt": "Character sheet front side back."}]}
 
 
-def build_storyboard_payload(panel_count: int = 3, panels_per_image: int = 3) -> dict:
-    return {"style_preset": "baimiao", "panels_per_image": panels_per_image, "images": [{"image_index": 1, "page_purpose": "introduce ferry", "panels": build_panels(panel_count)}]}
+def build_storyboard_payload(panel_count: int = 3, panels_per_image: int = 3, image_index: int = 1) -> dict:
+    return {"style_preset": "baimiao", "panels_per_image": panels_per_image, "images": [{"image_index": image_index, "page_purpose": "introduce ferry", "panels": build_panels(panel_count)}]}
 
 
 def build_two_image_storyboard_payload(*, first_panel_count: int, last_panel_count: int) -> dict:

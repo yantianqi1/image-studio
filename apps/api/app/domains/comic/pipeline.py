@@ -18,6 +18,13 @@ from apps.api.app.domains.comic.llm_prompts import (
 from apps.api.app.domains.comic.models import ComicCharacterCard, ComicPanelPrompt, ComicStoryboard, ComicStoryAnalysis, ComicTask
 from apps.api.app.domains.comic.prompt_composer import compose_panel_prompts
 from apps.api.app.domains.comic.repository import create_character_cards, create_panel_prompts, create_story_analysis, create_storyboard, mark_task_completed, update_task_stage
+from apps.api.app.domains.comic.storyboard_generation import (
+    build_storyboard_generation_context,
+    build_storyboard_input,
+    generate_storyboard_pages,
+    serialize_analysis,
+    validate_storyboard_image_indexes,
+)
 from apps.api.app.domains.comic.structured_outputs import CharacterBible, StoryAnalysis, Storyboard
 from apps.api.app.domains.comic.story_segments import build_story_segments, parse_target_image_count
 from apps.api.app.domains.comic.style_presets import DEFAULT_STYLE_PRESET_ID, normalize_style_preset_id
@@ -125,16 +132,23 @@ def run_character_bible(session: Session, *, task: ComicTask, inputs: PipelineIn
 
 def run_storyboard(session: Session, *, task: ComicTask, inputs: PipelineInputs, analysis: ComicStoryAnalysis, bible: CharacterBible) -> ComicStoryboard:
     publish_task_stage(session, task=task, stage="storyboarding", progress_percent=60)
-    storyboard = call_structured_llm(
-        session=session,
-        schema=Storyboard,
-        schema_name="Storyboard",
-        system_prompt=STORYBOARD_DIRECTOR_SYSTEM_PROMPT,
-        user_payload=build_storyboard_input(inputs=inputs, analysis=analysis, bible=bible),
-        client_provider_config=inputs.client_provider_config,
-        payload_defaults={"style_preset": inputs.style_preset, "panels_per_image": inputs.panels_per_image},
+    chat_target = openai_chat.resolve_chat_target_for_config(session, inputs.client_provider_config)
+    context = build_storyboard_generation_context(inputs=inputs, analysis=analysis, bible=bible)
+    storyboard = generate_storyboard_pages(
+        context=context,
+        call_storyboard_llm=lambda user_payload: call_structured_llm(
+            session=session,
+            schema=Storyboard,
+            schema_name="Storyboard",
+            system_prompt=STORYBOARD_DIRECTOR_SYSTEM_PROMPT,
+            user_payload=user_payload,
+            client_provider_config=inputs.client_provider_config,
+            payload_defaults={"style_preset": inputs.style_preset, "panels_per_image": inputs.panels_per_image},
+            chat_target=chat_target,
+        ),
     )
     validate_storyboard_image_count(storyboard, expected_image_count=inputs.target_image_count)
+    validate_storyboard_image_indexes(storyboard, expected_indexes=[segment["segment_index"] for segment in inputs.story_segments])
     validate_storyboard_panel_counts(storyboard, expected_panels_per_image=inputs.panels_per_image)
     validate_storyboard_character_codes(storyboard, bible=bible)
     model = ComicStoryboard(project_id=task.project_id, task_id=task.id, style_preset=inputs.style_preset, panels_per_image=inputs.panels_per_image, target_image_count=inputs.target_image_count, payload=storyboard.model_dump())
@@ -159,6 +173,7 @@ def call_structured_llm(
     user_payload: dict,
     client_provider_config: ClientProviderConfig | None,
     payload_defaults: dict | None = None,
+    chat_target: openai_chat.ChatTarget | None = None,
 ):
     try:
         payload = openai_chat.generate_structured_chat(
@@ -168,6 +183,7 @@ def call_structured_llm(
             schema_name=schema_name,
             response_schema=schema.model_json_schema(),
             client_provider_config=client_provider_config,
+            chat_target=chat_target,
         )
         return schema.model_validate(apply_payload_defaults(payload, payload_defaults))
     except AppError as exc:
@@ -254,26 +270,6 @@ def validate_storyboard_character_codes(storyboard: Storyboard, *, bible: Charac
             message=f"unknown storyboard character codes: {', '.join(unknown_codes)}",
             status_code=502,
         )
-
-
-def serialize_analysis(analysis: ComicStoryAnalysis) -> dict[str, Any]:
-    return {"title_suggestion": analysis.title_suggestion, "genre": analysis.genre, "tone": analysis.tone, "plot_summary": analysis.plot_summary, "world_setting": analysis.world_setting, "main_conflict": analysis.main_conflict, "narrative_beats": analysis.narrative_beats, "key_conflicts": analysis.key_conflicts, "visual_motifs": analysis.visual_motifs, "missing_information": analysis.missing_information}
-
-
-def build_storyboard_input(*, inputs: PipelineInputs, analysis: ComicStoryAnalysis, bible: CharacterBible) -> dict:
-    return {
-        "story_analysis": serialize_analysis(analysis),
-        "character_bible": bible.model_dump(),
-        "style_preset": inputs.style_preset,
-        "panels_per_image": inputs.panels_per_image,
-        "target_image_count": inputs.target_image_count,
-        "story_segments": inputs.story_segments,
-        "storyboard_requirements": [
-            "每个 story_segments 条目必须生成 exactly 1 张漫画图片，并且 images 数组长度必须等于 target_image_count。",
-            "每张漫画图片必须覆盖对应 source_text 的完整剧情容量，不要只画开头或摘要。",
-            "panel dialogue、caption、sign、SFX 如需出现文字，必须使用简体中文，不允许英文可见文字。",
-        ],
-    }
 
 
 def build_character_card(*, task: ComicTask, character: dict) -> ComicCharacterCard:
