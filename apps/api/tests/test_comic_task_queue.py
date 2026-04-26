@@ -76,6 +76,7 @@ def test_create_project_requires_login_or_client_provider() -> None:
 
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "login_or_client_provider_required"
+    assert response.json()["error"]["message"] == "请先登录，或配置浏览器端供应商密钥后重试"
 
 
 def test_create_task_stores_client_provider_context() -> None:
@@ -219,6 +220,8 @@ def test_worker_without_llm_config_fails_explicitly(monkeypatch) -> None:
         task.client_provider_config = None
         session.flush()
     monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("OPENAI_PROVIDER_API_KEY_ENV", "MISSING_COMIC_TEST_PROVIDER_KEY")
+    monkeypatch.delenv("MISSING_COMIC_TEST_PROVIDER_KEY", raising=False)
     get_settings.cache_clear()
 
     processed_task_id = worker_comic_tasks.run_next_comic_task()

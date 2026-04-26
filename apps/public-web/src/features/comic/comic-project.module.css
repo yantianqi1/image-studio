@@ -105,6 +105,8 @@
 }
 
 .chipRow button {
+  display: grid;
+  gap: 2px;
   border: 1px solid #e5e7eb;
   border-radius: 999px;
   background: #f9fafb;
@@ -112,6 +114,20 @@
   color: #4b5563;
   font-size: 12px;
   font-weight: 600;
+  text-align: left;
+}
+
+.chipRow button[data-active="true"] {
+  border-color: #111827;
+  background: #111827;
+  color: #fff;
+}
+
+.chipRow button small {
+  color: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  opacity: 0.74;
 }
 
 .primaryButton {

@@ -93,18 +93,17 @@ function BrandLink(props: Readonly<{ brandLabel: string; headerTitle?: string }>
 
 function MainNav({ activeHref }: Readonly<{ activeHref?: string }>) {
   return (
-    <nav className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 items-center justify-center gap-1.5 md:flex">
+    <nav className="absolute left-1/2 top-1/2 hidden h-11 w-[22.5rem] -translate-x-1/2 -translate-y-1/2 grid-cols-5 items-center gap-1 rounded-xl md:grid">
       {navItems.map((item) => <NavLink key={item.href} active={activeHref === item.href} href={item.href} label={item.label} />)}
     </nav>
   );
 }
 
 function NavLink(props: Readonly<{ active: boolean; href: string; label: string }>) {
-  const className = props.active ? "nav-pill text-gray-950" : "nav-pill text-gray-500 hover:bg-gray-100 hover:text-gray-900";
   return (
     <Link
       href={props.href}
-      className={`${className} whitespace-nowrap`}
+      className="nav-pill whitespace-nowrap"
       aria-current={props.active ? "page" : undefined}
       data-active={props.active ? "true" : "false"}
     >

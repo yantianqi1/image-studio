@@ -1,4 +1,4 @@
-# Commercial Studio Agent Rules
+# image Studio Agent Rules
 
 默认使用中文回复用户。
 

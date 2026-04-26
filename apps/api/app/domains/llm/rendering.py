@@ -27,7 +27,7 @@ def render_local_image(
     <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
       <rect width="1024" height="1024" fill="#f4e6d6"/>
       <rect x="48" y="48" width="928" height="928" rx="36" fill="#fff8f0" stroke="#1c1711" stroke-width="6"/>
-      <text x="96" y="180" fill="#b14a24" font-family="Arial" font-size="48">commercial-studio</text>
+      <text x="96" y="180" fill="#b14a24" font-family="Arial" font-size="48">image Studio</text>
       <text x="96" y="260" fill="#1c1711" font-family="Arial" font-size="72">{escape(model_code)}</text>
       <foreignObject x="96" y="340" width="832" height="520">
         <div xmlns="http://www.w3.org/1999/xhtml" style="font-family: Arial; font-size: 32px; color: #1c1711; line-height: 1.45;">

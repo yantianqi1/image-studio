@@ -111,7 +111,15 @@ def resolve_prompt_reference_asset_ids(session: Session, *, prompt: ComicPanelPr
     if not character_codes:
         return []
     cards = list_prompt_character_cards(session, prompt=prompt, character_codes=character_codes)
-    return [require_card_reference_asset(card) for card in cards]
+    return unique_asset_ids([require_card_reference_asset(card) for card in cards])
+
+
+def unique_asset_ids(asset_ids: list[int]) -> list[int]:
+    unique_ids: list[int] = []
+    for asset_id in asset_ids:
+        if asset_id not in unique_ids:
+            unique_ids.append(asset_id)
+    return unique_ids
 
 
 def list_prompt_character_cards(

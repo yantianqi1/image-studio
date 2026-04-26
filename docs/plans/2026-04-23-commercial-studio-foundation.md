@@ -1,4 +1,4 @@
-# Commercial Studio Foundation Implementation Plan
+# image Studio Foundation Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
@@ -115,4 +115,3 @@ Run:
 
 要求：
 - 只根据真实命令输出报告状态
-

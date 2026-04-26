@@ -136,16 +136,23 @@ def test_create_image_job_stays_queued_until_worker_runs():
     assert locked_cents == 77
 
 
-def test_anonymous_image_job_requires_login_or_client_provider():
+def test_anonymous_image_job_uses_server_provider_when_enabled():
     client = build_client()
 
     response = client.post(
         "/api/public/image/jobs",
-        json={"prompt": "Anonymous blocked", "model_code": "gpt-image-2", "requested_count": 1},
+        json={"prompt": "Anonymous render", "model_code": "gpt-image-2", "requested_count": 1},
     )
 
-    assert response.status_code == 401
-    assert response.json()["error"]["code"] == "login_or_client_provider_required"
+    assert response.status_code == 201
+    job = response.json()["data"]
+    assert job["source"] == "anonymous"
+    assert job["charge_cents"] == 0
+    with session_scope() as session:
+        stored_job = session.get(ImageJob, job["id"])
+        assert stored_job.user_id is None
+        assert stored_job.client_access_id is None
+        assert stored_job.client_provider_config is None
 
 
 def test_client_provider_image_job_records_browser_context():

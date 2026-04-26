@@ -5,10 +5,14 @@ import { useEffect, useState } from "react";
 import { buildAspectRatioPrompt } from "@/features/home/generation-aspect-ratio";
 import { GenerationControlPanel } from "@/features/home/generation-control-panel";
 import { GenerationHistorySidebar } from "@/features/home/generation-history-sidebar";
-import { waitForImageJobResults } from "@/features/home/generation-job-polling";
+import {
+  imageJobResultsToHistoryImages,
+  shouldResumeImageJobHistory,
+  waitForImageJobResults,
+} from "@/features/home/generation-job-polling";
 import { GenerationResultPanel } from "@/features/home/generation-result-panel";
 import { resolveImageModel } from "@/features/home/generation-models";
-import { MobileHistoryButton, TopBarActions } from "@/features/home/generation-workbench-nav";
+import { TopBarActions } from "@/features/home/generation-workbench-nav";
 import {
   type GenerationSourceImage,
   type GenerationState,
@@ -32,7 +36,6 @@ import {
   readSidebarCollapsed,
   saveSidebarCollapsed,
 } from "@/features/home/generation-workbench-helpers";
-import historyStyles from "./generation-history.module.css";
 import styles from "./generation-workbench.module.css";
 
 export function GenerationWorkbench() {
@@ -41,7 +44,6 @@ export function GenerationWorkbench() {
   const [sourceImage, setSourceImage] = useState<GenerationSourceImage | null>(null);
   const [uploadState, setUploadState] = useState<SourceUploadState>({ status: "idle" });
   const [historySearch, setHistorySearch] = useState("");
-  const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
   const [historySidebarCollapsed, setHistorySidebarCollapsed] = useState(false);
   const history = useGenerationHistory();
   const modelsState = useApiResource(() => publicApi.getModels());
@@ -69,6 +71,43 @@ export function GenerationWorkbench() {
   useEffect(() => {
     saveSidebarCollapsed(historySidebarCollapsed);
   }, [historySidebarCollapsed]);
+
+  useEffect(() => {
+    const selectedHistory = history.activeHistory;
+    const taskId = selectedHistory?.taskId;
+    if (!taskId || !shouldResumeImageJobHistory(selectedHistory)) {
+      return;
+    }
+
+    let active = true;
+    setState({ status: "submitting" });
+    waitForImageJobResults(publicApi, taskId)
+      .then((completed) => {
+        if (!active) {
+          return;
+        }
+        history.completeHistory(selectedHistory.id, {
+          status: "success",
+          taskId: completed.job.id,
+          taskStatus: completed.job.status,
+          errorMessage: null,
+          images: imageJobResultsToHistoryImages(completed.results),
+        });
+        setState({ status: "success", jobId: completed.job.id, taskStatus: completed.job.status });
+      })
+      .catch((error: unknown) => {
+        if (!active) {
+          return;
+        }
+        const message = error instanceof Error ? error.message : "生成任务失败";
+        history.failHistory(selectedHistory.id, message);
+        setState({ status: "error", message });
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [history.activeHistory?.id, history.activeHistory?.taskId, history.completeHistory, history.failHistory]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -119,11 +158,7 @@ export function GenerationWorkbench() {
         taskId: completed.job.id,
         taskStatus: completed.job.status,
         errorMessage: null,
-        images: completed.results.map((item) => ({
-          id: String(item.id),
-          assetId: item.asset_id,
-          url: item.asset_url,
-        })),
+        images: imageJobResultsToHistoryImages(completed.results),
       });
       setState({ status: "success", jobId: completed.job.id, taskStatus: completed.job.status });
     } catch (error: unknown) {
@@ -139,7 +174,6 @@ export function GenerationWorkbench() {
     setSourceImage(null);
     setUploadState({ status: "idle" });
     setState({ status: "idle" });
-    setHistoryDrawerOpen(false);
   }
 
 
@@ -166,35 +200,11 @@ export function GenerationWorkbench() {
 
   return (
     <AppShell
+      activeHref="/"
       brandLabel={getSiteTitle(settingsState)}
-      leadingAction={<MobileHistoryButton onClick={() => setHistoryDrawerOpen(true)} />}
       navAside={<TopBarActions walletLabel={walletLabel} />}
       workspaceMode
     >
-      {historyDrawerOpen ? (
-        <>
-          <button
-            className={`${historyStyles.drawerBackdrop} lg:hidden`}
-            type="button"
-            aria-label="关闭历史记录抽屉"
-            onClick={() => setHistoryDrawerOpen(false)}
-          />
-          <GenerationHistorySidebar
-            activeHistoryId={history.activeHistoryId}
-            histories={history.histories}
-            isDrawer
-            searchQuery={historySearch}
-            walletLabel={walletLabel}
-            onClose={() => setHistoryDrawerOpen(false)}
-            onDeleteHistory={history.removeHistory}
-            onNewGeneration={handleNewGeneration}
-            onRenameHistory={history.renameHistory}
-            onSearchQueryChange={setHistorySearch}
-            onSelectHistory={history.selectHistory}
-          />
-        </>
-      ) : null}
-
       <div className={getWorkspaceClass(styles, historySidebarCollapsed)}>
         <GenerationHistorySidebar
           activeHistoryId={history.activeHistoryId}

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from apps.api.app.core.config import get_settings
 from apps.api.app.core.errors import AppError
+from apps.api.app.domains.comic.character_references import parse_character_reference_mode
 from apps.api.app.domains.comic.llm_prompts import (
     CHARACTER_DESIGNER_SYSTEM_PROMPT,
     STORY_ANALYZER_SYSTEM_PROMPT,
@@ -41,6 +42,7 @@ class PipelineInputs:
     target_image_count: int
     story_segments: list[dict[str, Any]]
     image_model_code: str
+    character_reference_mode: str
     client_provider_config: ClientProviderConfig | None
 
 
@@ -63,6 +65,7 @@ def run_comic_pipeline(session: Session, *, task: ComicTask) -> ComicTask:
             "source_text_length": len(inputs.source_text),
             "target_image_count": inputs.target_image_count,
             "story_segment_count": len(inputs.story_segments),
+            "character_reference_mode": inputs.character_reference_mode,
         },
     )
 
@@ -77,6 +80,7 @@ def parse_pipeline_inputs(task: ComicTask) -> PipelineInputs:
     style_preset = normalize_style_preset_id(payload.get("style_preset") or DEFAULT_STYLE_PRESET_ID)
     target_image_count = parse_target_image_count(payload.get("target_image_count"), source_text=source_text)
     story_segments = build_story_segments(source_text, target_image_count=target_image_count)
+    character_reference_mode = parse_character_reference_mode(payload)
     return PipelineInputs(
         source_text=source_text,
         source_text_hash=sha256(source_text.encode("utf-8")).hexdigest(),
@@ -85,6 +89,7 @@ def parse_pipeline_inputs(task: ComicTask) -> PipelineInputs:
         target_image_count=len(story_segments),
         story_segments=story_segments,
         image_model_code=str(payload.get("image_model_code") or get_settings().openai_image_model_code or DEFAULT_IMAGE_MODEL_CODE),
+        character_reference_mode=character_reference_mode,
         client_provider_config=parse_task_client_provider_config(task),
     )
 
@@ -127,6 +132,7 @@ def run_storyboard(session: Session, *, task: ComicTask, inputs: PipelineInputs,
         system_prompt=STORYBOARD_DIRECTOR_SYSTEM_PROMPT,
         user_payload=build_storyboard_input(inputs=inputs, analysis=analysis, bible=bible),
         client_provider_config=inputs.client_provider_config,
+        payload_defaults={"style_preset": inputs.style_preset, "panels_per_image": inputs.panels_per_image},
     )
     validate_storyboard_image_count(storyboard, expected_image_count=inputs.target_image_count)
     validate_storyboard_panel_counts(storyboard, expected_panels_per_image=inputs.panels_per_image)
@@ -152,6 +158,7 @@ def call_structured_llm(
     system_prompt: str,
     user_payload: dict,
     client_provider_config: ClientProviderConfig | None,
+    payload_defaults: dict | None = None,
 ):
     try:
         payload = openai_chat.generate_structured_chat(
@@ -162,7 +169,7 @@ def call_structured_llm(
             response_schema=schema.model_json_schema(),
             client_provider_config=client_provider_config,
         )
-        return schema.model_validate(payload)
+        return schema.model_validate(apply_payload_defaults(payload, payload_defaults))
     except AppError as exc:
         if exc.code in {"provider_api_key_missing", "provider_base_url_missing", "provider_model_missing"}:
             raise AppError(
@@ -173,6 +180,12 @@ def call_structured_llm(
         raise
     except ValidationError as exc:
         raise AppError(code=COMIC_LLM_SCHEMA_INVALID_ERROR_CODE, message=str(exc), status_code=502) from exc
+
+
+def apply_payload_defaults(payload: object, defaults: dict | None) -> object:
+    if not isinstance(payload, dict) or not defaults:
+        return payload
+    return {**defaults, **payload}
 
 
 def publish_task_stage(session: Session, *, task: ComicTask, stage: str, progress_percent: int) -> ComicTask:

@@ -89,7 +89,19 @@ def parse_response_payload(response: httpx.Response | object) -> dict[str, objec
     content_type = response.headers.get("content-type", "")
     if "text/event-stream" in content_type:
         return {"choices": [{"message": {"content": parse_streaming_content(response.text)}}]}
-    return response.json()
+    try:
+        payload = response.json()
+    except ValueError:
+        return build_text_response_payload(getattr(response, "text", ""))
+    if isinstance(payload, dict):
+        return payload
+    return build_text_response_payload(getattr(response, "text", ""))
+
+
+def build_text_response_payload(text: str) -> dict[str, object]:
+    if not text.strip():
+        raise AppError(code="provider_response_invalid", message="provider response empty", status_code=502)
+    return {"choices": [{"message": {"content": text}}]}
 
 
 def parse_streaming_content(text: str) -> str:
@@ -171,7 +183,10 @@ def download_provider_image(url: str) -> tuple[bytes, str]:
     response = httpx.get(url, timeout=get_settings().chat_image_download_timeout_seconds)
     if response.status_code >= 400:
         raise AppError(code="provider_image_download_failed", message="provider image download failed", status_code=502)
-    return response.content, response.headers.get("content-type", "image/png")
+    mime_type = response.headers.get("content-type", "image/png").split(";", 1)[0]
+    if mime_type.startswith("image/"):
+        return response.content, mime_type
+    raise AppError(code="provider_image_download_invalid", message="provider image url did not return an image", status_code=502)
 
 
 def extract_provider_error(response: httpx.Response | object) -> str:

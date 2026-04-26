@@ -1,4 +1,4 @@
-# Commercial Studio
+# image Studio
 
 独立商业化仓库，承接用户生图、钱包计费、激活码、漫画创作、后台运营与外部 LLM Provider 接入。
 

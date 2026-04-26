@@ -6,6 +6,7 @@ import { AppShell } from "@/features/shell/app-shell";
 import { publicApi, type ComicProject, type ComicTaskImageResult, type TaskItem } from "@/lib/public-api";
 import { type ResourceState, useApiResource } from "@/lib/use-api-resource";
 
+import { DEFAULT_CHARACTER_REFERENCE_MODE, type CharacterReferenceMode } from "./character-reference-modes";
 import { DEFAULT_COMIC_STYLE_PRESET, type ComicStylePresetId } from "./comic-style-presets";
 import { deriveComicWorkspaceStatus, deriveComicWorkspaceStatusFromTask, type ComicWorkspaceStatus } from "./comic-state";
 import { latestProject, type StoryboardShot } from "./comic-utils";
@@ -43,6 +44,7 @@ type StudioModel = Readonly<{
   title: string;
   premise: string;
   stylePresetId: ComicStylePresetId;
+  characterReferenceMode: CharacterReferenceMode;
   workflowEvents: readonly ComicWorkflowEvent[];
   createState: CreateState;
   projectsState: ResourceState<readonly ComicProject[]>;
@@ -57,6 +59,7 @@ type StudioModel = Readonly<{
   setTitle: (value: string) => void;
   setPremise: (value: string) => void;
   setStylePresetId: (value: ComicStylePresetId) => void;
+  setCharacterReferenceMode: (value: CharacterReferenceMode) => void;
   setSelectedShotId: (value: string | null) => void;
   handleCreateProject: (event: React.FormEvent<HTMLFormElement>) => Promise<void>;
   handleRefresh: () => void;
@@ -72,6 +75,7 @@ export function ComicStudio() {
           title={studio.title}
           premise={studio.premise}
           stylePresetId={studio.stylePresetId}
+          characterReferenceMode={studio.characterReferenceMode}
           workflowStatus={studio.workspaceStatus}
           workflowError={studio.previewError}
           workflowEvents={studio.workflowEvents}
@@ -79,6 +83,7 @@ export function ComicStudio() {
           onTitleChange={studio.setTitle}
           onPremiseChange={studio.setPremise}
           onStylePresetChange={studio.setStylePresetId}
+          onCharacterReferenceModeChange={studio.setCharacterReferenceMode}
           onCreateProject={studio.handleCreateProject}
         />
         <StoryboardPlanningPanel
@@ -105,6 +110,7 @@ function useComicStudio(): StudioModel {
   const [title, setTitle] = useState("");
   const [premise, setPremise] = useState("");
   const [stylePresetId, setStylePresetId] = useState<ComicStylePresetId>(DEFAULT_COMIC_STYLE_PRESET);
+  const [characterReferenceMode, setCharacterReferenceMode] = useState<CharacterReferenceMode>(DEFAULT_CHARACTER_REFERENCE_MODE);
   const [refreshKey, setRefreshKey] = useState(0);
   const [selectedShotId, setSelectedShotId] = useState<string | null>(null);
   const [createState, setCreateState] = useState<CreateState>({ status: "idle" });
@@ -158,11 +164,12 @@ function useComicStudio(): StudioModel {
       const task = await publicApi.createComicTask({
         project_id: result.id,
         task_type: TASK_TYPE_SCENE_RENDER,
-        input_payload: buildTaskInputPayload(premise, stylePresetId),
+        input_payload: buildTaskInputPayload(premise, stylePresetId, characterReferenceMode),
       });
       setTitle("");
       setPremise("");
       setStylePresetId(DEFAULT_COMIC_STYLE_PRESET);
+      setCharacterReferenceMode(DEFAULT_CHARACTER_REFERENCE_MODE);
       setCreateState({ status: "success", title: result.title, projectId: result.id });
       handleRefresh();
       await runComicWorkflow(String(task.id));
@@ -217,6 +224,7 @@ function useComicStudio(): StudioModel {
     title,
     premise,
     stylePresetId,
+    characterReferenceMode,
     workflowEvents: visibleWorkflowEvents,
     createState,
     projectsState,
@@ -231,6 +239,7 @@ function useComicStudio(): StudioModel {
     setTitle,
     setPremise,
     setStylePresetId,
+    setCharacterReferenceMode,
     setSelectedShotId,
     handleCreateProject,
     handleRefresh,

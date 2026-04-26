@@ -167,7 +167,7 @@ def verify_admin_providers(page: Page) -> None:
 
 def verify_admin_settings(page: Page) -> None:
     page.goto("/settings")
-    page.locator("input[name='site_title']").fill("Commercial Studio E2E")
+    page.locator("input[name='site_title']").fill("image Studio E2E")
     page.get_by_role("button", name="保存设置").click()
     expect(page.get_by_text("设置已保存并立即影响新请求", exact=True)).to_be_visible(timeout=UI_TIMEOUT_MS)
 

@@ -8,10 +8,12 @@ import { ErrorMessage } from "@/features/ui/error-message";
 import { SectionPanel } from "@/features/ui/section-panel";
 import { StatusCard } from "@/features/ui/status-card";
 import { formatDateTime } from "@/lib/formatters";
+import { isUnauthorizedApiError } from "@/lib/api-client";
 import { publicApi, type ImageGenerationResponse, type ImageJobResult } from "@/lib/public-api";
 import { useApiResource } from "@/lib/use-api-resource";
 
 const DELETE_SKIP_KEY = "commercial-studio:tasks-delete-skip-date";
+const UNAUTHORIZED_STATUS = 401;
 
 function getTodayKey() {
   return new Date().toISOString().slice(0, 10);
@@ -32,6 +34,9 @@ function rememberDeleteConfirmSkip(enabled: boolean) {
 }
 
 function getErrorMessage(error: unknown) {
+  if (isUnauthorizedApiError(error)) {
+    return "未登录，登录后才能操作任务。";
+  }
   return error instanceof Error ? error.message : "未知请求错误";
 }
 
@@ -39,7 +44,7 @@ export function TasksBoard() {
   const board = useTasksBoardState();
 
   return (
-    <AppShell title="我的任务">
+    <AppShell activeHref="/tasks" title="我的任务">
       <SectionPanel title="任务列表">
         <TaskListState state={board.tasksState} />
         {board.operationError ? <ErrorMessage message={board.operationError} title="任务操作失败" /> : null}
@@ -132,6 +137,9 @@ function TaskListState({ state }: TaskListStateProps) {
     return <StatusCard title="加载中" description="正在读取任务列表..." tone="loading" />;
   }
   if (state.status === "error") {
+    if (state.statusCode === UNAUTHORIZED_STATUS) {
+      return <StatusCard title="未登录" description="登录后可以查看生成任务。" tone="neutral" />;
+    }
     return <ErrorMessage message={state.message} title="任务读取失败" />;
   }
   if (state.data.length === 0) {

@@ -1,4 +1,4 @@
-# Commercial Studio Master Plan
+# image Studio Master Plan
 
 ## 目标
 

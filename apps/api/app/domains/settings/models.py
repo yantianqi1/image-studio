@@ -12,7 +12,7 @@ class SiteSettings(Base):
     __tablename__ = "site_settings"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    site_title: Mapped[str] = mapped_column(String(255), default="Commercial Studio", nullable=False)
+    site_title: Mapped[str] = mapped_column(String(255), default="image Studio", nullable=False)
     allow_public_signup: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     allow_anonymous_image: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     uploads_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

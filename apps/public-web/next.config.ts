@@ -4,6 +4,7 @@ const API_BASE_URL = process.env.API_BASE_URL ?? "http://127.0.0.1:7800";
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1", "localhost"],
+  devIndicators: false,
   transpilePackages: ["@commercial-studio/ui"],
   async rewrites() {
     return [

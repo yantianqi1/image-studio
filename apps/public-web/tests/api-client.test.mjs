@@ -58,3 +58,17 @@ test("apiFetch includes saved client provider headers", async () => {
   assert.equal(captured.headers.get("x-client-provider-base-url"), "https://client.example/v1");
   assert.equal(captured.headers.get("x-client-provider-api-key"), "sk-client");
 });
+
+test("isUnauthorizedApiError detects API 401 responses", async () => {
+  const { apiFetch, isUnauthorizedApiError } = loadApiClient(async () =>
+    Response.json(
+      { data: null, meta: {}, error: { code: "unauthorized", message: "authentication required" } },
+      { status: 401 },
+    ),
+  );
+
+  await assert.rejects(
+    () => apiFetch("/billing/wallets/me"),
+    (error) => isUnauthorizedApiError(error),
+  );
+});

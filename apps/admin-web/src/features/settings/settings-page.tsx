@@ -8,7 +8,7 @@ import { Panel } from "@/features/ui/panel";
 import { adminApi } from "@/lib/admin-api";
 
 const DEFAULT_SETTINGS = {
-  site_title: "Commercial Studio",
+  site_title: "image Studio",
   allow_public_signup: true,
   allow_anonymous_image: true,
   uploads_enabled: true,

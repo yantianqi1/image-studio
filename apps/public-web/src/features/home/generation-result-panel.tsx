@@ -70,7 +70,7 @@ function PreviewCanvas({ historyItem, state, view, onUseAsSourceImage }: Readonl
   if (view.kind === "idle") {
     return <EmptyState view={view} />;
   }
-  return <WaitingState historyItem={historyItem} state={state} view={view} />;
+  return <WaitingState view={view} />;
 }
 
 function EmptyState({ view }: Readonly<{ view: ResultView }>) {
@@ -87,12 +87,11 @@ function EmptyState({ view }: Readonly<{ view: ResultView }>) {
   );
 }
 
-function WaitingState({ historyItem, state, view }: Readonly<{ historyItem: GenerationHistoryItem | null; state: GenerationState; view: ResultView }>) {
+function WaitingState({ view }: Readonly<{ view: ResultView }>) {
   return (
     <div className={resultStyles.canvasShell}>
       <div className={resultStyles.waitingLayout}>
         <WaitingCanvas view={view} />
-        <TaskInfoCard historyItem={historyItem} state={state} view={view} />
       </div>
       <ResultActionBar hasImages={false} />
     </div>
@@ -112,33 +111,6 @@ function WaitingCanvas({ view }: Readonly<{ view: ResultView }>) {
       <ProgressSteps activeStep={view.activeStep} />
     </div>
   );
-}
-
-function TaskInfoCard({ historyItem, state, view }: Readonly<{ historyItem: GenerationHistoryItem | null; state: GenerationState; view: ResultView }>) {
-  const taskId = historyItem?.taskId ?? (state.status === "success" ? state.jobId : null);
-  return (
-    <aside className={resultStyles.infoCard}>
-      <div>
-        <p className={resultStyles.infoLabel}>{view.eyebrow}</p>
-        <p className={resultStyles.jobId}>{taskId ? `#${taskId}` : "准备中"}</p>
-        <div className={resultStyles.metaGrid}>
-          <MetaRow label="当前状态" value={historyItem?.taskStatus ?? view.badgeLabel} />
-          <MetaRow label="模型" value={historyItem?.modelName || historyItem?.modelCode || "-"} />
-          <MetaRow label="比例" value={historyItem?.aspectRatio || "-"} />
-          <MetaRow label="数量" value={historyItem ? `${historyItem.count}` : "-"} />
-        </div>
-        <div className={resultStyles.promptBox}>
-          <p className={resultStyles.infoLabel}>Prompt</p>
-          <p className={resultStyles.promptText}>{historyItem?.prompt || "等待提示词"}</p>
-        </div>
-      </div>
-      <p className={resultStyles.autoRefresh}>系统正在自动检查结果。图片 URL 写回后，预览区会自动切换为结果画布。</p>
-    </aside>
-  );
-}
-
-function MetaRow({ label, value }: Readonly<{ label: string; value: string }>) {
-  return <div className={resultStyles.metaRow}><span>{label}</span><span className={resultStyles.metaValue}>{value}</span></div>;
 }
 
 function ProgressSteps({ activeStep }: Readonly<{ activeStep: ResultStep }>) {

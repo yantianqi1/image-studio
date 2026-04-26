@@ -25,7 +25,7 @@ from apps.api.app.domains.llm.client_provider import (
     require_login_or_client_provider,
 )
 from apps.api.app.domains.llm.service import ensure_storage_dir
-from apps.api.app.domains.settings.service import require_uploads_enabled
+from apps.api.app.domains.settings.service import require_anonymous_image_enabled, require_uploads_enabled
 
 public_router = APIRouter(prefix="/image", tags=["image-public"])
 admin_router = APIRouter(tags=["image-admin"])
@@ -38,14 +38,14 @@ def create_image_job(payload: CreateImageJobRequest, request: Request, session: 
     if token:
         user = get_user_by_token(session, token)
     client_config = read_client_provider_config(request)
-    if user is None:
-        require_login_or_client_provider(client_config)
+    if user is None and client_config is None:
+        require_anonymous_image_enabled(session)
     if payload.mode == "edit":
         require_uploads_enabled(session)
     job = create_job(
         session,
         user_id=user.id if user else None,
-        source="member" if user else CLIENT_PROVIDER_SOURCE,
+        source=resolve_image_job_source(user=user, has_client_provider=client_config is not None),
         prompt=payload.prompt,
         model_code=payload.model_code,
         requested_count=payload.requested_count,
@@ -133,6 +133,14 @@ async def upload_image_asset(
     )
     session.commit()
     return api_ok(upload_payload(asset))
+
+
+def resolve_image_job_source(*, user, has_client_provider: bool) -> str:
+    if user is not None:
+        return "member"
+    if has_client_provider:
+        return CLIENT_PROVIDER_SOURCE
+    return "anonymous"
 
 
 @admin_router.get("/image-tasks")

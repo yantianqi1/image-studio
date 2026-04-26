@@ -31,7 +31,7 @@ def register_user(client: TestClient, *, email: str = "settings@example.com") ->
 def update_site_settings(
     client: TestClient,
     *,
-    site_title: str = "Commercial Studio",
+    site_title: str = "image Studio",
     allow_public_signup: bool = True,
     allow_anonymous_image: bool = True,
     uploads_enabled: bool = True,
@@ -63,7 +63,7 @@ def test_disabling_public_signup_blocks_register() -> None:
     assert response.json()["error"]["code"] == "public_signup_disabled"
 
 
-def test_anonymous_image_job_requires_login_or_client_provider_before_settings_gate() -> None:
+def test_disabling_anonymous_image_blocks_anonymous_job_creation() -> None:
     client = build_client()
     seed_admin()
     admin_login(client)
@@ -74,8 +74,8 @@ def test_anonymous_image_job_requires_login_or_client_provider_before_settings_g
         json={"prompt": "Anonymous request", "model_code": "gpt-image-2", "requested_count": 1},
     )
 
-    assert response.status_code == 401
-    assert response.json()["error"]["code"] == "login_or_client_provider_required"
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "anonymous_image_disabled"
 
 
 def test_disabling_uploads_blocks_edit_mode_job_creation() -> None:

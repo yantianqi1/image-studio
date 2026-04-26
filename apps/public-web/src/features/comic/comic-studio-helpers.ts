@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { publicApi, type ComicProject, type ComicTaskImageResult, type TaskItem } from "@/lib/public-api";
 import type { ResourceState } from "@/lib/use-api-resource";
 
+import type { CharacterReferenceMode } from "./character-reference-modes";
 import type { ComicStylePresetId } from "./comic-style-presets";
 import type { ComicWorkspaceStatus } from "./comic-state";
 import { buildStoryboardShots } from "./comic-utils";
@@ -40,11 +41,16 @@ const AUTO_REFRESH_STATUSES = new Set([
 
 export const TASK_TYPE_SCENE_RENDER = "scene-render";
 
-export function buildTaskInputPayload(premise: string, stylePresetId: ComicStylePresetId): Record<string, unknown> {
+export function buildTaskInputPayload(
+  premise: string,
+  stylePresetId: ComicStylePresetId,
+  characterReferenceMode: CharacterReferenceMode,
+): Record<string, unknown> {
   return {
     source_type: "text",
     source_text: premise,
     style_preset: stylePresetId,
+    character_reference_mode: characterReferenceMode,
     panels_per_image: 3,
   };
 }

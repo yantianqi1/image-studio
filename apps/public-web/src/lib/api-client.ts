@@ -20,6 +20,8 @@ export class ApiError extends Error {
   }
 }
 
+const UNAUTHORIZED_STATUS = 401;
+
 type ApiEnvelope<T> = Readonly<{
   data: T | null;
   meta: Record<string, unknown>;
@@ -27,6 +29,10 @@ type ApiEnvelope<T> = Readonly<{
 }>;
 
 const PUBLIC_API_PREFIX = "/api/public";
+
+export function isUnauthorizedApiError(error: unknown) {
+  return error instanceof ApiError && error.status === UNAUTHORIZED_STATUS;
+}
 
 function buildPublicUrl(path: string) {
   if (!path.startsWith("/")) {

@@ -27,6 +27,16 @@ class FakeHttpResponse:
         return self.payload
 
 
+@dataclass
+class PlainTextHttpResponse:
+    status_code: int
+    text: str
+    headers: dict[str, str]
+
+    def json(self) -> dict[str, object]:
+        raise ValueError("plain text response")
+
+
 def test_chat_compatible_image_job_uses_chat_completions(monkeypatch) -> None:
     client = build_client()
     provider = create_chat_image_provider(client)
@@ -114,6 +124,30 @@ def test_chat_compatible_image_job_sends_reference_assets(monkeypatch) -> None:
     assert captured["content"][0] == {"type": "text", "text": "保持角色一致"}
     assert captured["content"][1]["type"] == "image_url"
     assert captured["content"][1]["image_url"]["url"].startswith("data:image/png;base64,")
+
+
+def test_chat_compatible_image_parser_accepts_plain_markdown_response(monkeypatch) -> None:
+    from apps.api.app.domains.llm.models import Provider
+    from apps.api.app.domains.llm.openai_chat_image import parse_chat_image_response
+
+    def fake_get(url: str, *, timeout: float):
+        assert url == "https://image2.mom/generated-images/plain-markdown.png"
+        return FakeHttpResponse(status_code=200, payload={}, headers={"content-type": "image/png"}, content=b"plain-png")
+
+    monkeypatch.setattr("apps.api.app.domains.llm.openai_chat_image.httpx.get", fake_get)
+    response = PlainTextHttpResponse(
+        status_code=200,
+        text="![image_1](https://image2.mom/generated-images/plain-markdown.png)",
+        headers={"content-type": "text/plain"},
+    )
+    rendered = parse_chat_image_response(
+        response=response,
+        provider=Provider(name="wdapi", type="openai-chat-compatible", base_url="https://example.test/v1"),
+        prompt="测试",
+    )
+
+    assert rendered.content == b"plain-png"
+    assert rendered.mime_type == "image/png"
 
 
 def build_client() -> TestClient:

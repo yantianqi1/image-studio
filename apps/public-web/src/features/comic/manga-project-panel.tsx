@@ -1,4 +1,5 @@
 import { ErrorState, StatusBadge, statusDescription } from "./comic-status";
+import { CHARACTER_REFERENCE_MODE_OPTIONS, type CharacterReferenceMode } from "./character-reference-modes";
 import { COMIC_STYLE_PRESETS, type ComicStylePresetId } from "./comic-style-presets";
 import { PROJECT_TITLE_LIMIT } from "./comic-utils";
 import type { ComicWorkflowEvent } from "./comic-workflow-events";
@@ -15,6 +16,7 @@ type MangaProjectPanelProps = Readonly<{
   title: string;
   premise: string;
   stylePresetId: ComicStylePresetId;
+  characterReferenceMode: CharacterReferenceMode;
   workflowStatus: string;
   workflowError?: string;
   workflowEvents: readonly ComicWorkflowEvent[];
@@ -22,6 +24,7 @@ type MangaProjectPanelProps = Readonly<{
   onTitleChange: (value: string) => void;
   onPremiseChange: (value: string) => void;
   onStylePresetChange: (value: ComicStylePresetId) => void;
+  onCharacterReferenceModeChange: (value: CharacterReferenceMode) => void;
   onCreateProject: (event: React.FormEvent<HTMLFormElement>) => void;
 }>;
 
@@ -55,6 +58,10 @@ function CreateProjectCard(props: MangaProjectPanelProps) {
         <StylePresetSelect
           value={props.stylePresetId}
           onChange={props.onStylePresetChange}
+        />
+        <ReferenceModeSelect
+          value={props.characterReferenceMode}
+          onChange={props.onCharacterReferenceModeChange}
         />
         <button className={styles.primaryButton} type="submit" disabled={isSubmitting}>
           {isSubmitting ? "创建中..." : "创建项目"}
@@ -138,6 +145,30 @@ function StylePresetSelect(props: Readonly<{
       </select>
       <small>{COMIC_STYLE_PRESETS.find((item) => item.id === props.value)?.bestFor}</small>
     </label>
+  );
+}
+
+function ReferenceModeSelect(props: Readonly<{
+  value: CharacterReferenceMode;
+  onChange: (value: CharacterReferenceMode) => void;
+}>) {
+  return (
+    <div className={styles.fieldGroup}>
+      <span>角色参考模式</span>
+      <div className={styles.chipRow}>
+        {CHARACTER_REFERENCE_MODE_OPTIONS.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            data-active={props.value === option.value ? "true" : "false"}
+            onClick={() => props.onChange(option.value)}
+          >
+            <span>{option.label}</span>
+            <small>{option.detail}</small>
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 

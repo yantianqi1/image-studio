@@ -1,4 +1,4 @@
-# Commercial Studio Current Status
+# image Studio Current Status
 
 更新日期：2026-04-24
 

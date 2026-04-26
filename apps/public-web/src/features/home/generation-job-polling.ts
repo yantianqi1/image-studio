@@ -15,6 +15,30 @@ export type CompletedImageJob = Readonly<{
   results: readonly ImageJobResult[];
 }>;
 
+export type ResumableImageJobHistory = Readonly<{
+  status: string;
+  taskId?: number | null;
+  images?: readonly unknown[];
+}>;
+
+export function shouldResumeImageJobHistory(history: ResumableImageJobHistory | null) {
+  if (!history?.taskId) {
+    return false;
+  }
+  if (history.status !== "success") {
+    return true;
+  }
+  return (history.images?.length ?? 0) === 0;
+}
+
+export function imageJobResultsToHistoryImages(results: readonly ImageJobResult[]) {
+  return results.map((item) => ({
+    id: String(item.id),
+    assetId: item.asset_id,
+    url: item.asset_url,
+  }));
+}
+
 export async function waitForImageJobResults(
   api: Pick<PublicApiClient, "getImageJob" | "getImageJobResults">,
   jobId: number,

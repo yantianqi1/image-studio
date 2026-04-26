@@ -37,7 +37,7 @@ export function AdminShell({ title, description, children }: AdminShellProps) {
       <aside className="admin-sidebar">
         <div>
           <p className="admin-brand">CS Admin</p>
-          <p className="admin-caption">Commercial Studio 后台</p>
+          <p className="admin-caption">image Studio 后台</p>
         </div>
         <nav className="admin-nav">
           {navItems.map((item) => (

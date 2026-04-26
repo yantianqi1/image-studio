@@ -16,9 +16,7 @@ type GenerationHistorySidebarProps = Readonly<{
   onRenameHistory: (historyId: string, title: string) => void;
   onDeleteHistory: (historyId: string) => void;
   walletLabel: string;
-  isDrawer?: boolean;
   collapsed?: boolean;
-  onClose?: () => void;
   onToggleCollapsed?: () => void;
 }>;
 
@@ -32,9 +30,7 @@ export function GenerationHistorySidebar({
   onRenameHistory,
   onDeleteHistory,
   walletLabel,
-  isDrawer = false,
   collapsed = false,
-  onClose,
   onToggleCollapsed,
 }: GenerationHistorySidebarProps) {
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
@@ -52,7 +48,7 @@ export function GenerationHistorySidebar({
     });
   }, [histories, searchQuery]);
 
-  if (!isDrawer && collapsed) {
+  if (collapsed) {
     return (
       <CollapsedSidebar
         activeCount={histories.length}
@@ -70,10 +66,7 @@ export function GenerationHistorySidebar({
         active={item.id === activeHistoryId}
         editing={editingHistoryId === item.id}
         draftTitle={editingHistoryId === item.id ? draftTitle : item.title}
-        onSelect={() => {
-          onSelectHistory(item.id);
-          onClose?.();
-        }}
+        onSelect={() => onSelectHistory(item.id)}
         onStartRename={() => {
           setEditingHistoryId(item.id);
           setDraftTitle(item.title);
@@ -110,7 +103,7 @@ export function GenerationHistorySidebar({
   );
 
   return (
-    <aside className={isDrawer ? `${styles.drawerPanel} lg:hidden` : `${styles.sidebarShell} hidden lg:flex`}>
+    <aside className={`${styles.sidebarShell} hidden lg:flex`}>
       <div className="flex items-start justify-between gap-3">
         <div className={styles.sidebarTitle}>
           <div className={styles.sidebarBrand}>CS</div>
@@ -119,15 +112,9 @@ export function GenerationHistorySidebar({
             <h2 className="mt-1 text-base font-semibold tracking-[-0.02em] text-gray-950">历史记录</h2>
           </div>
         </div>
-        {isDrawer ? (
-          <button className={styles.menuButton} type="button" onClick={onClose} aria-label="关闭历史记录">
-            ×
-          </button>
-        ) : (
-          <button className={styles.menuButton} type="button" onClick={onToggleCollapsed} aria-label="折叠历史记录">
-            ‹
-          </button>
-        )}
+        <button className={styles.menuButton} type="button" onClick={onToggleCollapsed} aria-label="折叠历史记录">
+          ‹
+        </button>
       </div>
 
       <div className="mt-4 flex gap-2">

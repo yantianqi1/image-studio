@@ -19,3 +19,9 @@ test("comic workflow does not depend on frontend approval calls after task creat
   assert.doesNotMatch(source, /approveComicCharacterReferences/);
   assert.doesNotMatch(source, /approveComicTaskImageGeneration/);
 });
+
+test("comic task payload includes selected character reference mode", () => {
+  assert.match(source, /characterReferenceMode/);
+  assert.match(source, /buildTaskInputPayload\(premise, stylePresetId, characterReferenceMode\)/);
+  assert.match(panelSource, /ReferenceModeSelect/);
+});

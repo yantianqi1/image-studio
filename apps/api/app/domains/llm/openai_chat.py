@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from typing import Any
 
 import httpx
 from sqlalchemy import select
@@ -16,6 +17,7 @@ from apps.api.app.domains.llm.provider_validation import OPENAI_CHAT_COMPATIBLE_
 
 OPENAI_CHAT_ENDPOINT = "/chat/completions"
 OPENAI_CHAT_TIMEOUT_SECONDS = 60.0
+JSON_OPENERS = ("{", "[")
 
 
 def generate_structured_chat(
@@ -34,7 +36,7 @@ def generate_structured_chat(
         json=build_chat_payload(target.provider_model, system_prompt, user_payload, schema_name, response_schema=response_schema),
         timeout=OPENAI_CHAT_TIMEOUT_SECONDS,
     )
-    return parse_chat_response(response)
+    return parse_chat_response(response, response_schema=response_schema)
 
 
 class ChatTarget:
@@ -89,20 +91,96 @@ def build_chat_payload(
     }
 
 
-def parse_chat_response(response: httpx.Response | object) -> dict:
+def parse_chat_response(response: httpx.Response | object, *, response_schema: dict | None = None) -> dict:
     if response.status_code >= 400:
         raise AppError(code="provider_request_failed", message=extract_provider_error(response), status_code=502)
     payload = response.json()
     content = payload.get("choices", [{}])[0].get("message", {}).get("content") if isinstance(payload, dict) else None
     if not isinstance(content, str):
         raise AppError(code="provider_response_invalid", message="provider chat response missing content", status_code=502)
+    return parse_chat_content(content, response_schema=response_schema)
+
+
+def parse_chat_content(content: str, *, response_schema: dict | None = None) -> dict:
+    outer_string = parse_outer_json_string(content.strip())
+    if outer_string is not None:
+        return normalize_chat_json(outer_string, response_schema=response_schema)
+    last_error: json.JSONDecodeError | None = None
+    for start in find_json_starts(content):
+        try:
+            parsed, end = json.JSONDecoder().raw_decode(content, idx=start)
+        except json.JSONDecodeError as exc:
+            last_error = exc
+            continue
+        reject_multiple_json_values(content[end:])
+        return normalize_chat_json(parsed, response_schema=response_schema)
+    if last_error is not None:
+        raise AppError(code="provider_response_invalid", message=f"provider chat response invalid JSON: {last_error}", status_code=502) from last_error
+    raise AppError(code="provider_response_invalid", message="provider chat response missing JSON object", status_code=502)
+
+
+def parse_outer_json_string(content: str) -> str | None:
+    if not content.startswith('"'):
+        return None
     try:
-        parsed = json.loads(content)
-    except json.JSONDecodeError as exc:
-        raise AppError(code="provider_response_invalid", message=f"provider chat response invalid JSON: {exc}", status_code=502) from exc
-    if not isinstance(parsed, dict):
-        raise AppError(code="provider_response_invalid", message="provider chat response must be a JSON object", status_code=502)
-    return parsed
+        parsed, end = json.JSONDecoder().raw_decode(content)
+    except json.JSONDecodeError:
+        return None
+    if isinstance(parsed, str) and not content[end:].strip():
+        return parsed
+    return None
+
+
+def find_json_starts(content: str) -> list[int]:
+    return [index for index, char in enumerate(content) if char in JSON_OPENERS]
+
+
+def reject_multiple_json_values(trailing_content: str) -> None:
+    stripped = trailing_content.strip()
+    if stripped.startswith(JSON_OPENERS):
+        raise AppError(code="provider_response_invalid", message="provider chat response contains multiple JSON values", status_code=502)
+
+
+def normalize_chat_json(parsed: Any, *, response_schema: dict | None = None) -> dict:
+    if isinstance(parsed, dict):
+        return parsed
+    if isinstance(parsed, str):
+        return parse_chat_content(parsed, response_schema=response_schema)
+    if isinstance(parsed, list):
+        wrapped = wrap_schema_array(parsed, response_schema=response_schema)
+        if wrapped is not None:
+            return wrapped
+        if is_single_object_array(parsed):
+            return parsed[0]
+    raise AppError(code="provider_response_invalid", message="provider chat response must be a JSON object", status_code=502)
+
+
+def wrap_schema_array(parsed: list, *, response_schema: dict | None) -> dict | None:
+    field = find_single_array_property(response_schema)
+    if field is None:
+        return None
+    if is_single_object_array(parsed) and object_overlaps_schema(parsed[0], response_schema):
+        return None
+    return {field: parsed}
+
+
+def find_single_array_property(response_schema: dict | None) -> str | None:
+    properties = response_schema.get("properties") if isinstance(response_schema, dict) else None
+    if not isinstance(properties, dict):
+        return None
+    fields = [name for name, schema in properties.items() if isinstance(schema, dict) and schema.get("type") == "array"]
+    return fields[0] if len(fields) == 1 else None
+
+
+def object_overlaps_schema(value: dict, response_schema: dict | None) -> bool:
+    properties = response_schema.get("properties") if isinstance(response_schema, dict) else None
+    if not isinstance(properties, dict):
+        return False
+    return bool(set(value.keys()) & set(properties.keys()))
+
+
+def is_single_object_array(parsed: Any) -> bool:
+    return isinstance(parsed, list) and len(parsed) == 1 and isinstance(parsed[0], dict)
 
 
 def build_auth_headers(provider: Provider) -> dict[str, str]:

@@ -23,10 +23,10 @@ class AppSettings(BaseSettings):
     openai_provider_type: str = "openai-chat-compatible"
     openai_provider_base_url: str = "https://ws.wdapi.top/v1"
     openai_provider_api_key_env: str = "OPENAI_PROVIDER_KEY"
-    openai_provider_default_model: str = "gemini-3-flash-preview-low-search"
-    openai_chat_model_code: str = "gemini-3-flash-preview-low-search"
-    openai_chat_model_display_name: str = "Gemini 3 Flash Preview Low Search"
-    openai_chat_model_provider_model: str = "gemini-3-flash-preview-low-search"
+    openai_provider_default_model: str = "gemini-3-flash-preview-low"
+    openai_chat_model_code: str = "gemini-3-flash-preview-low"
+    openai_chat_model_display_name: str = "Gemini 3 Flash Preview Low"
+    openai_chat_model_provider_model: str = "gemini-3-flash-preview-low"
     openai_chat_model_member_price_cents: int = 12
     openai_chat_model_anonymous_price_cents: int = 0
     openai_image_model_code: str = "gpt-image-2"

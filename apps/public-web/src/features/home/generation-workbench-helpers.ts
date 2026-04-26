@@ -11,6 +11,7 @@ import type { PublicModelSummary, WalletSummary } from "@/lib/public-api";
 import type { ResourceState } from "@/lib/use-api-resource";
 
 const CURRENCY_CODE = "CNY";
+const UNAUTHORIZED_STATUS = 401;
 export const SIDEBAR_COLLAPSED_STORAGE_KEY = "commercial_studio_history_sidebar_collapsed";
 
 export const INITIAL_FORM: ImageFormState = {
@@ -59,6 +60,9 @@ export function getSiteTitle(settingsState: ResourceState<{ site_title: string }
 }
 
 export function getWalletLabel(walletState: ResourceState<WalletSummary>) {
+  if (walletState.status === "error" && walletState.statusCode === UNAUTHORIZED_STATUS) {
+    return "未登录";
+  }
   if (walletState.status !== "ready") {
     return "余额 --";
   }

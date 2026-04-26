@@ -37,7 +37,7 @@ export function LoginPanel() {
   }
 
   return (
-    <AppShell title="登录">
+    <AppShell activeHref="/login" title="登录">
       <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
         <div className="grid gap-4 content-start">
           <SectionPanel title="登录账户">

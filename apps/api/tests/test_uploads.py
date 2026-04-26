@@ -33,7 +33,7 @@ def update_uploads_enabled(client: TestClient, *, enabled: bool) -> None:
     response = client.patch(
         "/api/admin/settings",
         json={
-            "site_title": "Commercial Studio",
+            "site_title": "image Studio",
             "allow_public_signup": True,
             "allow_anonymous_image": True,
             "uploads_enabled": enabled,
