@@ -7,7 +7,7 @@ from apps.api.app.infra.db.session import initialize_database
 from apps.worker.worker.config import get_settings
 from apps.worker.worker.tasks.comic_orchestration import run_next_comic_orchestration
 from apps.worker.worker.tasks.comic_tasks import run_next_comic_task
-from apps.worker.worker.tasks.image_jobs import run_next_image_job
+from apps.worker.worker.tasks.image_jobs import run_next_image_jobs
 
 
 def build_bootstrap_message() -> str:
@@ -22,9 +22,11 @@ def run_once() -> str:
     comic_action = run_next_comic_orchestration()
     if comic_action is not None:
         return f"Processed comic orchestration {comic_action}."
-    image_job_id = run_next_image_job()
-    if image_job_id is not None:
-        return f"Processed image job {image_job_id}."
+    image_job_ids = run_next_image_jobs(max_workers=get_settings().worker_image_job_concurrency)
+    if len(image_job_ids) == 1:
+        return f"Processed image job {image_job_ids[0]}."
+    if len(image_job_ids) > 1:
+        return f"Processed image jobs {', '.join(str(job_id) for job_id in image_job_ids)}."
     return "No claimable comic tasks or image jobs."
 
 
