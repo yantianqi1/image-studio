@@ -95,7 +95,7 @@ def first_failed_page_error(session: Session, *, prompts: list[ComicPanelPrompt]
 
 
 def missing_reference_jobs(cards: list[ComicCharacterCard]) -> bool:
-    return any(card.reference_image_job_id is None for card in cards)
+    return any(card.reference_image_job_id is None and card.reference_asset_id is None for card in cards)
 
 
 def missing_page_jobs(prompts: list[ComicPanelPrompt]) -> bool:

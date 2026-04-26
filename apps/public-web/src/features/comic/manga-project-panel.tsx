@@ -17,6 +17,9 @@ type MangaProjectPanelProps = Readonly<{
   premise: string;
   stylePresetId: ComicStylePresetId;
   characterReferenceMode: CharacterReferenceMode;
+  referencePackFileName: string | null;
+  referencePackStatus: "idle" | "exporting" | "importing" | "error" | "success";
+  referencePackMessage?: string;
   workflowStatus: string;
   workflowError?: string;
   workflowEvents: readonly ComicWorkflowEvent[];
@@ -25,6 +28,9 @@ type MangaProjectPanelProps = Readonly<{
   onPremiseChange: (value: string) => void;
   onStylePresetChange: (value: ComicStylePresetId) => void;
   onCharacterReferenceModeChange: (value: CharacterReferenceMode) => void;
+  onReferencePackFileChange: (value: File | null) => void;
+  onExportReferencePack: () => void;
+  onImportReferencePack: () => void;
   onCreateProject: (event: React.FormEvent<HTMLFormElement>) => void;
 }>;
 
@@ -63,6 +69,7 @@ function CreateProjectCard(props: MangaProjectPanelProps) {
           value={props.characterReferenceMode}
           onChange={props.onCharacterReferenceModeChange}
         />
+        <ReferencePackControls {...props} />
         <button className={styles.primaryButton} type="submit" disabled={isSubmitting}>
           {isSubmitting ? "创建中..." : "创建项目"}
         </button>
@@ -168,6 +175,37 @@ function ReferenceModeSelect(props: Readonly<{
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+function ReferencePackControls(props: MangaProjectPanelProps) {
+  const busy = props.referencePackStatus === "exporting" || props.referencePackStatus === "importing";
+  return (
+    <div className={styles.fieldGroup}>
+      <span>人设图包</span>
+      <div className={styles.packActionRow}>
+        <label className={styles.secondaryButton} htmlFor="comic-character-pack-file">
+          选择 zip
+        </label>
+        <input
+          accept=".zip,application/zip"
+          className={styles.fileInput}
+          id="comic-character-pack-file"
+          type="file"
+          onChange={(event) => props.onReferencePackFileChange(event.target.files?.[0] ?? null)}
+        />
+        <button type="button" disabled={busy || !props.referencePackFileName} onClick={props.onImportReferencePack}>
+          {props.referencePackStatus === "importing" ? "导入中" : "导入"}
+        </button>
+        <button type="button" disabled={busy} onClick={props.onExportReferencePack}>
+          {props.referencePackStatus === "exporting" ? "导出中" : "导出"}
+        </button>
+      </div>
+      {props.referencePackFileName ? <small>{props.referencePackFileName}</small> : null}
+      {props.referencePackMessage ? (
+        <small data-tone={props.referencePackStatus}>{props.referencePackMessage}</small>
+      ) : null}
     </div>
   );
 }

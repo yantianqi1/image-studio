@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import APIRouter, Depends, File, Query, Request, Response, UploadFile, status
 from sqlalchemy.orm import Session
 
 from apps.api.app.core.config import get_settings
@@ -33,6 +33,11 @@ from apps.api.app.domains.comic.character_references import (
     list_character_references,
     sync_completed_character_references,
 )
+from apps.api.app.domains.comic.character_reference_packs import (
+    ZIP_MEDIA_TYPE,
+    export_character_reference_pack,
+)
+from apps.api.app.domains.comic.character_reference_pack_import import import_character_reference_pack
 from apps.api.app.domains.comic.services import (
     create_project,
     create_task,
@@ -205,6 +210,28 @@ def sync_character_references_endpoint(
     session: Session = Depends(get_db_session),
 ) -> dict:
     return api_ok(sync_completed_character_references(session, task_id))
+
+
+@public_router.get("/tasks/{task_id}/character-references/export")
+def export_character_reference_pack_endpoint(
+    task_id: str,
+    session: Session = Depends(get_db_session),
+) -> Response:
+    content, filename = export_character_reference_pack(session, task_id)
+    return Response(
+        content=content,
+        media_type=ZIP_MEDIA_TYPE,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@public_router.post("/tasks/{task_id}/character-references/import", status_code=status.HTTP_201_CREATED)
+async def import_character_reference_pack_endpoint(
+    task_id: str,
+    file: UploadFile = File(...),
+    session: Session = Depends(get_db_session),
+) -> dict:
+    return api_ok(import_character_reference_pack(session, task_id=task_id, content=await file.read()))
 
 
 @public_router.post("/panel-prompts/{prompt_id}/regenerate-image", status_code=status.HTTP_201_CREATED)

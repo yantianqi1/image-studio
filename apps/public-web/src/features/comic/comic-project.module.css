@@ -98,6 +98,47 @@
   opacity: 0.52;
 }
 
+.packActionRow {
+  display: grid;
+  grid-template-columns: 1fr 72px 72px;
+  gap: 8px;
+}
+
+.fileInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.secondaryButton,
+.packActionRow button {
+  display: grid;
+  min-height: 38px;
+  place-items: center;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fff;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.packActionRow button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.fieldGroup small[data-tone="error"] {
+  color: #b91c1c;
+}
+
+.fieldGroup small[data-tone="success"] {
+  color: #15803d;
+}
+
 .chipRow {
   display: flex;
   flex-wrap: wrap;

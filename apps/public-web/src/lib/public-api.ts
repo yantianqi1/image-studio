@@ -1,4 +1,4 @@
-import { apiFetch, apiUpload } from "@/lib/api-client";
+import { apiDownload, apiFetch, apiUpload } from "@/lib/api-client";
 
 export type LoginRequest = Readonly<{
   email: string;
@@ -135,6 +135,13 @@ export type ComicCharacterReferenceResponse = Readonly<{
   characters: readonly ComicCharacterReference[];
 }>;
 
+export type ComicCharacterReferenceImportResponse = Readonly<{
+  character_count: number;
+  imported_count: number;
+  ready: boolean;
+  characters: readonly ComicCharacterReference[];
+}>;
+
 export type ComicTaskImageResult = Readonly<{
   id: number;
   task_id: string;
@@ -176,6 +183,14 @@ export const publicApi = {
   },
   syncComicCharacterReferences(taskId: string) {
     return apiFetch<ComicCharacterReferenceResponse>(`/comic/tasks/${taskId}/character-references/sync`, { method: "POST" });
+  },
+  downloadComicCharacterReferencePack(taskId: string) {
+    return apiDownload(`/comic/tasks/${taskId}/character-references/export`);
+  },
+  importComicCharacterReferencePack(taskId: string, file: Blob) {
+    const formData = new FormData();
+    formData.append("file", file);
+    return apiUpload<ComicCharacterReferenceImportResponse>(`/comic/tasks/${taskId}/character-references/import`, formData);
   },
   approveComicTaskImageGeneration(taskId: string) {
     return apiFetch<{ created_count: number; reused_count: number; prompts: readonly ComicTaskImageResult[] }>(`/comic/tasks/${taskId}/approve-and-generate-images`, { method: "POST" });

@@ -29,6 +29,8 @@ def approve_character_references(session: Session, task_id: str) -> dict:
     task = require_task(session, task_id)
     require_completed_task_status(task.status)
     cards = require_character_cards(session, task_id=task.id)
+    if all(card.reference_asset_id is not None for card in cards):
+        return build_reference_payload(session, cards=cards, created_count=0, reused_count=len(cards))
     mode = parse_character_reference_mode(task.input_payload)
     if mode == SINGLE_SHEET_REFERENCE_MODE:
         return approve_single_sheet_reference(session, task=task, cards=cards)
@@ -39,7 +41,7 @@ def approve_per_character_references(session: Session, *, task: ComicTask, cards
     created_count = 0
     reused_count = 0
     for card in cards:
-        if card.reference_image_job_id is not None:
+        if card.reference_image_job_id is not None or card.reference_asset_id is not None:
             reused_count += 1
             continue
         job = create_reference_job(session, task=task, card=card)
@@ -122,7 +124,9 @@ def build_single_sheet_prompt(cards: list[ComicCharacterCard]) -> str:
         "Generate one clean all-character reference sheet for a Chinese comic.",
         "Neutral white or light gray background. No environment, no story scene, no action sequence.",
         "Show each listed character exactly once as a clear full-body standing design.",
-        "Do not render text labels, dialogue, captions, panel borders, props not listed, or extra people.",
+        "Render a clear Simplified Chinese text label next to or beneath every character.",
+        "Use exactly each Label value below. Labels are required on this reference sheet.",
+        "Do not render dialogue, captions, panel borders, props not listed, or extra people.",
         "The image is only for character identity: fixed face, hairstyle, costume silhouette, and colors.",
     ]
     return "\n".join([*header, "", *character_sheet_lines(cards)])
@@ -138,12 +142,17 @@ def character_sheet_lines(cards: list[ComicCharacterCard]) -> list[str]:
 def single_character_sheet_lines(*, index: int, card: ComicCharacterCard) -> list[str]:
     return [
         f"Character {index}: {card.name} ({card.character_code}).",
+        f"Label: {character_label(card.name)}",
         f"Appearance: {stable_json(card.appearance)}.",
         f"Costume: {stable_json(card.costume)}.",
         f"Color palette: {stable_json(card.color_palette)}.",
         f"Identity lock: {card.must_keep_prompt}",
         f"Avoid: {card.negative_prompt}",
     ]
+
+
+def character_label(name: str) -> str:
+    return name.split("(", 1)[0].strip() or name.strip()
 
 
 def stable_json(value) -> str:

@@ -72,3 +72,20 @@ test("isUnauthorizedApiError detects API 401 responses", async () => {
     (error) => isUnauthorizedApiError(error),
   );
 });
+
+test("apiDownload returns binary responses with client provider headers", async () => {
+  const captured = {};
+  const { apiDownload } = loadApiClient(async (endpoint, init) => {
+    captured.endpoint = endpoint;
+    captured.headers = init.headers;
+    return new Response("zip-bytes", { status: 200, headers: { "content-type": "application/zip" } });
+  }, {
+    "x-client-id": "browser-1",
+  });
+
+  const blob = await apiDownload("/comic/tasks/task-1/character-references/export");
+
+  assert.equal(captured.endpoint, "/api/public/comic/tasks/task-1/character-references/export");
+  assert.equal(captured.headers.get("x-client-id"), "browser-1");
+  assert.equal(await blob.text(), "zip-bytes");
+});

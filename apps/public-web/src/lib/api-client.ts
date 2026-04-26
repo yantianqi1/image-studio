@@ -136,6 +136,34 @@ export async function apiFetch<T>(
   return unwrapApiEnvelope<T>(payload, endpoint, response.status);
 }
 
+export async function apiDownload(
+  path: string,
+  options: Pick<ApiRequestOptions, "token"> = {},
+): Promise<Blob> {
+  const endpoint = buildPublicUrl(path);
+  const headers = new Headers({ Accept: "application/zip" });
+
+  if (options.token) {
+    headers.set("Authorization", `Bearer ${options.token}`);
+  }
+  appendClientProviderHeaders(headers);
+
+  const response = await fetch(endpoint, {
+    method: "GET",
+    headers,
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    const payload = await readResponsePayload(response);
+    const message = isApiEnvelope(payload)
+      ? payload.error?.message ?? `Request failed: ${response.status}`
+      : formatApiError(payload, `Request failed: ${response.status}`);
+    throw new ApiError(message, response.status, endpoint);
+  }
+
+  return response.blob();
+}
 
 export async function apiUpload<T>(
   path: string,
