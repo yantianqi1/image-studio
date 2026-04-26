@@ -1,0 +1,455 @@
+from datetime import datetime, timedelta
+
+from fastapi.testclient import TestClient
+import pytest
+from sqlalchemy import select
+
+from apps.api.app.core.errors import AppError
+from apps.api.app.domains.billing.service import get_wallet
+from apps.api.app.domains.image import service as image_service
+from apps.api.app.domains.image.models import Asset, ImageJob, ImageJobReferenceAsset, ImageJobResult
+from apps.api.app.domains.llm.service import RenderedImage
+from apps.api.app.domains.auth.service import create_admin_account
+from apps.api.app.infra.db.session import initialize_database, session_scope
+from apps.api.app.main import create_app
+from apps.worker.worker.tasks import image_jobs as worker_image_jobs
+
+
+def build_client() -> TestClient:
+    initialize_database()
+    return TestClient(create_app())
+
+
+def register_user(client: TestClient, *, email: str = "image@example.com"):
+    response = client.post(
+        "/api/public/auth/register",
+        json={"email": email, "password": "top-secret"},
+    )
+    assert response.status_code == 201
+    return response.json()["data"]
+
+
+def create_image_job(client: TestClient, *, prompt: str = "A paper city under sunrise") -> dict[str, object]:
+    response = client.post(
+        "/api/public/image/jobs",
+        json={"prompt": prompt, "model_code": "gpt-image-2", "requested_count": 1},
+    )
+    assert response.status_code == 201
+    return response.json()["data"]
+
+
+def load_wallet_balance(user_id: int) -> tuple[int, int]:
+    with session_scope() as session:
+        wallet = get_wallet(session, user_id=user_id)
+        return wallet.balance_cents, wallet.locked_cents
+
+
+def create_asset(session, *, owner_user_id: int | None, storage_path: str) -> Asset:
+    asset = Asset(owner_user_id=owner_user_id, storage_path=storage_path, mime_type="image/png")
+    session.add(asset)
+    session.flush()
+    return asset
+
+
+def list_reference_rows(session, *, job_id: int) -> list[ImageJobReferenceAsset]:
+    statement = select(ImageJobReferenceAsset).where(ImageJobReferenceAsset.job_id == job_id)
+    return list(session.execute(statement.order_by(ImageJobReferenceAsset.sequence.asc())).scalars())
+
+
+def build_rendered_image(*, prompt: str, model_code: str) -> RenderedImage:
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32">'
+        f"<text>{prompt}:{model_code}</text>"
+        "</svg>"
+    )
+    return RenderedImage(
+        content=svg.encode("utf-8"),
+        mime_type="image/svg+xml",
+        revised_prompt=prompt,
+        provider_request_id=f"test:{model_code}",
+    )
+
+
+def build_rendered_image_from_job(
+    _session=None,
+    *,
+    prompt: str,
+    model_code: str,
+    provider_id: int | None = None,
+    provider_model: str | None = None,
+) -> RenderedImage:
+    del provider_id, provider_model
+    return build_rendered_image(prompt=prompt, model_code=model_code)
+
+
+def seed_admin():
+    with session_scope() as session:
+        create_admin_account(session=session, username="root", password="admin-pass")
+
+
+def admin_login(client: TestClient):
+    response = client.post("/api/admin/auth/login", json={"username": "root", "password": "admin-pass"})
+    assert response.status_code == 200
+
+
+def test_create_image_job_stays_queued_until_worker_runs():
+    client = build_client()
+    user = register_user(client)
+    job = create_image_job(client)
+
+    assert job["status"] == "queued"
+    assert job["attempt_count"] == 0
+    assert job["max_attempts"] == 3
+    assert job["available_at"] is not None
+
+    results_response = client.get(f"/api/public/image/jobs/{job['id']}/results")
+    assert results_response.status_code == 200
+    results = results_response.json()["data"]
+    assert results == []
+
+    balance_cents, locked_cents = load_wallet_balance(user["id"])
+    assert balance_cents == 100
+    assert locked_cents == 77
+
+
+def test_gpt_image_two_job_reserves_configured_price(monkeypatch):
+    monkeypatch.setenv("OPENAI_PROVIDER_NAME", "wdapi")
+    monkeypatch.setenv("OPENAI_PROVIDER_BASE_URL", "https://ws.wdapi.top/v1")
+    monkeypatch.setenv("OPENAI_PROVIDER_API_KEY_ENV", "OPENAI_PROVIDER_KEY")
+    monkeypatch.setenv("OPENAI_PROVIDER_DEFAULT_MODEL", "gemini-3-flash-preview-low-search")
+    monkeypatch.setenv("OPENAI_CHAT_MODEL_CODE", "gemini-3-flash-preview-low-search")
+    monkeypatch.setenv("OPENAI_CHAT_MODEL_DISPLAY_NAME", "Gemini 3 Flash Preview Low Search")
+    monkeypatch.setenv("OPENAI_CHAT_MODEL_PROVIDER_MODEL", "gemini-3-flash-preview-low-search")
+    monkeypatch.setenv("OPENAI_CHAT_MODEL_MEMBER_PRICE_CENTS", "12")
+    monkeypatch.setenv("OPENAI_IMAGE_MODEL_CODE", "gpt-image-2")
+    monkeypatch.setenv("OPENAI_IMAGE_MODEL_DISPLAY_NAME", "GPT Image 2")
+    monkeypatch.setenv("OPENAI_IMAGE_MODEL_PROVIDER_MODEL", "gpt-image-2")
+    monkeypatch.setenv("OPENAI_IMAGE_MODEL_MEMBER_PRICE_CENTS", "77")
+
+    client = build_client()
+    user = register_user(client, email="priced-gpt-image@example.com")
+
+    create_response = client.post(
+        "/api/public/image/jobs",
+        json={"prompt": "Priced GPT image", "model_code": "gpt-image-2", "requested_count": 1},
+    )
+
+    assert create_response.status_code == 201
+    assert create_response.json()["data"]["charge_cents"] == 77
+
+    balance_cents, locked_cents = load_wallet_balance(user["id"])
+    assert balance_cents == 100
+    assert locked_cents == 77
+
+
+def test_edit_job_records_uploaded_source_asset_and_passes_it_to_renderer(monkeypatch):
+    client = build_client()
+    register_user(client, email="edit-source@example.com")
+    upload_response = client.post(
+        "/api/public/image/uploads",
+        files={"file": ("source.png", b"source-image", "image/png")},
+    )
+    assert upload_response.status_code == 201
+    source_asset_id = upload_response.json()["data"]["id"]
+    captured: dict[str, object] = {}
+
+    def renderer(_session=None, **kwargs):
+        captured.update(kwargs)
+        return build_rendered_image(prompt=kwargs["prompt"], model_code=kwargs["model_code"])
+
+    monkeypatch.setattr(image_service, "render_image", renderer, raising=False)
+    create_response = client.post(
+        "/api/public/image/jobs",
+        json={
+            "prompt": "turn it into a watercolor dog",
+            "model_code": "gpt-image-2",
+            "requested_count": 1,
+            "mode": "edit",
+            "source_asset_id": source_asset_id,
+        },
+    )
+    assert create_response.status_code == 201
+    job = create_response.json()["data"]
+    assert job["mode"] == "edit"
+    assert job["source_asset_id"] == source_asset_id
+
+    processed_job_id = worker_image_jobs.run_next_image_job()
+
+    assert processed_job_id == job["id"]
+    assert captured["source_asset_id"] == source_asset_id
+
+
+def test_create_job_stores_reference_assets_in_order():
+    build_client()
+    with session_scope() as session:
+        first_asset = create_asset(session, owner_user_id=None, storage_path="/tmp/ref-a.png")
+        second_asset = create_asset(session, owner_user_id=None, storage_path="/tmp/ref-b.png")
+        job = image_service.create_job(
+            session,
+            user_id=None,
+            source="anonymous",
+            prompt="Use references",
+            model_code="gpt-image-2",
+            requested_count=1,
+            mode="generate",
+            reference_asset_ids=[first_asset.id, second_asset.id],
+        )
+        rows = list_reference_rows(session, job_id=job.id)
+
+    assert [row.sequence for row in rows] == [1, 2]
+    assert [row.asset_id for row in rows] == [first_asset.id, second_asset.id]
+
+
+def test_create_job_rejects_missing_reference_asset():
+    build_client()
+    with session_scope() as session:
+        with pytest.raises(AppError) as error:
+            image_service.create_job(
+                session,
+                user_id=None,
+                source="anonymous",
+                prompt="Missing reference",
+                model_code="gpt-image-2",
+                requested_count=1,
+                mode="generate",
+                reference_asset_ids=[999999],
+            )
+
+    assert error.value.code == "reference_asset_not_found"
+
+
+def test_create_job_rejects_forbidden_reference_asset():
+    build_client()
+    with session_scope() as session:
+        asset = create_asset(session, owner_user_id=321, storage_path="/tmp/private-ref.png")
+        with pytest.raises(AppError) as error:
+            image_service.create_job(
+                session,
+                user_id=123,
+                source="member",
+                prompt="Forbidden reference",
+                model_code="gpt-image-2",
+                requested_count=1,
+                mode="generate",
+                reference_asset_ids=[asset.id],
+            )
+
+    assert error.value.code == "reference_asset_forbidden"
+
+
+def test_image_job_passes_reference_assets_to_renderer(monkeypatch):
+    build_client()
+    render_calls: list[dict] = []
+
+    def renderer(_session=None, **kwargs):
+        render_calls.append(dict(kwargs))
+        return build_rendered_image(prompt=kwargs["prompt"], model_code=kwargs["model_code"])
+
+    monkeypatch.setattr(image_service, "render_image", renderer, raising=False)
+    with session_scope() as session:
+        first_asset = create_asset(session, owner_user_id=None, storage_path="/tmp/ref-a.png")
+        second_asset = create_asset(session, owner_user_id=None, storage_path="/tmp/ref-b.png")
+        job = image_service.create_job(
+            session,
+            user_id=None,
+            source="anonymous",
+            prompt="Render with references",
+            model_code="gpt-image-2",
+            requested_count=1,
+            mode="generate",
+            reference_asset_ids=[first_asset.id, second_asset.id],
+        )
+        job_id = job.id
+
+    processed_job_id = worker_image_jobs.run_next_image_job()
+
+    assert processed_job_id == job_id
+    assert render_calls[0]["reference_asset_ids"] == [first_asset.id, second_asset.id]
+
+
+def test_worker_claims_and_processes_queued_job(monkeypatch):
+    monkeypatch.setattr(image_service, "render_image", build_rendered_image_from_job, raising=False)
+    client = build_client()
+    register_user(client)
+    job = create_image_job(client, prompt="Fog over bronze towers")
+
+    assert hasattr(worker_image_jobs, "run_next_image_job")
+
+    processed_job_id = worker_image_jobs.run_next_image_job()
+
+    assert processed_job_id == job["id"]
+
+    job_response = client.get(f"/api/public/image/jobs/{job['id']}")
+    assert job_response.status_code == 200
+    processed_job = job_response.json()["data"]
+    assert processed_job["status"] == "succeeded"
+    assert processed_job["attempt_count"] == 1
+
+    results_response = client.get(f"/api/public/image/jobs/{job['id']}/results")
+    assert results_response.status_code == 200
+    results = results_response.json()["data"]
+    assert len(results) == 1
+
+    asset_response = client.get(results[0]["asset_url"])
+    assert asset_response.status_code == 200
+    assert "svg" in asset_response.text
+
+
+def test_user_can_delete_own_image_job_with_results(monkeypatch):
+    monkeypatch.setattr(image_service, "render_image", build_rendered_image_from_job, raising=False)
+    client = build_client()
+    register_user(client)
+    job = create_image_job(client, prompt="Delete completed job")
+    worker_image_jobs.run_next_image_job()
+
+    response = client.delete(f"/api/public/image/jobs/{job['id']}")
+
+    assert response.status_code == 200
+    assert response.json()["data"] == {"deleted": True, "id": str(job["id"])}
+    assert client.get(f"/api/public/image/jobs/{job['id']}").status_code == 404
+    with session_scope() as session:
+        assert session.get(ImageJob, job["id"]) is None
+        assert list(session.execute(select(ImageJobResult)).scalars()) == []
+
+
+def test_delete_queued_image_job_releases_wallet_reservation():
+    client = build_client()
+    user = register_user(client, email="delete-queued@example.com")
+    job = create_image_job(client, prompt="Delete queued job")
+
+    response = client.delete(f"/api/public/image/jobs/{job['id']}")
+
+    assert response.status_code == 200
+    balance_cents, locked_cents = load_wallet_balance(user["id"])
+    assert balance_cents == 100
+    assert locked_cents == 0
+
+
+def test_worker_retries_failed_job_before_terminal_failure(monkeypatch):
+    client = build_client()
+    register_user(client)
+    job = create_image_job(client, prompt="Retry once image")
+    attempts = {"count": 0}
+
+    def flaky_renderer(
+        _session=None,
+        *,
+        prompt: str,
+        model_code: str,
+        provider_id: int | None = None,
+        provider_model: str | None = None,
+    ):
+        del provider_id, provider_model
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            raise RuntimeError("upstream timeout")
+        return build_rendered_image(prompt=prompt, model_code=model_code)
+
+    monkeypatch.setattr(image_service, "IMAGE_JOB_RETRY_DELAY_SECONDS", 0, raising=False)
+    monkeypatch.setattr(image_service, "render_image", flaky_renderer, raising=False)
+    assert hasattr(worker_image_jobs, "run_next_image_job")
+
+    first_run_job_id = worker_image_jobs.run_next_image_job()
+    assert first_run_job_id == job["id"]
+
+    first_job_response = client.get(f"/api/public/image/jobs/{job['id']}")
+    assert first_job_response.status_code == 200
+    first_job = first_job_response.json()["data"]
+    assert first_job["status"] == "queued"
+    assert first_job["attempt_count"] == 1
+    assert first_job["error_code"] == "image_job_retry_scheduled"
+
+    second_run_job_id = worker_image_jobs.run_next_image_job()
+    assert second_run_job_id == job["id"]
+
+    second_job_response = client.get(f"/api/public/image/jobs/{job['id']}")
+    assert second_job_response.status_code == 200
+    second_job = second_job_response.json()["data"]
+    assert second_job["status"] == "succeeded"
+    assert second_job["attempt_count"] == 2
+
+
+def test_worker_marks_job_failed_after_max_attempts_and_releases_reservation(monkeypatch):
+    client = build_client()
+    user = register_user(client)
+    monkeypatch.setattr(image_service, "IMAGE_JOB_MAX_ATTEMPTS", 2, raising=False)
+    monkeypatch.setattr(image_service, "IMAGE_JOB_RETRY_DELAY_SECONDS", 0, raising=False)
+
+    def failing_renderer(
+        _session=None,
+        *,
+        prompt: str,
+        model_code: str,
+        provider_id: int | None = None,
+        provider_model: str | None = None,
+    ):
+        del provider_id, provider_model
+        raise RuntimeError(f"provider rejected: {prompt}:{model_code}")
+
+    monkeypatch.setattr(image_service, "render_image", failing_renderer, raising=False)
+    job = create_image_job(client, prompt="Always fail image")
+    assert hasattr(worker_image_jobs, "run_next_image_job")
+
+    first_run_job_id = worker_image_jobs.run_next_image_job()
+    assert first_run_job_id == job["id"]
+
+    first_job_response = client.get(f"/api/public/image/jobs/{job['id']}")
+    assert first_job_response.status_code == 200
+    first_job = first_job_response.json()["data"]
+    assert first_job["status"] == "queued"
+    assert first_job["attempt_count"] == 1
+
+    balance_cents, locked_cents = load_wallet_balance(user["id"])
+    assert balance_cents == 100
+    assert locked_cents == 77
+
+    second_run_job_id = worker_image_jobs.run_next_image_job()
+    assert second_run_job_id == job["id"]
+
+    second_job_response = client.get(f"/api/public/image/jobs/{job['id']}")
+    assert second_job_response.status_code == 200
+    second_job = second_job_response.json()["data"]
+    assert second_job["status"] == "failed"
+    assert second_job["attempt_count"] == 2
+    assert second_job["error_code"] == "image_job_failed"
+    assert "provider rejected" in second_job["error_message"]
+
+    final_balance_cents, final_locked_cents = load_wallet_balance(user["id"])
+    assert final_balance_cents == 100
+    assert final_locked_cents == 0
+
+
+def test_worker_recovers_stale_running_job(monkeypatch):
+    client = build_client()
+    register_user(client, email="stale@example.com")
+    job = create_image_job(client, prompt="Recover stale job")
+    with session_scope() as session:
+        running_job = image_service.get_job(session, job["id"])
+        running_job.status = "running"
+        running_job.attempt_count = 1
+        running_job.started_at = datetime.utcnow() - timedelta(seconds=30)
+        running_job.finished_at = None
+        session.flush()
+
+    monkeypatch.setattr(image_service, "IMAGE_JOB_STALE_TIMEOUT_SECONDS", 1, raising=False)
+    monkeypatch.setattr(image_service, "render_image", build_rendered_image_from_job, raising=False)
+    processed_job_id = worker_image_jobs.run_next_image_job()
+    job_response = client.get(f"/api/public/image/jobs/{job['id']}")
+
+    assert processed_job_id == job["id"]
+    assert job_response.status_code == 200
+    assert job_response.json()["data"]["status"] == "succeeded"
+    assert job_response.json()["data"]["attempt_count"] == 2
+
+
+def test_admin_can_list_jobs():
+    client = build_client()
+    register_user(client)
+    create_image_job(client, prompt="Admin visible queue")
+    seed_admin()
+    admin_login(client)
+
+    response = client.get("/api/admin/image/jobs")
+
+    assert response.status_code == 200
+    assert len(response.json()["data"]) >= 1

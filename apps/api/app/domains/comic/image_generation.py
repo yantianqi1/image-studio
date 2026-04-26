@@ -1,0 +1,165 @@
+from __future__ import annotations
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from apps.api.app.core.errors import AppError
+from apps.api.app.domains.comic.character_references import COMIC_REFERENCES_NOT_READY_CODE, require_all_references_ready
+from apps.api.app.domains.comic.models import ComicCharacterCard, ComicPanelPrompt, ComicTask
+from apps.api.app.domains.comic.services import require_task
+from apps.api.app.domains.image.service import create_job as create_image_job
+from apps.api.app.domains.image.service import get_job as get_image_job
+from apps.api.app.domains.image.service import list_job_results, list_reference_asset_ids
+
+
+def approve_task_image_generation(session: Session, task_id: str) -> dict:
+    task = require_task(session, task_id)
+    require_completed_task(task)
+    prompts = list_ready_panel_prompts(session, task_id=task.id)
+    if not prompts:
+        raise AppError(code="comic_prompts_not_ready", message="comic panel prompts are not ready", status_code=409)
+    require_all_references_ready(session, task_id=task.id)
+    created_count, reused_count = enqueue_missing_image_jobs(session, prompts=prompts)
+    session.commit()
+    return build_approval_payload(prompts=prompts, created_count=created_count, reused_count=reused_count)
+
+
+def regenerate_prompt_image(session: Session, prompt_id: int) -> dict:
+    prompt = require_panel_prompt(session, prompt_id)
+    require_completed_task(require_task(session, prompt.task_id))
+    reference_asset_ids = resolve_prompt_reference_asset_ids(session, prompt=prompt)
+    prompt.image_job_id = enqueue_prompt_image_job(session, prompt=prompt, reference_asset_ids=reference_asset_ids).id
+    prompt.asset_id = None
+    session.commit()
+    return panel_prompt_payload(prompt)
+
+
+def list_task_image_results(session: Session, task_id: str) -> list[dict]:
+    task = require_task(session, task_id)
+    prompts = list_ready_panel_prompts(session, task_id=task.id)
+    return [prompt_image_result_payload(session, prompt=prompt) for prompt in prompts]
+
+
+def enqueue_missing_image_jobs(session: Session, *, prompts: list[ComicPanelPrompt]) -> tuple[int, int]:
+    created_count = 0
+    reused_count = 0
+    for prompt in prompts:
+        reference_asset_ids = resolve_prompt_reference_asset_ids(session, prompt=prompt)
+        if should_reuse_prompt_image_job(session, prompt=prompt, reference_asset_ids=reference_asset_ids):
+            reused_count += 1
+            continue
+        prompt.image_job_id = enqueue_prompt_image_job(session, prompt=prompt, reference_asset_ids=reference_asset_ids).id
+        prompt.asset_id = None
+        created_count += 1
+    return created_count, reused_count
+
+
+def should_reuse_prompt_image_job(
+    session: Session,
+    *,
+    prompt: ComicPanelPrompt,
+    reference_asset_ids: list[int],
+) -> bool:
+    if prompt.image_job_id is None:
+        return False
+    job = get_image_job(session, prompt.image_job_id)
+    if job.status == "failed":
+        return False
+    return list_reference_asset_ids(session, job_id=job.id) == reference_asset_ids
+
+
+def list_ready_panel_prompts(session: Session, task_id: str) -> list[ComicPanelPrompt]:
+    statement = select(ComicPanelPrompt).where(ComicPanelPrompt.task_id == task_id, ComicPanelPrompt.status == "prompt_ready")
+    return list(session.execute(statement.order_by(ComicPanelPrompt.image_index.asc())).scalars())
+
+
+def require_completed_task(task: ComicTask) -> None:
+    if task.status != "completed":
+        raise AppError(code="comic_task_not_ready", message="comic task is not completed", status_code=409)
+
+
+def require_panel_prompt(session: Session, prompt_id: int) -> ComicPanelPrompt:
+    prompt = session.get(ComicPanelPrompt, prompt_id)
+    if prompt is None:
+        raise AppError(code="comic_panel_prompt_not_found", message="comic panel prompt not found", status_code=404)
+    return prompt
+
+
+def resolve_prompt_reference_asset_ids(session: Session, *, prompt: ComicPanelPrompt) -> list[int]:
+    character_codes = list(prompt.character_codes or [])
+    if not character_codes:
+        return []
+    cards = list_prompt_character_cards(session, prompt=prompt, character_codes=character_codes)
+    return [require_card_reference_asset(card) for card in cards]
+
+
+def list_prompt_character_cards(
+    session: Session,
+    *,
+    prompt: ComicPanelPrompt,
+    character_codes: list[str],
+) -> list[ComicCharacterCard]:
+    statement = select(ComicCharacterCard).where(
+        ComicCharacterCard.task_id == prompt.task_id,
+        ComicCharacterCard.character_code.in_(character_codes),
+    )
+    card_map = {card.character_code: card for card in session.execute(statement).scalars()}
+    return [require_character_card(card_map, character_code=code) for code in character_codes]
+
+
+def require_character_card(card_map: dict[str, ComicCharacterCard], *, character_code: str) -> ComicCharacterCard:
+    card = card_map.get(character_code)
+    if card is None:
+        raise_references_not_ready()
+    return card
+
+
+def require_card_reference_asset(card: ComicCharacterCard) -> int:
+    if card.reference_asset_id is None:
+        raise_references_not_ready()
+    return card.reference_asset_id
+
+
+def raise_references_not_ready() -> None:
+    raise AppError(
+        code=COMIC_REFERENCES_NOT_READY_CODE,
+        message="comic character references are not ready",
+        status_code=409,
+    )
+
+
+def enqueue_prompt_image_job(session: Session, *, prompt: ComicPanelPrompt, reference_asset_ids: list[int] | None = None):
+    return create_image_job(session, user_id=None, source="anonymous", prompt=prompt.prompt, model_code=prompt.model_code, requested_count=1, mode="generate", reference_asset_ids=reference_asset_ids)
+
+
+def build_approval_payload(*, prompts: list[ComicPanelPrompt], created_count: int, reused_count: int) -> dict:
+    return {"created_count": created_count, "reused_count": reused_count, "prompts": [panel_prompt_payload(prompt) for prompt in prompts]}
+
+
+def panel_prompt_payload(prompt: ComicPanelPrompt) -> dict:
+    return {
+        "id": prompt.id,
+        "task_id": prompt.task_id,
+        "image_index": prompt.image_index,
+        "image_job_id": prompt.image_job_id,
+        "asset_id": prompt.asset_id,
+        "prompt": prompt.prompt,
+    }
+
+
+def prompt_image_result_payload(session: Session, *, prompt: ComicPanelPrompt) -> dict:
+    payload = panel_prompt_payload(prompt)
+    payload.update({"image_status": None, "error_message": None, "result": None})
+    if prompt.image_job_id is None:
+        return payload
+    job = get_image_job(session, prompt.image_job_id)
+    payload["image_status"] = job.status
+    payload["error_message"] = job.error_message
+    results = list_job_results(session, job.id)
+    if results:
+        payload["result"] = image_result_payload(results[0])
+    return payload
+
+
+def image_result_payload(result) -> dict:
+    return {"id": result.id, "job_id": result.job_id, "asset_id": result.asset_id, "asset_url": result.asset_url, "revised_prompt": result.revised_prompt, "provider_request_id": result.provider_request_id}

@@ -26,10 +26,18 @@
 - 声称完成前必须运行相关测试或构建。
 - 不允许只靠人工判断或“应该可以”作为完成依据。
 
+## 漫创 Agent 当前事实
+
+- 当前 `/comic` 页面里的“LLM Agent 处理中 / 自动拆解剧情 / 分镜生成 / 漫画页面生成”是前端状态与占位 UI，不代表真实后台 agent 正在执行。
+- `comic_projects` 只表示项目已创建；不能据此推断剧情拆解、分镜或漫画生成已启动。
+- `comic_tasks` 为空时，不存在可执行的漫创任务；前端若显示 `planning`，需要按状态映射问题排查，而不是假设 agent 卡住。
+- 当前 `apps/worker/worker/main.py` 只轮询并处理 `image_jobs`，没有消费 `comic_tasks`。
+- 当前 `apps/api/app/domains/comic/services.py` 的 `create_task()` 是 API 请求内同步执行，并通过本地数据拼接 `output_payload`；没有调用 LLM、没有进入 worker 队列、没有串联图片生成。
+- 实现真实漫创流程时，必须显式设计任务队列、worker 消费、LLM adapter 调用、image job 串联、状态持久化和错误暴露；禁止用前端假进度、mock 输出或静默 fallback 伪装成功。
+
 ## Subagent 规则
 
 - Batch 0 由主控串行完成。
 - Batch 1 起才允许并发。
 - 每个 subagent 必须返回修改文件、测试命令、测试结果和边界外修改情况。
 - reviewer 未通过时，不得进入下一批次。
-
