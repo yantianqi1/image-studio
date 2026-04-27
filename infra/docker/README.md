@@ -85,9 +85,9 @@ docker compose down
 docker compose down -v
 ```
 
-## 入口说明
+## 开发态入口说明
 
-默认暴露端口：
+`docker-compose.yml` 为了本地调试会暴露以下端口：
 
 - `8080`：nginx 用户端入口
 - `8081`：nginx 后台入口
@@ -101,6 +101,20 @@ docker compose down -v
 - 用户端：`http://localhost:8080/`
 - 后台端：`http://localhost:8081/`
 - API 健康检查：`http://localhost:8080/health`
+
+## 生产态入口说明
+
+`docker-compose.prod.yml` 只对外暴露：
+
+- `8080`：用户端 nginx 入口
+- `8081`：管理后台 nginx 入口
+
+以下端口只在 Docker 网络内部使用，不对宿主机发布：
+
+- `public-web:7700`
+- `admin-web:7701`
+- `api:7800`
+- `postgres:5432`
 
 ## 生产镜像部署
 

@@ -6,12 +6,12 @@
 
 ## 服务拓扑
 
-- `public-web`：用户端 Next.js，默认入口 `http://localhost:7700`
-- `admin-web`：后台端 Next.js，默认入口 `http://localhost:7701`
-- `api`：FastAPI，默认入口 `http://localhost:7800`
+- `public-web`：用户端 Next.js，本地直连端口 `7700`，生产仅 Docker 内网可见
+- `admin-web`：后台端 Next.js，本地直连端口 `7701`，生产仅 Docker 内网可见
+- `api`：FastAPI，本地直连端口 `7800`，生产仅 Docker 内网可见
 - `worker`：异步任务进程，负责消费图片任务
-- `postgres`：主数据库，默认端口 `5432`
-- `nginx`：统一入口与反向代理，本地建议监听 `8080` 与 `8081`
+- `postgres`：主数据库，生产仅 Docker 内网可见
+- `nginx`：统一入口与反向代理，生产默认只暴露 `8080` 与 `8081`
 
 ## 仓库结构
 
@@ -261,6 +261,8 @@ docker compose -f docker-compose.prod.yml up -d
 - 用户端：`http://服务器IP:8080/`
 - 后台端：`http://服务器IP:8081/`
 - API 健康检查：`http://服务器IP:8080/health`
+
+生产 Compose 只对外发布 `8080` 和 `8081`。`public-web:7700`、`admin-web:7701`、`api:7800`、`postgres:5432` 只在 Docker 网络内部给 nginx、API 和 worker 使用。
 
 生产建议见 `infra/docker/README.md`、`infra/nginx/README.md`、`db/migrations/README.md`、`db/seeds/README.md`。
 
