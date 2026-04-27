@@ -26,6 +26,13 @@ test("prompt app catalog exposes character poster app", () => {
   assert.equal(PROMPT_APPS[0].href, "/apps/character-poster");
 });
 
+test("character poster app is public and relies on image job API access rules", () => {
+  const { PROMPT_APPS } = loadPromptApps();
+  const app = PROMPT_APPS.find((item) => item.id === "character-poster");
+
+  assert.equal(app.access, "public-image-job-api");
+});
+
 test("buildCharacterPosterPrompt inserts character and note", () => {
   const { buildCharacterPosterPrompt } = loadPromptApps();
   const prompt = buildCharacterPosterPrompt({ character: "张夏", note: "网络小说青山的女主" });

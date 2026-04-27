@@ -1,4 +1,5 @@
 export type PromptApp = Readonly<{
+  access: "public-image-job-api";
   id: string;
   title: string;
   description: string;
@@ -13,6 +14,7 @@ export type CharacterPosterPromptInput = Readonly<{
 
 export const PROMPT_APPS: readonly PromptApp[] = [
   {
+    access: "public-image-job-api",
     id: "character-poster",
     title: "角色海报",
     description: "输入角色与备注，生成二次元动漫插画海报。",
