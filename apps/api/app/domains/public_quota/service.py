@@ -38,28 +38,36 @@ def consume_public_quota(
     units: int = 1,
     now: datetime | None = None,
 ) -> PublicQuotaUsage:
-    timestamp = normalize_timestamp(now)
-    record = get_settings_record(session)
-    mode = validate_quota_mode(record.public_quota_mode)
-    validate_feature(feature)
-    validate_units(units)
-    limit_count = resolve_limit_count(record, mode)
-    ip_hash = hash_request_ip(request_ip)
-    bucket_key = resolve_bucket_key(mode=mode, request_ip_hash=ip_hash, now=timestamp)
-    bucket = get_or_create_bucket(session, mode=mode, bucket_key=bucket_key, limit_count=limit_count, now=timestamp)
-    reserve_bucket_units(session, bucket_id=bucket.id, units=units, now=timestamp)
-    usage = PublicQuotaUsage(
-        bucket_id=bucket.id,
+    return consume_public_quota_by_request_ip_hash(
+        session,
+        request_ip_hash=hash_request_ip(request_ip),
         feature=feature,
-        units=units,
         reference_type=reference_type,
         reference_id=reference_id,
-        request_ip_hash=ip_hash,
-        created_at=timestamp.replace(tzinfo=None),
+        units=units,
+        now=now,
     )
-    session.add(usage)
-    session.flush()
-    return usage
+
+
+def consume_public_quota_by_request_ip_hash(
+    session: Session,
+    *,
+    request_ip_hash: str | None,
+    feature: str,
+    reference_type: str,
+    reference_id: str,
+    units: int = 1,
+    now: datetime | None = None,
+) -> PublicQuotaUsage:
+    return _consume_public_quota(
+        session,
+        request_ip_hash=request_ip_hash,
+        feature=feature,
+        reference_type=reference_type,
+        reference_id=reference_id,
+        units=units,
+        now=now,
+    )
 
 
 def get_public_quota_status(
@@ -84,6 +92,39 @@ def get_public_quota_status(
         "remaining_count": remaining_count,
         "exhausted": remaining_count <= MIN_REMAINING_COUNT,
     }
+
+
+def _consume_public_quota(
+    session: Session,
+    *,
+    request_ip_hash: str | None,
+    feature: str,
+    reference_type: str,
+    reference_id: str,
+    units: int,
+    now: datetime | None,
+) -> PublicQuotaUsage:
+    timestamp = normalize_timestamp(now)
+    record = get_settings_record(session)
+    mode = validate_quota_mode(record.public_quota_mode)
+    validate_feature(feature)
+    validate_units(units)
+    limit_count = resolve_limit_count(record, mode)
+    bucket_key = resolve_bucket_key(mode=mode, request_ip_hash=request_ip_hash, now=timestamp)
+    bucket = get_or_create_bucket(session, mode=mode, bucket_key=bucket_key, limit_count=limit_count, now=timestamp)
+    reserve_bucket_units(session, bucket_id=bucket.id, units=units, now=timestamp)
+    usage = PublicQuotaUsage(
+        bucket_id=bucket.id,
+        feature=feature,
+        units=units,
+        reference_type=reference_type,
+        reference_id=reference_id,
+        request_ip_hash=request_ip_hash,
+        created_at=timestamp.replace(tzinfo=None),
+    )
+    session.add(usage)
+    session.flush()
+    return usage
 
 
 def resolve_request_ip(request: Request) -> str | None:

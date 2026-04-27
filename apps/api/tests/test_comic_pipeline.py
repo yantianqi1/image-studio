@@ -318,13 +318,22 @@ def create_comic_client() -> TestClient:
     return TestClient(app)
 
 
-def create_task(client: TestClient, input_payload: dict | None = None) -> dict:
+def create_task(
+    client: TestClient,
+    input_payload: dict | None = None,
+    *,
+    headers: dict[str, str] | None = None,
+    include_client_provider: bool = True,
+) -> dict:
     project_id = create_project(client)
     save_chapter(client, project_id)
     save_scene(client, project_id)
+    request_headers = client_provider_headers() if include_client_provider else {}
+    if headers:
+        request_headers.update(headers)
     response = client.post(
         "/api/public/comic/tasks",
-        headers=client_provider_headers(),
+        headers=request_headers,
         json={
             "project_id": project_id,
             "chapter_id": "chapter-001",

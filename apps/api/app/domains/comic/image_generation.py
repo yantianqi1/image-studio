@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from apps.api.app.core.errors import AppError
 from apps.api.app.domains.auth.ownership import OwnerContext
+from apps.api.app.domains.comic.quota import consume_public_quota_for_comic_image_job
 from apps.api.app.domains.comic.character_references import COMIC_REFERENCES_NOT_READY_CODE, require_all_references_ready
 from apps.api.app.domains.comic.models import ComicCharacterCard, ComicPanelPrompt, ComicTask
 from apps.api.app.domains.comic.ownership import require_task_for_owner
@@ -171,7 +172,7 @@ def enqueue_prompt_image_job(
     reference_asset_ids: list[int] | None = None,
 ):
     client_config = resolve_task_client_provider_config(task)
-    return create_image_job(
+    job = create_image_job(
         session,
         owner=task_owner(task),
         source=resolve_image_job_source(task=task, client_config=client_config),
@@ -183,6 +184,14 @@ def enqueue_prompt_image_job(
         client_access_id=client_config.client_id if client_config else None,
         client_provider_config=client_config,
     )
+    consume_public_quota_for_comic_image_job(
+        session,
+        task=task,
+        request_ip_hash=task.request_ip_hash,
+        reference_type="comic_panel_image_job",
+        reference_id=str(job.id),
+    )
+    return job
 
 
 def resolve_task_client_provider_config(task: ComicTask) -> ClientProviderConfig | None:

@@ -162,6 +162,7 @@ class ComicTask(Base):
     )
     client_access_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)
     client_provider_config: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    request_ip_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     task_type: Mapped[str] = mapped_column(String(TASK_TYPE_LENGTH), nullable=False)
     status: Mapped[str] = mapped_column(String(STATUS_LENGTH), nullable=False)
     input_payload: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)

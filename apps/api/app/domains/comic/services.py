@@ -191,6 +191,7 @@ def create_task(
     owner: OwnerContext,
     client_provider_config: ClientProviderConfig | None = None,
     client_provider_type: str | None = None,
+    request_ip_hash: str | None = None,
     commit: bool = True,
 ) -> ComicTask:
     require_project_for_owner(session, payload.project_id, owner)
@@ -210,6 +211,7 @@ def create_task(
         anonymous_session_id=owner.anonymous_session_id,
         client_access_id=client_provider_config.client_id if client_provider_config else None,
         client_provider_config=provider_config,
+        request_ip_hash=request_ip_hash,
         task_type=payload.task_type,
         status=TASK_STATUS_PENDING,
         stage="queued",

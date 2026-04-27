@@ -5,13 +5,21 @@ from sqlalchemy import select
 
 from apps.api.app.domains.comic.models import ComicCharacterCard, ComicTask
 from apps.api.app.domains.image.models import Asset, ImageJob, ImageJobResult
+from apps.api.app.domains.public_quota.constants import PUBLIC_QUOTA_MODE_PER_IP
+from apps.api.app.domains.public_quota.service import get_public_quota_status
+from apps.api.app.domains.settings.service import get_settings_record
 from apps.api.app.infra.db.session import session_scope
 from apps.worker.worker.tasks import comic_tasks as worker_comic_tasks
 from apps.api.tests.test_comic_pipeline import create_comic_client, create_task, install_llm_outputs
 
+PUBLIC_QUOTA_REQUEST_IP = "203.0.113.42"
+
 
 def test_approve_character_references_enqueues_jobs(monkeypatch) -> None:
-    client, task_id = create_completed_comic_task(monkeypatch)
+    client, task_id = create_completed_comic_task(monkeypatch, request_headers=public_quota_headers())
+    clear_task_client_provider(task_id)
+    use_per_ip_public_quota()
+    quota_before = public_quota_used_count()
 
     response = client.post(f"/api/public/comic/tasks/{task_id}/character-references")
 
@@ -21,18 +29,26 @@ def test_approve_character_references_enqueues_jobs(monkeypatch) -> None:
     assert data["characters"][0]["reference_image_job_id"] is not None
     assert data["characters"][0]["reference_asset_id"] is None
     assert data["characters"][0]["image_status"] == "queued"
+    assert quota_before == 0
+    assert public_quota_used_count() == 1
 
 
 def test_approve_character_references_reuses_existing_jobs(monkeypatch) -> None:
-    client, task_id = create_completed_comic_task(monkeypatch)
+    client, task_id = create_completed_comic_task(monkeypatch, request_headers=public_quota_headers())
+    clear_task_client_provider(task_id)
+    use_per_ip_public_quota()
 
     first = client.post(f"/api/public/comic/tasks/{task_id}/character-references").json()["data"]
+    quota_after_first = public_quota_used_count()
     second = client.post(f"/api/public/comic/tasks/{task_id}/character-references").json()["data"]
+    quota_after_second = public_quota_used_count()
 
     assert first["created_count"] == 1
     assert second["created_count"] == 0
     assert second["reused_count"] == 1
     assert second["characters"][0]["reference_image_job_id"] == first["characters"][0]["reference_image_job_id"]
+    assert quota_after_first == 1
+    assert quota_after_second == 1
 
 
 def test_approve_character_references_aligns_reference_prompt_with_style(monkeypatch) -> None:
@@ -102,12 +118,46 @@ def test_approve_character_references_requires_completed_task(monkeypatch) -> No
     assert response.json()["error"]["code"] == "comic_task_not_ready"
 
 
-def create_completed_comic_task(monkeypatch) -> tuple[TestClient, str]:
+def create_completed_comic_task(
+    monkeypatch,
+    *,
+    request_headers: dict[str, str] | None = None,
+    include_client_provider: bool = True,
+) -> tuple[TestClient, str]:
     client = create_comic_client()
-    task = create_task(client)
+    task = create_task(
+        client,
+        headers=request_headers,
+        include_client_provider=include_client_provider,
+    )
     install_llm_outputs(monkeypatch)
     worker_comic_tasks.run_next_comic_task()
     return client, task["id"]
+
+
+def clear_task_client_provider(task_id: str) -> None:
+    with session_scope() as session:
+        task = session.get(ComicTask, task_id)
+        task.client_provider_config = None
+        task.client_access_id = None
+        session.commit()
+
+
+def public_quota_headers() -> dict[str, str]:
+    return {"x-forwarded-for": PUBLIC_QUOTA_REQUEST_IP}
+
+
+def public_quota_used_count() -> int:
+    with session_scope() as session:
+        status = get_public_quota_status(session, request_ip=PUBLIC_QUOTA_REQUEST_IP)
+        return int(status["used_count"])
+
+
+def use_per_ip_public_quota() -> None:
+    with session_scope() as session:
+        record = get_settings_record(session)
+        record.public_quota_mode = PUBLIC_QUOTA_MODE_PER_IP
+        record.public_quota_per_ip_limit = 5
 
 
 def approve_first_reference_job(client: TestClient, task_id: str) -> int:

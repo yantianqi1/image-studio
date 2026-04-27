@@ -178,24 +178,21 @@ def test_admin_rejects_zero_public_quota_limit(client: TestClient) -> None:
     assert response.status_code == 422
 
 
-def test_public_quota_is_shared_between_image_and_comic(client: TestClient) -> None:
+def test_comic_agent_planning_does_not_consume_public_quota(client: TestClient) -> None:
     seed_admin()
     admin_login(client)
-    update_public_quota_settings(mode="daily_global", daily_limit=2, per_ip_limit=5)
+    update_public_quota_settings(mode="daily_global", daily_limit=1, per_ip_limit=5)
 
-    image_job = create_public_image_job(client, prompt="First public image")
     project = create_comic_project(client)
     create_comic_scene(client, project["id"])
     comic_task = create_comic_task(client, project["id"])
-    exhausted_response = client.post(
-        "/api/public/image/jobs",
-        json={"prompt": "Third public request", "model_code": "gpt-image-2", "requested_count": 1},
-    )
+    quota_response = client.get("/api/public/quota")
+    image_job = create_public_image_job(client, prompt="Only counted public image")
 
-    assert image_job["source"] == "anonymous"
     assert comic_task["status"] == "pending"
-    assert exhausted_response.status_code == 403
-    assert exhausted_response.json()["error"]["code"] == "public_quota_exhausted"
+    assert quota_response.status_code == 200
+    assert quota_response.json()["data"]["used_count"] == 0
+    assert image_job["source"] == "anonymous"
 
 
 def test_public_quota_bypasses_login_and_client_provider_requests() -> None:

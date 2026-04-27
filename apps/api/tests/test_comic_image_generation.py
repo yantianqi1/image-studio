@@ -9,10 +9,15 @@ from apps.api.app.domains.auth.service import create_user
 from apps.api.app.domains.billing.service import create_wallet
 from apps.api.app.domains.comic.models import ComicCharacterCard, ComicPanelPrompt, ComicStoryboard, ComicTask
 from apps.api.app.domains.image.models import Asset, ImageJob, ImageJobReferenceAsset, ImageJobResult
+from apps.api.app.domains.public_quota.constants import PUBLIC_QUOTA_MODE_PER_IP
+from apps.api.app.domains.public_quota.service import get_public_quota_status
+from apps.api.app.domains.settings.service import get_settings_record
 from apps.api.app.infra.db.session import initialize_database, session_scope
 from apps.api.app.main import create_app
 from apps.worker.worker.tasks import comic_orchestration as worker_comic_orchestration
 from apps.worker.worker.tasks import comic_tasks as worker_comic_tasks
+
+PUBLIC_QUOTA_REQUEST_IP = "203.0.113.41"
 
 
 def test_approve_does_not_render_images_synchronously(monkeypatch) -> None:
@@ -53,16 +58,26 @@ def test_page_generation_requires_character_references() -> None:
 
 def test_approve_is_idempotent() -> None:
     client = build_client()
-    task = seed_completed_task(client, prompt_count=2)
+    use_per_ip_public_quota()
+    task = seed_completed_task(
+        client,
+        prompt_count=2,
+        include_client_provider=False,
+        request_headers=public_quota_headers(),
+    )
 
     first = approve_task(client, task["id"])
+    quota_after_first = public_quota_used_count()
     second = approve_task(client, task["id"])
+    quota_after_second = public_quota_used_count()
 
     assert first["created_count"] == 2
     assert second["created_count"] == 0
     assert second["reused_count"] == 2
     assert prompt_job_ids(second) == prompt_job_ids(first)
     assert count_image_jobs() == 2
+    assert quota_after_first == 2
+    assert quota_after_second == 2
 
 
 def test_approve_replaces_failed_page_jobs() -> None:
@@ -116,12 +131,20 @@ def test_approve_fails_when_task_is_not_completed() -> None:
 
 def test_regenerate_image_replaces_prompt_job_without_rendering(monkeypatch) -> None:
     client = build_client()
-    task = seed_completed_task(client, prompt_count=1)
+    use_per_ip_public_quota()
+    task = seed_completed_task(
+        client,
+        prompt_count=1,
+        include_client_provider=False,
+        request_headers=public_quota_headers(),
+    )
     first_job_id = approve_task(client, task["id"])["prompts"][0]["image_job_id"]
+    quota_after_first_approve = public_quota_used_count()
     prompt_id = first_prompt_id(task["id"])
     install_render_sentinel(monkeypatch)
 
     response = client.post(f"/api/public/comic/panel-prompts/{prompt_id}/regenerate-image")
+    quota_after_regenerate = public_quota_used_count()
 
 
     assert response.status_code == 201
@@ -129,6 +152,8 @@ def test_regenerate_image_replaces_prompt_job_without_rendering(monkeypatch) -> 
     assert data["image_job_id"] != first_job_id
     assert first_job_id in image_job_ids()
     assert current_prompt_job_id(prompt_id) == data["image_job_id"]
+    assert quota_after_first_approve == 1
+    assert quota_after_regenerate == 2
 
 
 def test_image_results_reports_prompt_image_statuses() -> None:
@@ -204,8 +229,10 @@ def seed_completed_task(
     prompt_count: int,
     status: str = "completed",
     reference_ready: bool = True,
+    request_headers: dict[str, str] | None = None,
+    include_client_provider: bool = True,
 ) -> dict:
-    task = create_task(client)
+    task = create_task(client, headers=request_headers, include_client_provider=include_client_provider)
     with session_scope() as session:
         task_model = session.get(ComicTask, task["id"])
         task_model.status = status
@@ -283,13 +310,21 @@ def seed_character_card(session, *, task_model: ComicTask, reference_ready: bool
     )
 
 
-def create_task(client: TestClient) -> dict:
+def create_task(
+    client: TestClient,
+    *,
+    headers: dict[str, str] | None = None,
+    include_client_provider: bool = True,
+) -> dict:
     project_id = create_project(client)
     client.put(f"/api/public/comic/projects/{project_id}/chapters/chapter-001", json={"title": "Crossing", "summary": "River crossing", "sequence": 1})
     client.put(f"/api/public/comic/projects/{project_id}/chapters/chapter-001/scenes/scene-001", json={"title": "Ferry", "summary": "Ferry scene", "sequence": 1, "shots": ["wide"]})
+    request_headers = client_provider_headers() if include_client_provider else {}
+    if headers:
+        request_headers.update(headers)
     response = client.post(
         "/api/public/comic/tasks",
-        headers=client_provider_headers(),
+        headers=request_headers,
         json={"project_id": project_id, "chapter_id": "chapter-001", "scene_id": "scene-001", "task_type": "scene-render", "input_payload": build_input_payload()},
     )
     assert response.status_code == 201
@@ -312,6 +347,23 @@ def client_provider_headers() -> dict[str, str]:
         "x-client-provider-base-url": "https://comic-image.example/v1",
         "x-client-provider-api-key": "sk-comic-image",
     }
+
+
+def public_quota_headers() -> dict[str, str]:
+    return {"x-forwarded-for": PUBLIC_QUOTA_REQUEST_IP}
+
+
+def public_quota_used_count() -> int:
+    with session_scope() as session:
+        status = get_public_quota_status(session, request_ip=PUBLIC_QUOTA_REQUEST_IP)
+        return int(status["used_count"])
+
+
+def use_per_ip_public_quota() -> None:
+    with session_scope() as session:
+        record = get_settings_record(session)
+        record.public_quota_mode = PUBLIC_QUOTA_MODE_PER_IP
+        record.public_quota_per_ip_limit = 5
 
 
 def build_input_payload() -> dict:

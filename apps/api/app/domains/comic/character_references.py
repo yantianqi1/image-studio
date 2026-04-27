@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from apps.api.app.core.errors import AppError
 from apps.api.app.domains.auth.ownership import OwnerContext
+from apps.api.app.domains.comic.quota import consume_public_quota_for_comic_image_job
 from apps.api.app.domains.comic.models import ComicCharacterCard, ComicTask
 from apps.api.app.domains.comic.repository import (
     list_character_cards,
@@ -104,7 +105,7 @@ def require_character_cards(session: Session, *, task_id: str, owner: OwnerConte
 
 def create_reference_job(session: Session, *, task: ComicTask, card: ComicCharacterCard):
     client_config = resolve_task_client_provider_config(task)
-    return create_job(
+    job = create_job(
         session,
         owner=task_owner(task),
         source=resolve_image_job_source(task=task, client_config=client_config),
@@ -115,11 +116,19 @@ def create_reference_job(session: Session, *, task: ComicTask, card: ComicCharac
         client_access_id=client_config.client_id if client_config else None,
         client_provider_config=client_config,
     )
+    consume_public_quota_for_comic_image_job(
+        session,
+        task=task,
+        request_ip_hash=task.request_ip_hash,
+        reference_type="comic_character_reference_job",
+        reference_id=str(job.id),
+    )
+    return job
 
 
 def create_shared_reference_job(session: Session, *, task: ComicTask, cards: list[ComicCharacterCard]):
     client_config = resolve_task_client_provider_config(task)
-    return create_job(
+    job = create_job(
         session,
         owner=task_owner(task),
         source=resolve_image_job_source(task=task, client_config=client_config),
@@ -130,6 +139,14 @@ def create_shared_reference_job(session: Session, *, task: ComicTask, cards: lis
         client_access_id=client_config.client_id if client_config else None,
         client_provider_config=client_config,
     )
+    consume_public_quota_for_comic_image_job(
+        session,
+        task=task,
+        request_ip_hash=task.request_ip_hash,
+        reference_type="comic_character_reference_job",
+        reference_id=str(job.id),
+    )
+    return job
 
 
 def build_single_sheet_prompt(cards: list[ComicCharacterCard], style_preset_id: object | None = None) -> str:
