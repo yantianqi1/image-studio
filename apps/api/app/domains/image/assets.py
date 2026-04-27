@@ -18,12 +18,14 @@ def persist_rendered_asset(
     storage_dir: Path,
     rendered,
     user_id: int | None,
+    anonymous_session_id: int | None = None,
     client_id: str | None = None,
 ) -> Asset:
     asset = create_pending_asset(
         session,
         mime_type=rendered.mime_type,
         owner_user_id=user_id,
+        owner_anonymous_session_id=anonymous_session_id,
         owner_client_id=client_id,
     )
     file_path = storage_dir / f"asset-{asset.id}.svg"
@@ -41,12 +43,14 @@ def persist_uploaded_asset(
     filename: str | None,
     mime_type: str | None,
     user_id: int | None,
+    anonymous_session_id: int | None = None,
     client_id: str | None = None,
 ) -> Asset:
     asset = create_pending_asset(
         session,
         mime_type=normalize_mime_type(mime_type),
         owner_user_id=user_id,
+        owner_anonymous_session_id=anonymous_session_id,
         owner_client_id=client_id,
     )
     suffix = resolve_upload_suffix(filename=filename, mime_type=asset.mime_type)
@@ -63,10 +67,12 @@ def create_pending_asset(
     *,
     mime_type: str,
     owner_user_id: int | None,
+    owner_anonymous_session_id: int | None,
     owner_client_id: str | None,
 ) -> Asset:
     asset = Asset(
         owner_user_id=owner_user_id,
+        owner_anonymous_session_id=owner_anonymous_session_id,
         owner_client_id=owner_client_id,
         storage_path="",
         mime_type=mime_type,

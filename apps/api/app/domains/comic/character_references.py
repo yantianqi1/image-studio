@@ -5,13 +5,15 @@ import json
 from sqlalchemy.orm import Session
 
 from apps.api.app.core.errors import AppError
+from apps.api.app.domains.auth.ownership import OwnerContext
 from apps.api.app.domains.comic.models import ComicCharacterCard, ComicTask
 from apps.api.app.domains.comic.repository import (
     list_character_cards,
     update_character_reference_asset,
     update_character_reference_job,
 )
-from apps.api.app.domains.comic.services import require_task
+from apps.api.app.domains.comic.ownership import require_task_for_owner
+from apps.api.app.domains.comic.payloads import build_reference_payload, character_reference_payload
 from apps.api.app.domains.comic.style_presets import DEFAULT_STYLE_PRESET_ID, get_style_preset
 from apps.api.app.domains.image.service import create_job, get_job, list_job_results
 from apps.api.app.domains.llm.client_provider import (
@@ -26,10 +28,10 @@ SINGLE_SHEET_REFERENCE_MODE = "single_sheet"
 VALID_CHARACTER_REFERENCE_MODES = {PER_CHARACTER_REFERENCE_MODE, SINGLE_SHEET_REFERENCE_MODE}
 
 
-def approve_character_references(session: Session, task_id: str) -> dict:
-    task = require_task(session, task_id)
+def approve_character_references(session: Session, task_id: str, *, owner: OwnerContext) -> dict:
+    task = require_task_for_owner(session, task_id, owner)
     require_completed_task_status(task.status)
-    cards = require_character_cards(session, task_id=task.id)
+    cards = require_character_cards(session, task_id=task.id, owner=owner)
     if all(card.reference_asset_id is not None for card in cards):
         return build_reference_payload(session, cards=cards, created_count=0, reused_count=len(cards))
     mode = parse_character_reference_mode(task.input_payload)
@@ -38,7 +40,12 @@ def approve_character_references(session: Session, task_id: str) -> dict:
     return approve_per_character_references(session, task=task, cards=cards)
 
 
-def approve_per_character_references(session: Session, *, task: ComicTask, cards: list[ComicCharacterCard]) -> dict:
+def approve_per_character_references(
+    session: Session,
+    *,
+    task: ComicTask,
+    cards: list[ComicCharacterCard],
+) -> dict:
     created_count = 0
     reused_count = 0
     for card in cards:
@@ -52,7 +59,12 @@ def approve_per_character_references(session: Session, *, task: ComicTask, cards
     return build_reference_payload(session, cards=cards, created_count=created_count, reused_count=reused_count)
 
 
-def approve_single_sheet_reference(session: Session, *, task: ComicTask, cards: list[ComicCharacterCard]) -> dict:
+def approve_single_sheet_reference(
+    session: Session,
+    *,
+    task: ComicTask,
+    cards: list[ComicCharacterCard],
+) -> dict:
     existing_job_id = single_existing_reference_job_id(cards)
     if existing_job_id is not None:
         session.commit()
@@ -64,16 +76,16 @@ def approve_single_sheet_reference(session: Session, *, task: ComicTask, cards: 
     return build_reference_payload(session, cards=cards, created_count=1, reused_count=0)
 
 
-def sync_completed_character_references(session: Session, task_id: str) -> dict:
-    cards = require_character_cards(session, task_id=task_id)
+def sync_completed_character_references(session: Session, task_id: str, *, owner: OwnerContext) -> dict:
+    cards = require_character_cards(session, task_id=task_id, owner=owner)
     for card in cards:
         sync_card_reference_asset(session, card=card)
     session.commit()
     return build_reference_payload(session, cards=cards, created_count=0, reused_count=len(cards))
 
 
-def list_character_references(session: Session, task_id: str) -> list[dict]:
-    cards = require_character_cards(session, task_id=task_id)
+def list_character_references(session: Session, task_id: str, *, owner: OwnerContext) -> list[dict]:
+    cards = require_character_cards(session, task_id=task_id, owner=owner)
     return [character_reference_payload(session, card=card) for card in cards]
 
 
@@ -82,8 +94,8 @@ def require_completed_task_status(status: str) -> None:
         raise AppError(code="comic_task_not_ready", message="comic task is not completed", status_code=409)
 
 
-def require_character_cards(session: Session, *, task_id: str) -> list[ComicCharacterCard]:
-    require_task(session, task_id)
+def require_character_cards(session: Session, *, task_id: str, owner: OwnerContext) -> list[ComicCharacterCard]:
+    require_task_for_owner(session, task_id, owner)
     cards = list_character_cards(session, task_id=task_id)
     if not cards:
         raise AppError(code="comic_character_cards_not_ready", message="comic character cards are not ready", status_code=409)
@@ -94,7 +106,7 @@ def create_reference_job(session: Session, *, task: ComicTask, card: ComicCharac
     client_config = resolve_task_client_provider_config(task)
     return create_job(
         session,
-        user_id=task.user_id,
+        owner=task_owner(task),
         source=resolve_image_job_source(task=task, client_config=client_config),
         prompt=build_style_aligned_reference_prompt(task=task, prompt=card.multi_view_prompt),
         model_code="gpt-image-2",
@@ -109,7 +121,7 @@ def create_shared_reference_job(session: Session, *, task: ComicTask, cards: lis
     client_config = resolve_task_client_provider_config(task)
     return create_job(
         session,
-        user_id=task.user_id,
+        owner=task_owner(task),
         source=resolve_image_job_source(task=task, client_config=client_config),
         prompt=build_single_sheet_prompt(cards, style_preset_id=task_style_preset_id(task)),
         model_code="gpt-image-2",
@@ -239,6 +251,10 @@ def resolve_image_job_source(*, task: ComicTask, client_config: ClientProviderCo
     return "member" if task.user_id is not None else "anonymous"
 
 
+def task_owner(task: ComicTask) -> OwnerContext:
+    return OwnerContext(user_id=task.user_id, anonymous_session_id=task.anonymous_session_id)
+
+
 def sync_card_reference_asset(session: Session, *, card: ComicCharacterCard) -> None:
     if card.reference_image_job_id is None or card.reference_asset_id is not None:
         return
@@ -250,46 +266,8 @@ def sync_card_reference_asset(session: Session, *, card: ComicCharacterCard) -> 
         update_character_reference_asset(session, card=card, asset_id=results[0].asset_id)
 
 
-def build_reference_payload(
-    session: Session,
-    *,
-    cards: list[ComicCharacterCard],
-    created_count: int,
-    reused_count: int,
-) -> dict:
-    return {
-        "character_count": len(cards),
-        "created_count": created_count,
-        "reused_count": reused_count,
-        "ready": all(card.reference_asset_id is not None for card in cards),
-        "characters": [character_reference_payload(session, card=card) for card in cards],
-    }
-
-
-def character_reference_payload(session: Session, *, card: ComicCharacterCard) -> dict:
-    payload = base_character_payload(card)
-    if card.reference_image_job_id is None:
-        return payload
-    job = get_job(session, card.reference_image_job_id)
-    payload["image_status"] = job.status
-    payload["error_message"] = job.error_message
-    return payload
-
-
-def base_character_payload(card: ComicCharacterCard) -> dict:
-    return {
-        "id": card.id,
-        "character_code": card.character_code,
-        "name": card.name,
-        "reference_image_job_id": card.reference_image_job_id,
-        "reference_asset_id": card.reference_asset_id,
-        "image_status": None,
-        "error_message": None,
-    }
-
-
-def require_all_references_ready(session: Session, *, task_id: str) -> None:
-    cards = require_character_cards(session, task_id=task_id)
+def require_all_references_ready(session: Session, *, task_id: str, owner: OwnerContext) -> None:
+    cards = require_character_cards(session, task_id=task_id, owner=owner)
     if any(card.reference_asset_id is None for card in cards):
         raise AppError(
             code=COMIC_REFERENCES_NOT_READY_CODE,

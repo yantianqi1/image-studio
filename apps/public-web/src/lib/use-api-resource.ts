@@ -25,6 +25,7 @@ export function useApiResource<T>(loader: Loader<T>, refreshKey = 0) {
 
   useEffect(() => {
     let active = true;
+    setState({ status: "loading" });
 
     runLoader()
       .then((data) => {

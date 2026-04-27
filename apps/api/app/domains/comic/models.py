@@ -17,6 +17,12 @@ class ComicProject(Base):
     __tablename__ = "comic_projects"
 
     id: Mapped[str] = mapped_column(String(ID_LENGTH), primary_key=True)
+    owner_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    owner_anonymous_session_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("anonymous_sessions.id"),
+        nullable=True,
+        index=True,
+    )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, default="", nullable=False)
     genre: Mapped[str] = mapped_column(String(128), default="", nullable=False)
@@ -149,6 +155,11 @@ class ComicTask(Base):
         index=True,
     )
     user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    anonymous_session_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("anonymous_sessions.id"),
+        nullable=True,
+        index=True,
+    )
     client_access_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)
     client_provider_config: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     task_type: Mapped[str] = mapped_column(String(TASK_TYPE_LENGTH), nullable=False)

@@ -9,7 +9,7 @@ from sqlalchemy import create_engine, inspect, text
 from apps.api.app.core.config import get_settings
 from apps.api.app.infra.db.session import get_engine, get_session_factory, initialize_database
 
-BASELINE_REVISION = "20260426_000006"
+HEAD_REVISION = "20260427_000007"
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
@@ -39,10 +39,23 @@ def test_alembic_upgrade_creates_core_tables(tmp_path):
     assert inspector.has_table("sellable_models")
     assert inspector.has_table("image_jobs")
     assert inspector.has_table("image_job_reference_assets")
+    assert inspector.has_table("anonymous_sessions")
     assert inspector.has_table("site_settings")
 
     image_job_columns = {column["name"] for column in inspector.get_columns("image_jobs")}
-    assert {"provider_id", "provider_model", "client_access_id", "client_provider_config"} <= image_job_columns
+    assert {
+        "provider_id",
+        "provider_model",
+        "client_access_id",
+        "client_provider_config",
+        "anonymous_session_id",
+    } <= image_job_columns
+
+    asset_columns = {column["name"] for column in inspector.get_columns("assets")}
+    assert {"owner_user_id", "owner_anonymous_session_id"} <= asset_columns
+
+    anonymous_session_columns = {column["name"] for column in inspector.get_columns("anonymous_sessions")}
+    assert {"id", "token_hash", "created_at", "revoked_at", "rotated_from_id"} <= anonymous_session_columns
 
     reference_columns = {column["name"] for column in inspector.get_columns("image_job_reference_assets")}
     assert {"id", "job_id", "asset_id", "sequence", "created_at"} <= reference_columns
@@ -50,7 +63,16 @@ def test_alembic_upgrade_creates_core_tables(tmp_path):
     assert {"ix_image_job_reference_assets_job_id", "ix_image_job_reference_assets_asset_id"} <= reference_indexes
 
     comic_task_columns = {column["name"] for column in inspector.get_columns("comic_tasks")}
-    assert {"stage", "progress_percent", "user_id", "client_access_id", "client_provider_config"} <= comic_task_columns
+    assert {
+        "stage",
+        "progress_percent",
+        "user_id",
+        "anonymous_session_id",
+        "client_access_id",
+        "client_provider_config",
+    } <= comic_task_columns
+    comic_project_columns = {column["name"] for column in inspector.get_columns("comic_projects")}
+    assert {"owner_user_id", "owner_anonymous_session_id"} <= comic_project_columns
     assert inspector.has_table("comic_story_analyses")
     assert inspector.has_table("comic_character_cards")
     assert inspector.has_table("comic_storyboards")
@@ -59,7 +81,7 @@ def test_alembic_upgrade_creates_core_tables(tmp_path):
     with engine.begin() as connection:
         version_rows = connection.execute(text("SELECT version_num FROM alembic_version")).fetchall()
 
-    assert version_rows == [(BASELINE_REVISION,)]
+    assert version_rows == [(HEAD_REVISION,)]
 
 
 def test_initialize_database_runs_alembic_to_head(tmp_path):
@@ -79,9 +101,10 @@ def test_initialize_database_runs_alembic_to_head(tmp_path):
     assert inspector.has_table("users")
     assert inspector.has_table("image_jobs")
     assert inspector.has_table("image_job_reference_assets")
+    assert inspector.has_table("anonymous_sessions")
     assert inspector.has_table("site_settings")
 
     with engine.begin() as connection:
         version_rows = connection.execute(text("SELECT version_num FROM alembic_version")).fetchall()
 
-    assert version_rows == [(BASELINE_REVISION,)]
+    assert version_rows == [(HEAD_REVISION,)]

@@ -14,7 +14,7 @@ from apps.worker.worker.tasks import comic_tasks as worker_comic_tasks
 
 def test_approve_does_not_render_images_synchronously(monkeypatch) -> None:
     client = build_client()
-    task = seed_completed_task(prompt_count=2)
+    task = seed_completed_task(client, prompt_count=2)
     install_render_sentinel(monkeypatch)
 
     response = approve_task(client, task["id"])
@@ -26,7 +26,7 @@ def test_approve_does_not_render_images_synchronously(monkeypatch) -> None:
 
 def test_approve_creates_one_image_job_per_panel_prompt() -> None:
     client = build_client()
-    task = seed_completed_task(prompt_count=3, reference_ready=True)
+    task = seed_completed_task(client, prompt_count=3, reference_ready=True)
 
     response = approve_task(client, task["id"])
 
@@ -40,7 +40,7 @@ def test_approve_creates_one_image_job_per_panel_prompt() -> None:
 
 def test_page_generation_requires_character_references() -> None:
     client = build_client()
-    task = seed_completed_task(prompt_count=1, reference_ready=False)
+    task = seed_completed_task(client, prompt_count=1, reference_ready=False)
 
     response = client.post(f"/api/public/comic/tasks/{task['id']}/approve-and-generate-images")
 
@@ -50,7 +50,7 @@ def test_page_generation_requires_character_references() -> None:
 
 def test_approve_is_idempotent() -> None:
     client = build_client()
-    task = seed_completed_task(prompt_count=2)
+    task = seed_completed_task(client, prompt_count=2)
 
     first = approve_task(client, task["id"])
     second = approve_task(client, task["id"])
@@ -64,7 +64,7 @@ def test_approve_is_idempotent() -> None:
 
 def test_approve_replaces_failed_page_jobs() -> None:
     client = build_client()
-    task = seed_completed_task(prompt_count=1)
+    task = seed_completed_task(client, prompt_count=1)
     first = approve_task(client, task["id"])
     mark_prompt_job_failed(first["prompts"][0]["image_job_id"])
 
@@ -78,7 +78,7 @@ def test_approve_replaces_failed_page_jobs() -> None:
 
 def test_approve_replaces_jobs_without_reference_rows() -> None:
     client = build_client()
-    task = seed_completed_task(prompt_count=1)
+    task = seed_completed_task(client, prompt_count=1)
     first = approve_task(client, task["id"])
     delete_reference_rows(first["prompts"][0]["image_job_id"])
 
@@ -92,7 +92,7 @@ def test_approve_replaces_jobs_without_reference_rows() -> None:
 
 def test_approve_fails_when_prompts_are_not_ready() -> None:
     client = build_client()
-    task = seed_completed_task(prompt_count=0)
+    task = seed_completed_task(client, prompt_count=0)
 
     response = client.post(f"/api/public/comic/tasks/{task['id']}/approve-and-generate-images")
 
@@ -102,7 +102,7 @@ def test_approve_fails_when_prompts_are_not_ready() -> None:
 
 def test_approve_fails_when_task_is_not_completed() -> None:
     client = build_client()
-    task = seed_completed_task(prompt_count=1, status="running")
+    task = seed_completed_task(client, prompt_count=1, status="running")
 
 
     response = client.post(f"/api/public/comic/tasks/{task['id']}/approve-and-generate-images")
@@ -113,7 +113,7 @@ def test_approve_fails_when_task_is_not_completed() -> None:
 
 def test_regenerate_image_replaces_prompt_job_without_rendering(monkeypatch) -> None:
     client = build_client()
-    task = seed_completed_task(prompt_count=1)
+    task = seed_completed_task(client, prompt_count=1)
     first_job_id = approve_task(client, task["id"])["prompts"][0]["image_job_id"]
     prompt_id = first_prompt_id(task["id"])
     install_render_sentinel(monkeypatch)
@@ -130,7 +130,7 @@ def test_regenerate_image_replaces_prompt_job_without_rendering(monkeypatch) -> 
 
 def test_image_results_reports_prompt_image_statuses() -> None:
     client = build_client()
-    task = seed_completed_task(prompt_count=3)
+    task = seed_completed_task(client, prompt_count=3)
     prompt_ids = [item["id"] for item in approve_task(client, task["id"])["prompts"]]
     seed_job_states(prompt_ids)
 
@@ -167,8 +167,13 @@ def approve_task(client: TestClient, task_id: str) -> dict:
     return response.json()["data"]
 
 
-def seed_completed_task(*, prompt_count: int, status: str = "completed", reference_ready: bool = True) -> dict:
-    client = build_client()
+def seed_completed_task(
+    client: TestClient,
+    *,
+    prompt_count: int,
+    status: str = "completed",
+    reference_ready: bool = True,
+) -> dict:
     task = create_task(client)
     with session_scope() as session:
         task_model = session.get(ComicTask, task["id"])
@@ -192,7 +197,12 @@ def build_prompt(*, task_model: ComicTask, storyboard_id: int, index: int) -> Co
 def seed_character_card(session, *, task_model: ComicTask, reference_ready: bool) -> None:
     asset_id = None
     if reference_ready:
-        asset = Asset(owner_user_id=None, storage_path="/tmp/hero-reference.png", mime_type="image/png")
+        asset = Asset(
+            owner_user_id=task_model.user_id,
+            owner_anonymous_session_id=task_model.anonymous_session_id,
+            storage_path="/tmp/hero-reference.png",
+            mime_type="image/png",
+        )
         session.add(asset)
         session.flush()
         asset_id = asset.id

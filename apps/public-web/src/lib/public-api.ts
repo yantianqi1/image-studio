@@ -12,6 +12,10 @@ export type LoginResponse = Readonly<{
   status: string;
 }>;
 
+export type AnonymousSessionResponse = Readonly<{
+  anonymous_session_id: number;
+}>;
+
 export type ImageGenerationRequest = Readonly<{
   prompt: string;
   model_code: string;
@@ -241,6 +245,14 @@ export const publicApi = {
   },
   getWalletSummary() {
     return apiFetch<WalletSummary>("/billing/wallets/me");
+  },
+  ensureAnonymousSession() {
+    return apiFetch<AnonymousSessionResponse>("/auth/anonymous-session", {
+      method: "POST",
+    });
+  },
+  getCurrentUser() {
+    return apiFetch<LoginResponse>("/auth/me");
   },
   login(input: LoginRequest) {
     return apiFetch<LoginResponse>("/auth/login", {

@@ -6,6 +6,8 @@
     "dev": "next dev",
     "build": "next build --webpack",
     "start": "next start",
+    "test": "cd ../.. && node --test apps/public-web/tests/*.mjs",
+    "typecheck": "tsc --noEmit",
     "lint": "eslint"
   },
   "dependencies": {

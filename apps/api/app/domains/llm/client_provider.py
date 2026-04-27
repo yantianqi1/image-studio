@@ -13,8 +13,6 @@ CLIENT_PROVIDER_CONFIG_KEY = "_client_provider"
 CLIENT_ID_HEADER = "x-client-id"
 PROVIDER_BASE_URL_HEADER = "x-client-provider-base-url"
 PROVIDER_API_KEY_HEADER = "x-client-provider-api-key"
-LOGIN_OR_CLIENT_PROVIDER_REQUIRED_CODE = "login_or_client_provider_required"
-LOGIN_OR_CLIENT_PROVIDER_REQUIRED_MESSAGE = "请先登录，或配置浏览器端供应商密钥后重试"
 CLIENT_PROVIDER_CONFIG_INVALID_CODE = "client_provider_config_invalid"
 MAX_CLIENT_ID_LENGTH = 128
 
@@ -49,16 +47,6 @@ def read_client_provider_config(request: Request) -> ClientProviderConfig | None
     validate_client_id(client_id)
     validate_base_url(base_url)
     return ClientProviderConfig(client_id=client_id, base_url=base_url, api_key=api_key)
-
-
-def require_login_or_client_provider(config: ClientProviderConfig | None) -> None:
-    if config is not None:
-        return
-    raise AppError(
-        code=LOGIN_OR_CLIENT_PROVIDER_REQUIRED_CODE,
-        message=LOGIN_OR_CLIENT_PROVIDER_REQUIRED_MESSAGE,
-        status_code=401,
-    )
 
 
 def serialize_client_provider_config(

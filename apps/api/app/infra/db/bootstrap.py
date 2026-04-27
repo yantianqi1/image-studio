@@ -2,6 +2,7 @@ from apps.api.app.core.module_loader import load_optional_attribute
 
 DOMAIN_MODEL_MODULES = (
     "apps.api.app.domains.auth.models",
+    "apps.api.app.domains.auth.anonymous_sessions",
     "apps.api.app.domains.billing.models",
     "apps.api.app.domains.redeem.models",
     "apps.api.app.domains.llm.models",

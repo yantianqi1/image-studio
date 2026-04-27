@@ -10,16 +10,18 @@ from zipfile import BadZipFile, ZipFile
 from sqlalchemy.orm import Session
 
 from apps.api.app.core.errors import AppError
+from apps.api.app.domains.auth.ownership import OwnerContext
 from apps.api.app.domains.comic.character_reference_packs import (
     ALLOWED_IMAGE_SUFFIXES,
     IMAGE_DIR,
     MANIFEST_PATH,
     PACK_SCHEMA_VERSION,
 )
-from apps.api.app.domains.comic.character_references import character_reference_payload, require_character_cards
+from apps.api.app.domains.comic.character_references import require_character_cards
 from apps.api.app.domains.comic.models import ComicCharacterCard
 from apps.api.app.domains.comic.repository import update_character_reference_asset
-from apps.api.app.domains.comic.services import require_task
+from apps.api.app.domains.comic.ownership import require_task_for_owner
+from apps.api.app.domains.comic.payloads import character_reference_payload
 from apps.api.app.domains.image.assets import persist_uploaded_asset
 from apps.api.app.domains.llm.service import ensure_storage_dir
 
@@ -33,9 +35,9 @@ class CharacterImportRecord:
     mime_type: str
 
 
-def import_character_reference_pack(session: Session, *, task_id: str, content: bytes) -> dict:
-    task = require_task(session, task_id)
-    cards = require_character_cards(session, task_id=task_id)
+def import_character_reference_pack(session: Session, *, task_id: str, content: bytes, owner: OwnerContext) -> dict:
+    task = require_task_for_owner(session, task_id, owner)
+    cards = require_character_cards(session, task_id=task_id, owner=owner)
     records = parse_import_archive(content)
     matched_pairs = match_import_records(cards=cards, records=records)
     asset_ids_by_file: dict[str, int] = {}
@@ -49,6 +51,7 @@ def import_character_reference_pack(session: Session, *, task_id: str, content: 
                 filename=record.image_file,
                 mime_type=record.mime_type,
                 user_id=task.user_id,
+                anonymous_session_id=task.anonymous_session_id,
                 client_id=task.client_access_id,
             )
             asset_id = asset.id

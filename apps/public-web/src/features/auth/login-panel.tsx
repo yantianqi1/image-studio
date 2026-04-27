@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { AppShell } from "@/features/shell/app-shell";
+import { notifyComicOwnerChanged } from "@/features/comic/comic-anonymous-session";
 import { ErrorMessage } from "@/features/ui/error-message";
 import { FormField } from "@/features/ui/form-field";
 import { SectionPanel } from "@/features/ui/section-panel";
@@ -26,6 +27,7 @@ export function LoginPanel() {
 
     try {
       const result = await publicApi.login({ email, password });
+      notifyComicOwnerChanged();
       setState({
         status: "success",
         email: result.email,

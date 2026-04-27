@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from fastapi.testclient import TestClient
 
+from apps.api.app.domains.auth.ownership import OwnerContext
 from apps.api.app.domains.auth.service import create_admin_account
 from apps.api.app.domains.llm.service import extract_image_reference
 from apps.api.app.infra.db.session import initialize_database, session_scope
@@ -27,9 +28,10 @@ def admin_login(client: TestClient) -> None:
     assert response.status_code == 200
 
 
-def register_user(client: TestClient, *, email: str = "provider@example.com") -> None:
+def register_user(client: TestClient, *, email: str = "provider@example.com") -> dict:
     response = client.post("/api/public/auth/register", json={"email": email, "password": "top-secret"})
     assert response.status_code == 201
+    return response.json()["data"]
 
 
 def create_openai_provider(client: TestClient) -> dict[str, object]:
@@ -215,23 +217,24 @@ def test_openai_compatible_reference_assets_use_multipart_adapter(monkeypatch) -
     admin_login(client)
     provider = create_openai_provider(client)
     create_sellable_model(client, provider_id=provider["id"])
-    register_user(client, email="provider-reference@example.com")
+    user = register_user(client, email="provider-reference@example.com")
     captured: dict[str, object] = {}
 
     with session_scope() as session:
         from apps.api.app.domains.image.models import Asset
         from apps.api.app.domains.image.service import create_job
 
-        first_asset = Asset(owner_user_id=None, storage_path="/tmp/ref-a.png", mime_type="image/png")
-        second_asset = Asset(owner_user_id=None, storage_path="/tmp/ref-b.png", mime_type="image/png")
+        owner = OwnerContext(user_id=user["id"], anonymous_session_id=None)
+        first_asset = Asset(owner_user_id=user["id"], storage_path="/tmp/ref-a.png", mime_type="image/png")
+        second_asset = Asset(owner_user_id=user["id"], storage_path="/tmp/ref-b.png", mime_type="image/png")
         session.add_all([first_asset, second_asset])
         session.flush()
         first_asset.storage_path = write_reference_file("ref-a.png", b"ref-a")
         second_asset.storage_path = write_reference_file("ref-b.png", b"ref-b")
         job = create_job(
             session,
-            user_id=None,
-            source="anonymous",
+            owner=owner,
+            source="member",
             prompt="Use character references",
             model_code="remote-image",
             requested_count=1,

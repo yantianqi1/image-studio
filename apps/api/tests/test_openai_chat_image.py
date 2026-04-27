@@ -4,6 +4,8 @@ from dataclasses import dataclass
 
 from fastapi.testclient import TestClient
 
+from apps.api.app.domains.auth.anonymous_sessions import create_anonymous_session
+from apps.api.app.domains.auth.ownership import OwnerContext
 from apps.api.app.domains.image.models import Asset
 from apps.api.app.domains.image.service import create_job
 from apps.api.app.infra.db.session import initialize_database, session_scope
@@ -89,13 +91,19 @@ def test_chat_compatible_image_job_sends_reference_assets(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
     with session_scope() as session:
-        asset = Asset(owner_user_id=None, storage_path="/tmp/ref-chat.png", mime_type="image/png")
+        owner = create_anonymous_owner(session)
+        asset = Asset(
+            owner_user_id=None,
+            owner_anonymous_session_id=owner.anonymous_session_id,
+            storage_path="/tmp/ref-chat.png",
+            mime_type="image/png",
+        )
         session.add(asset)
         session.flush()
         asset.storage_path = write_reference_file("ref-chat.png", b"reference-bytes")
         job = create_job(
             session,
-            user_id=None,
+            owner=owner,
             source="anonymous",
             prompt="保持角色一致",
             model_code="chat-image",
@@ -156,6 +164,11 @@ def build_client() -> TestClient:
     seed_admin()
     admin_login(client)
     return client
+
+
+def create_anonymous_owner(session) -> OwnerContext:
+    anonymous_session, _token = create_anonymous_session(session)
+    return OwnerContext(user_id=None, anonymous_session_id=anonymous_session.id)
 
 
 def create_chat_image_provider(client: TestClient) -> dict[str, object]:

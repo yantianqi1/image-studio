@@ -3,6 +3,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from apps.api.app.domains.auth.ownership import OwnerContext
 from apps.api.app.domains.comic.character_references import (
     approve_character_references,
     sync_completed_character_references,
@@ -39,15 +40,19 @@ def continue_completed_task(session: Session, *, task: ComicTask) -> str | None:
     if failed_action is not None:
         return failed_action
     if missing_reference_jobs(cards):
-        approve_character_references(session, task.id)
+        approve_character_references(session, task.id, owner=task_owner(task))
         return "queued-character-references"
-    reference_payload = sync_completed_character_references(session, task.id)
+    reference_payload = sync_completed_character_references(session, task.id, owner=task_owner(task))
     if not reference_payload["ready"]:
         return None
     if missing_page_jobs(prompts):
-        approve_task_image_generation(session, task.id)
+        approve_task_image_generation(session, task.id, owner=task_owner(task))
         return "queued-page-images"
     return None
+
+
+def task_owner(task: ComicTask) -> OwnerContext:
+    return OwnerContext(user_id=task.user_id, anonymous_session_id=task.anonymous_session_id)
 
 
 def fail_on_terminal_image_errors(
