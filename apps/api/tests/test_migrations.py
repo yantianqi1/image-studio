@@ -9,7 +9,7 @@ from sqlalchemy import create_engine, inspect, text
 from apps.api.app.core.config import get_settings
 from apps.api.app.infra.db.session import get_engine, get_session_factory, initialize_database
 
-HEAD_REVISION = "20260427_000009"
+HEAD_REVISION = "20260428_000010"
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
@@ -49,6 +49,7 @@ def test_alembic_upgrade_creates_core_tables(tmp_path):
         "client_access_id",
         "client_provider_config",
         "anonymous_session_id",
+        "storage_subdir",
     } <= image_job_columns
 
     asset_columns = {column["name"] for column in inspector.get_columns("assets")}

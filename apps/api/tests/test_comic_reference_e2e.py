@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from sqlalchemy import select
 
+from apps.api.app.core.config import get_settings
+from apps.api.app.domains.comic.models import ComicCharacterCard
 from apps.api.app.domains.image import service as image_service
-from apps.api.app.domains.image.models import ImageJobReferenceAsset
+from apps.api.app.domains.image.models import Asset, ImageJobReferenceAsset
 from apps.api.app.domains.llm.service import RenderedImage
 from apps.api.app.infra.db.session import session_scope
 from apps.worker.worker import main as worker_main
@@ -54,6 +58,7 @@ def test_worker_persists_full_comic_generation_without_frontend_approval(monkeyp
     assert results[0]["result"]["asset_url"]
     assert page_job_id is not None
     assert page_job_has_reference_rows(page_job_id)
+    assert_comic_assets_saved_under_task_folder(task["id"], page_asset_id=results[0]["result"]["asset_id"])
 
 
 def fake_renderer(_session=None, **kwargs) -> RenderedImage:
@@ -83,3 +88,22 @@ def page_job_has_reference_rows(job_id: int) -> bool:
     with session_scope() as session:
         row_count = len(list(session.execute(select(ImageJobReferenceAsset).where(ImageJobReferenceAsset.job_id == job_id)).scalars()))
         return row_count > 0
+
+
+def assert_comic_assets_saved_under_task_folder(task_id: str, *, page_asset_id: int) -> None:
+    expected_root = Path(get_settings().generated_assets_dir) / "comics" / f"River-Blade--{task_id}"
+    with session_scope() as session:
+        reference_asset_id = session.execute(
+            select(ComicCharacterCard.reference_asset_id).where(ComicCharacterCard.task_id == task_id)
+        ).scalar_one()
+        reference_asset = session.get(Asset, reference_asset_id)
+        page_asset = session.get(Asset, page_asset_id)
+
+    assert reference_asset is not None
+    assert page_asset is not None
+    reference_path = Path(reference_asset.storage_path)
+    page_path = Path(page_asset.storage_path)
+    assert reference_path.parent == expected_root / "references"
+    assert page_path.parent == expected_root / "pages"
+    assert reference_path.exists()
+    assert page_path.exists()

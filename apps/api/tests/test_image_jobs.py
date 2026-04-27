@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 import pytest
@@ -413,6 +414,32 @@ def test_worker_claims_and_processes_queued_job(monkeypatch):
     asset_response = client.get(results[0]["asset_url"])
     assert asset_response.status_code == 200
     assert "svg" in asset_response.text
+
+
+def test_worker_persists_rendered_assets_with_mime_extension(monkeypatch):
+    def png_renderer(_session=None, **kwargs) -> RenderedImage:
+        return RenderedImage(
+            content=b"png-bytes",
+            mime_type="image/png",
+            revised_prompt=str(kwargs["prompt"]),
+            provider_request_id="test:png",
+        )
+
+    monkeypatch.setattr(image_service, "render_image", png_renderer, raising=False)
+    client = build_client()
+    register_user(client, email="png-extension@example.com")
+    job = create_image_job(client, prompt="PNG output")
+
+    worker_image_jobs.run_next_image_job()
+
+    with session_scope() as session:
+        result = session.execute(select(ImageJobResult).where(ImageJobResult.job_id == job["id"])).scalar_one()
+        asset = session.get(Asset, result.asset_id)
+
+    assert asset is not None
+    path = Path(asset.storage_path)
+    assert path.suffix == ".png"
+    assert path.read_bytes() == b"png-bytes"
 
 
 def test_user_can_delete_own_image_job_with_results(monkeypatch):

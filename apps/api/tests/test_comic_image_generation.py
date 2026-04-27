@@ -8,6 +8,7 @@ from sqlalchemy import delete, select
 from apps.api.app.domains.auth.service import create_user
 from apps.api.app.domains.billing.service import create_wallet
 from apps.api.app.domains.comic.models import ComicCharacterCard, ComicPanelPrompt, ComicStoryboard, ComicTask
+from apps.api.app.domains.comic.storage import ASSET_FOLDER_NAME_OUTPUT_KEY, build_asset_folder_name
 from apps.api.app.domains.image.models import Asset, ImageJob, ImageJobReferenceAsset, ImageJobResult
 from apps.api.app.domains.public_quota.constants import PUBLIC_QUOTA_MODE_PER_IP
 from apps.api.app.domains.public_quota.service import get_public_quota_status
@@ -238,6 +239,12 @@ def seed_completed_task(
         task_model.status = status
         task_model.stage = status
         task_model.finished_at = datetime.utcnow() if status == "completed" else None
+        task_model.output_payload = {
+            ASSET_FOLDER_NAME_OUTPUT_KEY: build_asset_folder_name(
+                project_title="River Blade",
+                task_id=task_model.id,
+            )
+        }
         storyboard = ComicStoryboard(project_id=task_model.project_id, task_id=task_model.id, style_preset="baimiao", panels_per_image=3, target_image_count=prompt_count, payload={"images": []})
         session.add(storyboard)
         session.flush()

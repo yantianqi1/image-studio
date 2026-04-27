@@ -17,7 +17,16 @@ from apps.api.app.domains.comic.llm_prompts import (
 )
 from apps.api.app.domains.comic.models import ComicCharacterCard, ComicPanelPrompt, ComicStoryboard, ComicStoryAnalysis, ComicTask
 from apps.api.app.domains.comic.prompt_composer import compose_panel_prompts
-from apps.api.app.domains.comic.repository import create_character_cards, create_panel_prompts, create_story_analysis, create_storyboard, mark_task_completed, update_task_stage
+from apps.api.app.domains.comic.repository import (
+    create_character_cards,
+    create_panel_prompts,
+    create_story_analysis,
+    create_storyboard,
+    mark_task_completed,
+    require_project,
+    update_task_stage,
+)
+from apps.api.app.domains.comic.storage import ASSET_FOLDER_NAME_OUTPUT_KEY, build_asset_folder_name
 from apps.api.app.domains.comic.storyboard_generation import (
     build_storyboard_generation_context,
     build_storyboard_input,
@@ -55,6 +64,7 @@ class PipelineInputs:
 
 def run_comic_pipeline(session: Session, *, task: ComicTask) -> ComicTask:
     inputs = parse_pipeline_inputs(task)
+    project = require_project(session, task.project_id)
     analysis = run_story_analysis(session, task=task, inputs=inputs)
     bible = run_character_bible(session, task=task, inputs=inputs, analysis=analysis)
     storyboard = run_storyboard(session, task=task, inputs=inputs, analysis=analysis, bible=bible)
@@ -73,6 +83,10 @@ def run_comic_pipeline(session: Session, *, task: ComicTask) -> ComicTask:
             "target_image_count": inputs.target_image_count,
             "story_segment_count": len(inputs.story_segments),
             "character_reference_mode": inputs.character_reference_mode,
+            ASSET_FOLDER_NAME_OUTPUT_KEY: build_asset_folder_name(
+                project_title=project.title,
+                task_id=task.id,
+            ),
         },
     )
 

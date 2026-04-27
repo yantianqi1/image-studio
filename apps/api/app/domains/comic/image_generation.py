@@ -14,6 +14,7 @@ from apps.api.app.domains.comic.payloads import (
     panel_prompt_payload,
     prompt_image_result_payload,
 )
+from apps.api.app.domains.comic.storage import page_storage_subdir
 from apps.api.app.domains.image.service import create_job as create_image_job
 from apps.api.app.domains.image.service import get_job as get_image_job
 from apps.api.app.domains.image.service import list_reference_asset_ids
@@ -183,6 +184,7 @@ def enqueue_prompt_image_job(
         reference_asset_ids=reference_asset_ids,
         client_access_id=client_config.client_id if client_config else None,
         client_provider_config=client_config,
+        storage_subdir=page_storage_subdir(task),
     )
     consume_public_quota_for_comic_image_job(
         session,

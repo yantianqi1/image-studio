@@ -20,6 +20,7 @@ def persist_rendered_asset(
     user_id: int | None,
     anonymous_session_id: int | None = None,
     client_id: str | None = None,
+    storage_subdir: str | None = None,
 ) -> Asset:
     asset = create_pending_asset(
         session,
@@ -28,11 +29,29 @@ def persist_rendered_asset(
         owner_anonymous_session_id=anonymous_session_id,
         owner_client_id=client_id,
     )
-    file_path = storage_dir / f"asset-{asset.id}.svg"
+    file_path = rendered_asset_path(
+        storage_dir=storage_dir,
+        asset_id=asset.id,
+        mime_type=rendered.mime_type,
+        storage_subdir=storage_subdir,
+    )
+    file_path.parent.mkdir(parents=True, exist_ok=True)
     file_path.write_bytes(rendered.content)
     asset.storage_path = str(file_path)
     session.flush()
     return asset
+
+
+def rendered_asset_path(*, storage_dir: Path, asset_id: int, mime_type: str, storage_subdir: str | None) -> Path:
+    target_dir = storage_dir / storage_subdir if storage_subdir else storage_dir
+    return target_dir / f"asset-{asset_id}{resolve_rendered_suffix(mime_type)}"
+
+
+def resolve_rendered_suffix(mime_type: str) -> str:
+    guessed = mimetypes.guess_extension(mime_type)
+    if is_safe_suffix(guessed):
+        return str(guessed)
+    return DEFAULT_UPLOAD_EXTENSION
 
 
 def persist_uploaded_asset(

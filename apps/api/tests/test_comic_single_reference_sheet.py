@@ -5,6 +5,7 @@ from datetime import datetime
 from sqlalchemy import select
 
 from apps.api.app.domains.comic.models import ComicCharacterCard, ComicPanelPrompt, ComicStoryboard, ComicTask
+from apps.api.app.domains.comic.storage import ASSET_FOLDER_NAME_OUTPUT_KEY, build_asset_folder_name
 from apps.api.app.domains.image.models import Asset, ImageJob, ImageJobReferenceAsset, ImageJobResult
 from apps.api.app.infra.db.session import session_scope
 from apps.api.tests.test_comic_pipeline import build_input_payload, create_comic_client, create_task
@@ -92,6 +93,12 @@ def mark_completed(task: ComicTask) -> None:
     task.status = "completed"
     task.stage = "completed"
     task.finished_at = datetime.utcnow()
+    task.output_payload = {
+        ASSET_FOLDER_NAME_OUTPUT_KEY: build_asset_folder_name(
+            project_title="River Blade",
+            task_id=task.id,
+        )
+    }
 
 
 def add_character_cards(session, *, task_model: ComicTask, reference_asset_id: int | None = None) -> None:

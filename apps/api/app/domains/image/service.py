@@ -61,6 +61,7 @@ def create_job(
     reference_asset_ids: list[int] | None = None,
     client_access_id: str | None = None,
     client_provider_config: ClientProviderConfig | None = None,
+    storage_subdir: str | None = None,
 ) -> ImageJob:
     target = resolve_model_execution_target(session, model_code=model_code)
     source_asset = resolve_source_asset(session, mode=mode, source_asset_id=source_asset_id, owner=owner)
@@ -84,6 +85,7 @@ def create_job(
         provider_model=target.provider_model,
         client_access_id=client_access_id,
         client_provider_config=serialize_client_provider_config(config=client_provider_config, provider_type=target.provider.type),
+        storage_subdir=storage_subdir,
         charge_cents=charge_cents,
         reservation_id=build_reservation(session, owner=owner, charge_cents=charge_cents),
     )
@@ -106,6 +108,7 @@ def build_image_job(
     provider_model: str | None,
     client_access_id: str | None,
     client_provider_config: dict[str, str] | None,
+    storage_subdir: str | None,
     charge_cents: int,
     reservation_id: int | None,
 ) -> ImageJob:
@@ -120,6 +123,7 @@ def build_image_job(
         provider_model=provider_model,
         client_access_id=client_access_id,
         client_provider_config=client_provider_config,
+        storage_subdir=storage_subdir,
         requested_count=requested_count,
         mode=mode,
         charge_cents=charge_cents,
@@ -190,6 +194,7 @@ def process_render_results(session: Session, *, job: ImageJob) -> None:
             user_id=job.user_id,
             anonymous_session_id=job.anonymous_session_id,
             client_id=job.client_access_id,
+            storage_subdir=job.storage_subdir,
         )
         add_job_result(session, job=job, result_index=result_index, asset_id=asset.id, rendered=rendered)
 

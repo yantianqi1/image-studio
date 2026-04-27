@@ -44,6 +44,7 @@ class ImageJob(Base):
     provider_model: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     client_access_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     client_provider_config: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    storage_subdir: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="queued", nullable=False)
     requested_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     attempt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

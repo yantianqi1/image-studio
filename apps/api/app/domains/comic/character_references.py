@@ -15,6 +15,7 @@ from apps.api.app.domains.comic.repository import (
 )
 from apps.api.app.domains.comic.ownership import require_task_for_owner
 from apps.api.app.domains.comic.payloads import build_reference_payload, character_reference_payload
+from apps.api.app.domains.comic.storage import reference_storage_subdir
 from apps.api.app.domains.comic.style_presets import DEFAULT_STYLE_PRESET_ID, get_style_preset
 from apps.api.app.domains.image.service import create_job, get_job, list_job_results
 from apps.api.app.domains.llm.client_provider import (
@@ -115,6 +116,7 @@ def create_reference_job(session: Session, *, task: ComicTask, card: ComicCharac
         mode="generate",
         client_access_id=client_config.client_id if client_config else None,
         client_provider_config=client_config,
+        storage_subdir=reference_storage_subdir(task),
     )
     consume_public_quota_for_comic_image_job(
         session,
@@ -138,6 +140,7 @@ def create_shared_reference_job(session: Session, *, task: ComicTask, cards: lis
         mode="generate",
         client_access_id=client_config.client_id if client_config else None,
         client_provider_config=client_config,
+        storage_subdir=reference_storage_subdir(task),
     )
     consume_public_quota_for_comic_image_job(
         session,
