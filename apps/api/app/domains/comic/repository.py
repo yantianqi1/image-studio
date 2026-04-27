@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from datetime import datetime
+from uuid import uuid4
 
 from sqlalchemy import or_, select, update
 from sqlalchemy.orm import Session, selectinload
 
+from apps.api.app.core.errors import AppError
 from apps.api.app.domains.comic.constants import (
     TASK_STATUS_COMPLETED,
     TASK_STATUS_FAILED,
@@ -200,3 +202,61 @@ def list_tasks(session: Session, project_id: str | None = None) -> list[ComicTas
     if project_id is not None:
         statement = statement.where(ComicTask.project_id == project_id)
     return list(session.execute(statement.order_by(ComicTask.created_at.desc())).scalars())
+
+
+def require_project(session: Session, project_id: str) -> ComicProject:
+    project = get_project(session, project_id)
+    if project is None:
+        raise AppError(
+            code="comic_project_not_found",
+            message=f"comic project {project_id} not found",
+            status_code=404,
+        )
+    return project
+
+
+def require_chapter(session: Session, chapter_id: str) -> ComicChapter:
+    chapter = get_chapter(session, chapter_id)
+    if chapter is None:
+        raise AppError(
+            code="comic_chapter_not_found",
+            message=f"comic chapter {chapter_id} not found",
+            status_code=404,
+        )
+    return chapter
+
+
+def require_scene(session: Session, scene_id: str) -> ComicScene:
+    scene = get_scene(session, scene_id)
+    if scene is None:
+        raise AppError(
+            code="comic_scene_not_found",
+            message=f"comic scene {scene_id} not found",
+            status_code=404,
+        )
+    return scene
+
+
+def require_task(session: Session, task_id: str) -> ComicTask:
+    task = get_task(session, task_id)
+    if task is None:
+        raise AppError(
+            code="comic_task_not_found",
+            message=f"comic task {task_id} not found",
+            status_code=404,
+        )
+    return task
+
+
+def validate_project_match(expected_id: str, actual_id: str, error_code: str) -> None:
+    if expected_id != actual_id:
+        raise AppError(
+            code=error_code,
+            message=f"{error_code} for scope {expected_id}",
+            status_code=404,
+        )
+
+
+def generate_id(prefix: str) -> str:
+    return f"{prefix}_{uuid4().hex}"
+

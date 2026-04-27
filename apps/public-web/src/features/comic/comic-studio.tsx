@@ -6,6 +6,7 @@ import { AppShell } from "@/features/shell/app-shell";
 import { publicApi, type ComicProject, type ComicTaskImageResult, type TaskItem } from "@/lib/public-api";
 import { type ResourceState, useApiResource } from "@/lib/use-api-resource";
 
+import { ensureComicAnonymousSession, listenComicOwnerChanged } from "./comic-anonymous-session";
 import { DEFAULT_CHARACTER_REFERENCE_MODE, type CharacterReferenceMode } from "./character-reference-modes";
 import { DEFAULT_COMIC_STYLE_PRESET, type ComicStylePresetId } from "./comic-style-presets";
 import { deriveComicWorkspaceStatus, deriveComicWorkspaceStatusFromTask, type ComicWorkspaceStatus } from "./comic-state";
@@ -129,14 +130,18 @@ function useComicStudio(): StudioModel {
   const [referencePackStatus, setReferencePackStatus] = useState<ReferencePackStatus>("idle");
   const [referencePackMessage, setReferencePackMessage] = useState<string | undefined>();
   const [refreshKey, setRefreshKey] = useState(0);
+  const [ownerRefreshKey, setOwnerRefreshKey] = useState(0);
+  const [ownerState, setOwnerState] = useState<ResourceState<null>>({ status: "loading" });
   const [selectedShotId, setSelectedShotId] = useState<string | null>(null);
   const [createState, setCreateState] = useState<CreateState>({ status: "idle" });
   const [workflowStatus, setWorkflowStatus] = useState<ComicWorkspaceStatus | null>(null);
   const [workflowError, setWorkflowError] = useState<string | undefined>();
   const [workflowEvents, setWorkflowEvents] = useState<readonly ComicWorkflowEvent[]>([]);
 
-  const projectsState = useApiResource(() => publicApi.getComicProjects(), refreshKey);
-  const tasksState = useApiResource(() => publicApi.getComicTasks(), refreshKey);
+  const rawProjectsState = useApiResource(() => loadOwnerScopedCollection(ownerState, publicApi.getComicProjects), refreshKey);
+  const rawTasksState = useApiResource(() => loadOwnerScopedCollection(ownerState, publicApi.getComicTasks), refreshKey);
+  const projectsState = resolveOwnerScopedState(ownerState, rawProjectsState);
+  const tasksState = resolveOwnerScopedState(ownerState, rawTasksState);
   const latestTask = useMemo(() => selectLatestTask(tasksState), [tasksState]);
   const imageResultsState = useComicTaskImageResults(latestTask?.id ?? null, refreshKey);
   const shots = useMemo(
@@ -154,6 +159,25 @@ function useComicStudio(): StudioModel {
   );
   const visibleWorkflowEvents = workflowEvents.length > 0 ? workflowEvents : persistedWorkflowEvents;
   const previewError = workflowError ?? getPreviewError(projectsState, tasksState, imageResultsState);
+
+  useEffect(() => {
+    let active = true;
+    setOwnerState({ status: "loading" });
+    ensureComicAnonymousSession()
+      .then(() => {
+        if (!active) return;
+        setOwnerState({ status: "ready", data: null });
+        handleRefresh();
+      })
+      .catch((error: unknown) => {
+        if (active) setOwnerState({ status: "error", message: errorMessage(error, "漫画身份初始化失败") });
+      });
+    return () => {
+      active = false;
+    };
+  }, [ownerRefreshKey]);
+
+  useEffect(() => listenComicOwnerChanged(handleOwnerChanged), []);
 
   useEffect(() => {
     if (!shouldAutoRefreshComic(workspaceStatus)) {
@@ -284,6 +308,19 @@ function useComicStudio(): StudioModel {
     setRefreshKey((current) => current + 1);
   }
 
+  function handleOwnerChanged() {
+    resetOwnerScopedDisplayState();
+    setOwnerRefreshKey((current) => current + 1);
+  }
+
+  function resetOwnerScopedDisplayState() {
+    setSelectedShotId(null);
+    setCreateState({ status: "idle" });
+    setWorkflowStatus(null);
+    setWorkflowError(undefined);
+    setWorkflowEvents([]);
+  }
+
   return {
     title,
     premise,
@@ -334,6 +371,23 @@ function resolveProjectTitleForFile(projectTitle: string): string {
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
+}
+
+function loadOwnerScopedCollection<T>(ownerState: ResourceState<null>, loader: () => Promise<readonly T[]>): Promise<readonly T[]> {
+  if (ownerState.status !== "ready") {
+    return Promise.resolve([]);
+  }
+  return loader();
+}
+
+function resolveOwnerScopedState<T>(ownerState: ResourceState<null>, resourceState: ResourceState<T>): ResourceState<T> {
+  if (ownerState.status === "ready") {
+    return resourceState;
+  }
+  if (ownerState.status === "loading") {
+    return { status: "loading" };
+  }
+  return { status: "error", message: ownerState.message, statusCode: ownerState.statusCode };
 }
 
 function resolveProjectTitleForExport(

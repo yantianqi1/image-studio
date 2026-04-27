@@ -13,7 +13,12 @@ class Asset(Base):
     __tablename__ = "assets"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    owner_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    owner_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    owner_anonymous_session_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("anonymous_sessions.id"),
+        nullable=True,
+        index=True,
+    )
     owner_client_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     storage_path: Mapped[str] = mapped_column(String(255), nullable=False)
     mime_type: Mapped[str] = mapped_column(String(128), nullable=False)
@@ -24,7 +29,12 @@ class ImageJob(Base):
     __tablename__ = "image_jobs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    anonymous_session_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("anonymous_sessions.id"),
+        nullable=True,
+        index=True,
+    )
     source: Mapped[str] = mapped_column(String(32), nullable=False)
     mode: Mapped[str] = mapped_column(String(32), nullable=False)
     prompt: Mapped[str] = mapped_column(Text, nullable=False)

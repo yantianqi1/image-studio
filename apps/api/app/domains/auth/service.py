@@ -34,12 +34,16 @@ def authenticate_user(session: Session, *, email: str, password: str) -> User:
 
 
 def get_user_by_token(session: Session, token: str | None) -> User:
-    token_hash = sha256_hex(token or "")
-    statement = select(User).join(UserSession, User.id == UserSession.user_id).where(UserSession.token_hash == token_hash)
-    user = session.execute(statement).scalar_one_or_none()
+    user = find_user_by_token(session, token)
     if user is None:
         raise AppError(code="unauthorized", message="authentication required", status_code=401)
     return user
+
+
+def find_user_by_token(session: Session, token: str | None) -> User | None:
+    token_hash = sha256_hex(token or "")
+    statement = select(User).join(UserSession, User.id == UserSession.user_id).where(UserSession.token_hash == token_hash)
+    return session.execute(statement).scalar_one_or_none()
 
 
 def delete_user_session(session: Session, token: str | None) -> None:

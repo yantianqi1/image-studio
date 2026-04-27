@@ -122,6 +122,7 @@ export async function apiFetch<T>(
     headers: buildHeaders(options),
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
     cache: "no-store",
+    credentials: "same-origin",
   });
 
   const payload = await readResponsePayload(response);
@@ -152,6 +153,7 @@ export async function apiDownload(
     method: "GET",
     headers,
     cache: "no-store",
+    credentials: "same-origin",
   });
 
   if (!response.ok) {
@@ -183,6 +185,7 @@ export async function apiUpload<T>(
     headers,
     body: formData,
     cache: "no-store",
+    credentials: "same-origin",
   });
   const payload = await readResponsePayload(response);
 

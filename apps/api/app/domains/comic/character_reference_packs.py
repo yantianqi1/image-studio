@@ -10,14 +10,15 @@ from zipfile import ZIP_DEFLATED, ZipFile
 from sqlalchemy.orm import Session
 
 from apps.api.app.core.errors import AppError
+from apps.api.app.domains.auth.ownership import OwnerContext
 from apps.api.app.domains.comic.character_references import (
     COMIC_REFERENCES_NOT_READY_CODE,
     require_character_cards,
 )
 from apps.api.app.domains.comic.models import ComicCharacterCard, ComicTask
-from apps.api.app.domains.comic.services import require_task
+from apps.api.app.domains.comic.ownership import require_task_for_owner
 from apps.api.app.domains.image.models import Asset
-from apps.api.app.domains.image.service import get_asset
+from apps.api.app.domains.image.service import get_asset_for_owner
 
 PACK_SCHEMA_VERSION = 1
 MANIFEST_PATH = "characters.json"
@@ -35,17 +36,22 @@ class CharacterPackEntry:
     image_file: str
 
 
-def export_character_reference_pack(session: Session, task_id: str) -> tuple[bytes, str]:
-    task = require_task(session, task_id)
-    cards = require_ready_character_cards(session, task_id=task_id)
-    entries = build_pack_entries(session, cards=cards)
+def export_character_reference_pack(session: Session, task_id: str, *, owner: OwnerContext) -> tuple[bytes, str]:
+    task = require_task_for_owner(session, task_id, owner)
+    cards = require_ready_character_cards(session, task_id=task_id, owner=owner)
+    entries = build_pack_entries(session, cards=cards, owner=owner)
     manifest = build_manifest(task=task, entries=entries)
     archive_name = build_archive_name(task)
     return write_archive(manifest=manifest, entries=entries), archive_name
 
 
-def require_ready_character_cards(session: Session, *, task_id: str) -> list[ComicCharacterCard]:
-    cards = require_character_cards(session, task_id=task_id)
+def require_ready_character_cards(
+    session: Session,
+    *,
+    task_id: str,
+    owner: OwnerContext,
+) -> list[ComicCharacterCard]:
+    cards = require_character_cards(session, task_id=task_id, owner=owner)
     if any(card.reference_asset_id is None for card in cards):
         raise AppError(
             code=COMIC_REFERENCES_NOT_READY_CODE,
@@ -55,12 +61,17 @@ def require_ready_character_cards(session: Session, *, task_id: str) -> list[Com
     return cards
 
 
-def build_pack_entries(session: Session, *, cards: list[ComicCharacterCard]) -> list[CharacterPackEntry]:
+def build_pack_entries(
+    session: Session,
+    *,
+    cards: list[ComicCharacterCard],
+    owner: OwnerContext,
+) -> list[CharacterPackEntry]:
     seen: dict[str, int] = {}
     filenames_by_asset: dict[int, str] = {}
     entries: list[CharacterPackEntry] = []
     for card in cards:
-        asset = get_asset(session, int(card.reference_asset_id or 0))
+        asset = get_asset_for_owner(session, int(card.reference_asset_id or 0), owner)
         assert_exportable_asset_file(asset)
         image_file = filenames_by_asset.get(asset.id)
         if image_file is None:

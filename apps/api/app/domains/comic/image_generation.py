@@ -4,12 +4,18 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from apps.api.app.core.errors import AppError
+from apps.api.app.domains.auth.ownership import OwnerContext
 from apps.api.app.domains.comic.character_references import COMIC_REFERENCES_NOT_READY_CODE, require_all_references_ready
 from apps.api.app.domains.comic.models import ComicCharacterCard, ComicPanelPrompt, ComicTask
-from apps.api.app.domains.comic.services import require_task
+from apps.api.app.domains.comic.ownership import require_task_for_owner
+from apps.api.app.domains.comic.payloads import (
+    build_approval_payload,
+    panel_prompt_payload,
+    prompt_image_result_payload,
+)
 from apps.api.app.domains.image.service import create_job as create_image_job
 from apps.api.app.domains.image.service import get_job as get_image_job
-from apps.api.app.domains.image.service import list_job_results, list_reference_asset_ids
+from apps.api.app.domains.image.service import list_reference_asset_ids
 from apps.api.app.domains.llm.client_provider import (
     CLIENT_PROVIDER_SOURCE,
     ClientProviderConfig,
@@ -17,23 +23,23 @@ from apps.api.app.domains.llm.client_provider import (
 )
 
 
-def approve_task_image_generation(session: Session, task_id: str) -> dict:
-    task = require_task(session, task_id)
+def approve_task_image_generation(session: Session, task_id: str, *, owner: OwnerContext) -> dict:
+    task = require_task_for_owner(session, task_id, owner)
     require_completed_task(task)
     prompts = list_ready_panel_prompts(session, task_id=task.id)
     if not prompts:
         raise AppError(code="comic_prompts_not_ready", message="comic panel prompts are not ready", status_code=409)
-    require_all_references_ready(session, task_id=task.id)
+    require_all_references_ready(session, task_id=task.id, owner=owner)
     created_count, reused_count = enqueue_missing_image_jobs(session, task=task, prompts=prompts)
     session.commit()
     return build_approval_payload(prompts=prompts, created_count=created_count, reused_count=reused_count)
 
 
-def regenerate_prompt_image(session: Session, prompt_id: int) -> dict:
+def regenerate_prompt_image(session: Session, prompt_id: int, *, owner: OwnerContext) -> dict:
     prompt = require_panel_prompt(session, prompt_id)
-    require_completed_task(require_task(session, prompt.task_id))
+    require_completed_task(require_task_for_owner(session, prompt.task_id, owner))
     reference_asset_ids = resolve_prompt_reference_asset_ids(session, prompt=prompt)
-    task = require_task(session, prompt.task_id)
+    task = require_task_for_owner(session, prompt.task_id, owner)
     prompt.image_job_id = enqueue_prompt_image_job(
         session,
         task=task,
@@ -45,8 +51,8 @@ def regenerate_prompt_image(session: Session, prompt_id: int) -> dict:
     return panel_prompt_payload(prompt)
 
 
-def list_task_image_results(session: Session, task_id: str) -> list[dict]:
-    task = require_task(session, task_id)
+def list_task_image_results(session: Session, task_id: str, *, owner: OwnerContext) -> list[dict]:
+    task = require_task_for_owner(session, task_id, owner)
     prompts = list_ready_panel_prompts(session, task_id=task.id)
     return [prompt_image_result_payload(session, prompt=prompt) for prompt in prompts]
 
@@ -167,7 +173,7 @@ def enqueue_prompt_image_job(
     client_config = resolve_task_client_provider_config(task)
     return create_image_job(
         session,
-        user_id=task.user_id,
+        owner=task_owner(task),
         source=resolve_image_job_source(task=task, client_config=client_config),
         prompt=prompt.prompt,
         model_code=prompt.model_code,
@@ -191,34 +197,5 @@ def resolve_image_job_source(*, task: ComicTask, client_config: ClientProviderCo
     return "member" if task.user_id is not None else "anonymous"
 
 
-def build_approval_payload(*, prompts: list[ComicPanelPrompt], created_count: int, reused_count: int) -> dict:
-    return {"created_count": created_count, "reused_count": reused_count, "prompts": [panel_prompt_payload(prompt) for prompt in prompts]}
-
-
-def panel_prompt_payload(prompt: ComicPanelPrompt) -> dict:
-    return {
-        "id": prompt.id,
-        "task_id": prompt.task_id,
-        "image_index": prompt.image_index,
-        "image_job_id": prompt.image_job_id,
-        "asset_id": prompt.asset_id,
-        "prompt": prompt.prompt,
-    }
-
-
-def prompt_image_result_payload(session: Session, *, prompt: ComicPanelPrompt) -> dict:
-    payload = panel_prompt_payload(prompt)
-    payload.update({"image_status": None, "error_message": None, "result": None})
-    if prompt.image_job_id is None:
-        return payload
-    job = get_image_job(session, prompt.image_job_id)
-    payload["image_status"] = job.status
-    payload["error_message"] = job.error_message
-    results = list_job_results(session, job.id)
-    if results:
-        payload["result"] = image_result_payload(results[0])
-    return payload
-
-
-def image_result_payload(result) -> dict:
-    return {"id": result.id, "job_id": result.job_id, "asset_id": result.asset_id, "asset_url": result.asset_url, "revised_prompt": result.revised_prompt, "provider_request_id": result.provider_request_id}
+def task_owner(task: ComicTask) -> OwnerContext:
+    return OwnerContext(user_id=task.user_id, anonymous_session_id=task.anonymous_session_id)
