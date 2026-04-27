@@ -30,31 +30,32 @@ def compose_panel_prompts(
             image=image,
             character_map=character_map,
             style_base_prompt=preset.base_prompt,
-            style_negative_prompt=preset.negative_prompt,
             model_code=model_code,
         )
         for image in storyboard.images
     ]
 
 
-def compose_single_prompt(*, image: StoryboardImage, character_map: dict, style_base_prompt: str, style_negative_prompt: str, model_code: str) -> PanelPromptDraft:
+def compose_single_prompt(*, image: StoryboardImage, character_map: dict, style_base_prompt: str, model_code: str) -> PanelPromptDraft:
     character_codes = collect_character_codes(image=image)
+    negative_prompt = build_negative_prompt(character_codes=character_codes, character_map=character_map)
     prompt_parts = [
         build_prompt_header(),
         build_style_block(style_base_prompt),
+        build_output_format_and_quality_instruction(),
         build_layout_instruction(panel_count=len(image.panels)),
         build_chinese_text_instruction(),
         build_character_block(character_codes=character_codes, character_map=character_map),
         build_panel_descriptions(image=image),
         build_global_constraints(),
-        f"Negative prompt: {build_negative_prompt(character_codes=character_codes, character_map=character_map, style_negative_prompt=style_negative_prompt)}",
+        f"Negative prompt: {negative_prompt}",
     ]
     return PanelPromptDraft(
         image_index=image.image_index,
         panel_count=len(image.panels),
         character_codes=character_codes,
         prompt="\n\n".join(part for part in prompt_parts if part),
-        negative_prompt=build_negative_prompt(character_codes=character_codes, character_map=character_map, style_negative_prompt=style_negative_prompt),
+        negative_prompt=negative_prompt,
         model_code=model_code,
     )
 
@@ -65,6 +66,22 @@ def build_prompt_header() -> str:
 
 def build_style_block(style_base_prompt: str) -> str:
     return f"Style preset:\n{style_base_prompt}"
+
+
+def build_output_format_and_quality_instruction() -> str:
+    return (
+        "Output format and image quality:\n"
+        "Generate a high-resolution vertical Chinese comic page, portrait format, optimized for a 9:16 mobile "
+        "webtoon-style reading experience.\n"
+        "The composition must clearly fit inside one full page image, with all comic panels fully visible, evenly "
+        "spaced, and not cropped.\n"
+        "Use crisp lineart, sharp facial details, readable hands, clean silhouettes, clear panel borders, and clean "
+        "color separation.\n"
+        "Prioritize readability over decoration. The image should feel like a finished professional manhua page, not "
+        "a sketch, draft, poster, concept art, or single illustration.\n"
+        "Avoid low-resolution artifacts, blurry faces, compressed panels, crowded layouts, excessive background "
+        "detail, tiny unreadable text, cropped borders, and messy visual noise."
+    )
 
 
 def collect_character_codes(*, image: StoryboardImage) -> list[str]:
@@ -138,6 +155,5 @@ def build_global_constraints() -> str:
     )
 
 
-def build_negative_prompt(*, character_codes: list[str], character_map: dict, style_negative_prompt: str) -> str:
-    character_negatives = [character_map[code].negative_prompt for code in character_codes if code in character_map]
-    return "; ".join([style_negative_prompt, *character_negatives])
+def build_negative_prompt(*, character_codes: list[str], character_map: dict) -> str:
+    return "; ".join(character_map[code].negative_prompt for code in character_codes if code in character_map)

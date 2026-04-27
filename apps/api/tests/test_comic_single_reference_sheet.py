@@ -24,6 +24,7 @@ def test_single_sheet_mode_enqueues_one_shared_reference_job() -> None:
     assert count_image_jobs() == 1
     assert_reference_prompt_mentions_all_characters(job_ids[0])
     assert_reference_prompt_requires_name_labels(job_ids[0])
+    assert_reference_prompt_aligns_with_selected_style(job_ids[0])
 
 
 def test_single_sheet_mode_syncs_shared_asset_to_all_characters() -> None:
@@ -157,6 +158,16 @@ def assert_reference_prompt_requires_name_labels(job_id: int) -> None:
     assert "Label: Lin" in prompt
     assert "Label: Monk Qiao" in prompt
     assert "Do not render text labels" not in prompt
+
+
+def assert_reference_prompt_aligns_with_selected_style(job_id: int) -> None:
+    with session_scope() as session:
+        prompt = session.get(ImageJob, job_id).prompt
+    assert "Character reference style alignment" in prompt
+    assert "Clean Baimiao Line-art Comic" in prompt
+    assert "clean manhua/comic aesthetic" in prompt
+    assert "reference sheet" in prompt
+    assert "9:16 mobile webtoon-style reading experience" not in prompt
 
 
 def reference_asset_ids(job_id: int) -> list[int]:

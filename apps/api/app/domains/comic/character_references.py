@@ -12,6 +12,7 @@ from apps.api.app.domains.comic.repository import (
     update_character_reference_job,
 )
 from apps.api.app.domains.comic.services import require_task
+from apps.api.app.domains.comic.style_presets import DEFAULT_STYLE_PRESET_ID, get_style_preset
 from apps.api.app.domains.image.service import create_job, get_job, list_job_results
 from apps.api.app.domains.llm.client_provider import (
     CLIENT_PROVIDER_SOURCE,
@@ -95,7 +96,7 @@ def create_reference_job(session: Session, *, task: ComicTask, card: ComicCharac
         session,
         user_id=task.user_id,
         source=resolve_image_job_source(task=task, client_config=client_config),
-        prompt=card.multi_view_prompt,
+        prompt=build_style_aligned_reference_prompt(task=task, prompt=card.multi_view_prompt),
         model_code="gpt-image-2",
         requested_count=1,
         mode="generate",
@@ -110,7 +111,7 @@ def create_shared_reference_job(session: Session, *, task: ComicTask, cards: lis
         session,
         user_id=task.user_id,
         source=resolve_image_job_source(task=task, client_config=client_config),
-        prompt=build_single_sheet_prompt(cards),
+        prompt=build_single_sheet_prompt(cards, style_preset_id=task_style_preset_id(task)),
         model_code="gpt-image-2",
         requested_count=1,
         mode="generate",
@@ -119,7 +120,7 @@ def create_shared_reference_job(session: Session, *, task: ComicTask, cards: lis
     )
 
 
-def build_single_sheet_prompt(cards: list[ComicCharacterCard]) -> str:
+def build_single_sheet_prompt(cards: list[ComicCharacterCard], style_preset_id: object | None = None) -> str:
     header = [
         "Generate one clean all-character reference sheet for a Chinese comic.",
         "Neutral white or light gray background. No environment, no story scene, no action sequence.",
@@ -129,7 +130,58 @@ def build_single_sheet_prompt(cards: list[ComicCharacterCard]) -> str:
         "Do not render dialogue, captions, panel borders, props not listed, or extra people.",
         "The image is only for character identity: fixed face, hairstyle, costume silhouette, and colors.",
     ]
-    return "\n".join([*header, "", *character_sheet_lines(cards)])
+    prompt = "\n".join([*header, "", *character_sheet_lines(cards)])
+    return prepend_style_alignment(prompt=prompt, style_preset_id=style_preset_id)
+
+
+def build_style_aligned_reference_prompt(*, task: ComicTask, prompt: str) -> str:
+    return prepend_style_alignment(prompt=prompt, style_preset_id=task_style_preset_id(task))
+
+
+def prepend_style_alignment(*, prompt: str, style_preset_id: object | None) -> str:
+    return "\n\n".join([build_character_reference_style_alignment(style_preset_id), prompt])
+
+
+def build_character_reference_style_alignment(style_preset_id: object | None) -> str:
+    preset = resolve_reference_style_preset(style_preset_id)
+    lines = [
+        "Character reference style alignment:",
+        "Use the selected comic style as the visual direction for this character reference sheet.",
+        "The character sheet should match the same clean manhua/comic aesthetic that will be used in the final comic pages.",
+        "Keep the reference sheet clean, readable, front-facing or multi-view when requested, with clear face, hairstyle, costume silhouette, color design, and key accessories.",
+        "Avoid painterly noise, dirty texture, excessive background detail, dramatic lighting that hides features, and inconsistent facial design.",
+    ]
+    return "\n".join([*lines, *selected_style_summary_lines(preset.base_prompt)])
+
+
+def selected_style_summary_lines(base_prompt: str) -> list[str]:
+    lines = [line.strip() for line in base_prompt.splitlines()]
+    style_name = next((line for line in lines if line.startswith("Style name:")), "")
+    core_language = extract_core_visual_language(lines)
+    summary = ["Selected comic style:", style_name or "default clean manhua/comic style."]
+    if core_language:
+        summary.append(f"Core visual language: {core_language}")
+    return summary
+
+
+def extract_core_visual_language(lines: list[str]) -> str:
+    for index, line in enumerate(lines):
+        if line == "Core visual language:":
+            return next((candidate for candidate in lines[index + 1:] if candidate), "")
+    return ""
+
+
+def resolve_reference_style_preset(style_preset_id: object | None):
+    try:
+        return get_style_preset(style_preset_id or DEFAULT_STYLE_PRESET_ID)
+    except AppError as exc:
+        if exc.code == "comic_style_preset_invalid":
+            return get_style_preset(DEFAULT_STYLE_PRESET_ID)
+        raise
+
+
+def task_style_preset_id(task: ComicTask) -> object | None:
+    return (task.input_payload or {}).get("style_preset")
 
 
 def character_sheet_lines(cards: list[ComicCharacterCard]) -> list[str]:

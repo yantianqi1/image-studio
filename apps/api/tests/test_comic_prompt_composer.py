@@ -31,6 +31,23 @@ def test_prompt_composer_uses_exact_panel_count_instruction() -> None:
     assert prompts[0].panel_count == 3
 
 
+def test_prompt_composer_includes_output_format_and_quality_block() -> None:
+    prompts = compose_panel_prompts(
+        storyboard=build_storyboard(),
+        character_bible=build_character_bible(),
+        style_preset_id="baimiao",
+        model_code="gpt-image-2",
+    )
+
+    prompt = prompts[0].prompt
+    assert "Output format and image quality" in prompt
+    assert "9:16 mobile webtoon-style reading experience" in prompt
+    assert "high-resolution vertical Chinese comic page" in prompt
+    assert "all comic panels fully visible" in prompt
+    assert prompt.index("Style preset:") < prompt.index("Output format and image quality")
+    assert prompt.index("Output format and image quality") < prompt.index("Page layout:")
+
+
 def test_prompt_composer_uses_single_anchor_for_repeated_character() -> None:
     prompts = compose_panel_prompts(
         storyboard=build_storyboard(),
@@ -52,20 +69,20 @@ def test_prompt_composer_injects_full_style_template_before_storyboard() -> None
     )
 
     assert prompts[0].prompt.startswith("Task: Generate one finished vertical Chinese comic page")
-    assert "Style name: Baimiao Line-art Comic" in prompts[0].prompt
-    assert "no color, varied ink line weights" in prompts[0].prompt
+    assert "Style name: Clean Baimiao Line-art Comic" in prompts[0].prompt
+    assert "Use black ink on a light paper background only" in prompts[0].prompt
     assert "Lin studies the haunted ferry." in prompts[0].prompt
 
 
 def test_prompt_composer_supports_all_comic_style_presets() -> None:
     expected_phrases = {
-        "ink_wash": "Style name: Ink Wash Comic",
-        "gongbi": "Style name: Meticulous Color Comic",
-        "neo_chinese": "Style name: Linear Neo-Chinese",
-        "baimiao": "Style name: Baimiao Line-art Comic",
-        "guochao_chibi": "Style name: Guochao Chibi Comic",
-        "dark_gothic": "Style name: Dark Chinese Gothic",
-        "exquisite_3d_donghua": "Style name: Exquisite 3D Donghua Style",
+        "ink_wash": "Style name: Clean Ink Wash Comic",
+        "gongbi": "Style name: Clean Gongbi Color Comic",
+        "neo_chinese": "Style name: Linear Neo-Chinese Comic",
+        "baimiao": "Style name: Clean Baimiao Line-art Comic",
+        "guochao_chibi": "Style name: Clean Guochao Chibi Comic",
+        "dark_gothic": "Style name: Clean Dark Chinese Gothic Comic",
+        "exquisite_3d_donghua": "Style name: Clean Exquisite 3D Donghua Comic",
     }
 
     for style_preset_id, expected_phrase in expected_phrases.items():
@@ -76,6 +93,18 @@ def test_prompt_composer_supports_all_comic_style_presets() -> None:
             model_code="gpt-image-2",
         )
         assert expected_phrase in prompts[0].prompt
+
+
+def test_prompt_composer_uses_character_negative_prompt_without_style_negative_prompt() -> None:
+    prompts = compose_panel_prompts(
+        storyboard=build_storyboard(),
+        character_bible=build_character_bible(),
+        style_preset_id="baimiao",
+        model_code="gpt-image-2",
+    )
+
+    assert prompts[0].negative_prompt == "Do not change hairstyle or robe silhouette."
+    assert "heavy painterly textures" not in prompts[0].prompt
 
 
 def test_prompt_composer_requires_chinese_visible_text() -> None:
