@@ -2,14 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { ClientProviderControls } from "@/features/shell/client-provider-controls";
-
-const navItems = [
-  { href: "/", label: "生图" },
-  { href: "/comic", label: "漫画" },
-  { href: "/tasks", label: "任务" },
-  { href: "/wallet", label: "钱包" },
-  { href: "/login", label: "登录" },
-] as const;
+import { APP_NAV_CONTAINER_CLASS, APP_NAV_ITEMS } from "@/features/shell/app-navigation";
 
 type AppShellProps = Readonly<{
   children: ReactNode;
@@ -93,8 +86,8 @@ function BrandLink(props: Readonly<{ brandLabel: string; headerTitle?: string }>
 
 function MainNav({ activeHref }: Readonly<{ activeHref?: string }>) {
   return (
-    <nav className="absolute left-1/2 top-1/2 hidden h-11 w-[22.5rem] -translate-x-1/2 -translate-y-1/2 grid-cols-5 items-center gap-1 rounded-xl md:grid">
-      {navItems.map((item) => <NavLink key={item.href} active={activeHref === item.href} href={item.href} label={item.label} />)}
+    <nav className={APP_NAV_CONTAINER_CLASS}>
+      {APP_NAV_ITEMS.map((item) => <NavLink key={item.href} active={activeHref === item.href} href={item.href} label={item.label} />)}
     </nav>
   );
 }

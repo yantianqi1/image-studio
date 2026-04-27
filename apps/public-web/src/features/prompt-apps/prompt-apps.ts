@@ -1,5 +1,5 @@
 export type PromptApp = Readonly<{
-  id: "character-poster";
+  id: string;
   title: string;
   description: string;
   href: string;
