@@ -2,6 +2,7 @@ node_modules
 .next
 dist
 .turbo
+.worktrees/
 .pnpm-store
 *.tsbuildinfo
 *.db
