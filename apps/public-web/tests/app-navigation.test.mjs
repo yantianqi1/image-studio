@@ -23,10 +23,10 @@ test("app navigation exposes 应用 after 生图", () => {
 
   assert.equal(APP_NAV_ITEMS.length, 6);
   assert.equal(APP_NAV_ITEMS[0].label, "生图");
-  assert.equal(APP_NAV_ITEMS[1].label, "应用");
-  assert.equal(APP_NAV_ITEMS[2].label, "漫画");
+  assert.equal(APP_NAV_ITEMS[1].label, "漫画");
+  assert.equal(APP_NAV_ITEMS[2].label, "应用");
   assert.equal(APP_NAV_ITEMS[3].label, "任务");
   assert.equal(APP_NAV_ITEMS[4].label, "钱包");
   assert.equal(APP_NAV_ITEMS[5].label, "登录");
-  assert.equal(APP_NAV_ITEMS[1].href, "/apps");
+  assert.equal(APP_NAV_ITEMS[2].href, "/apps");
 });
