@@ -17,9 +17,6 @@ import type { PublicModelSummary } from "@/lib/public-api";
 import type { ResourceState } from "@/lib/use-api-resource";
 import styles from "./generation-workbench.module.css";
 
-const PROMPT_MAX_LENGTH = 1000;
-
-
 type ControlPanelProps = Readonly<{
   form: ImageFormState;
   modelsState: ResourceState<readonly PublicModelSummary[]>;
@@ -111,7 +108,6 @@ function PromptField({
       <div className={styles.textareaShell}>
         <textarea
           className="min-h-36 w-full resize-y bg-transparent text-sm leading-6 text-gray-900 outline-none placeholder:text-gray-400"
-          maxLength={PROMPT_MAX_LENGTH}
           name="prompt"
           placeholder="黄昏港口，蒸汽列车穿过潮湿雾气，电影感光影"
           required
@@ -120,7 +116,7 @@ function PromptField({
             onFormChange((current) => ({ ...current, prompt: event.target.value }))
           }
         />
-        <div className="flex items-center justify-between border-t border-gray-100 pt-2 text-xs text-gray-400">
+        <div className="flex items-center justify-end border-t border-gray-100 pt-2 text-xs text-gray-400">
           <button
             className="rounded-full px-2 py-1 transition-colors hover:bg-gray-100 hover:text-gray-700"
             type="button"
@@ -128,7 +124,6 @@ function PromptField({
           >
             清空
           </button>
-          <span>{form.prompt.length} / {PROMPT_MAX_LENGTH}</span>
         </div>
         <GenerationPromptImageUpload
           sourceImage={sourceImage}
