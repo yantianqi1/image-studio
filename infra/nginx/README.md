@@ -7,28 +7,21 @@
 
 因此浏览器访问前端时，必须让同一个 origin 下的 `/api/*` 能转发到 FastAPI。Nginx 的核心职责就是统一入口与代理 API。
 
-## 本地端口
+## 端口
 
 - `public-web`：`http://public-web:7700`
 - `admin-web`：`http://admin-web:7701`
 - `api`：`http://api:7800`
-- 开发态 `nginx-public`：`http://localhost:8080`
-- 开发态 `nginx-admin`：`http://localhost:8081`
-- 生产态 `nginx-public`：`http://localhost:7700`
-- 生产态 `nginx-admin`：`http://localhost:7701`
+- `nginx-public`：`http://localhost:7700`
+- `nginx-admin`：`http://localhost:7701`
 
-## Docker Compose 内联配置
+## Docker Compose 配置
 
-根目录 `docker-compose.yml` 已经内联一份开发态 nginx 配置，默认规则：
+根目录只保留正式 `docker-compose.yml`，并挂载：
 
-- `8080`：`/api/public/*`、`/health`、`/` 分别转发到 API 与 `public-web`
-- `8081`：`/api/admin/*`、`/health`、`/` 分别转发到 API 与 `admin-web`
-
-生产镜像部署使用独立配置文件：
-
-- `infra/nginx/nginx.prod.conf`
-- `docker-compose.prod.yml` 会把它挂载到 `/etc/nginx/conf.d/default.conf`
-- 生产默认对外发布 `7700` 和 `7701`
+- `infra/nginx/nginx.prod.conf` -> `/etc/nginx/conf.d/default.conf`
+- `7700`：`/api/public/*`、`/health`、`/` 分别转发到 API 与 `public-web`
+- `7701`：`/api/admin/*`、`/health`、`/` 分别转发到 API 与 `admin-web`
 
 ## 生产域名建议
 
@@ -130,20 +123,20 @@ docker compose exec nginx nginx -t
 健康检查：
 
 ```bash
-curl -i http://localhost:8080/health
-curl -i http://localhost:8081/health
+curl -i http://localhost:7700/health
+curl -i http://localhost:7701/health
 ```
 
 用户 API：
 
 ```bash
-curl -i http://localhost:8080/api/public/models
+curl -i http://localhost:7700/api/public/models
 ```
 
 后台登录：
 
 ```bash
-curl -i -X POST http://localhost:8081/api/admin/auth/login \
+curl -i -X POST http://localhost:7701/api/admin/auth/login \
   -H 'Content-Type: application/json' \
   -d '{"username":"admin","password":"change-me"}'
 ```

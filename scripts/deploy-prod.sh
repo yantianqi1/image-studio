@@ -1,8 +1,6 @@
 #!/usr/bin/env sh
 set -eu
 
-COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
-
-docker compose -f "${COMPOSE_FILE}" pull
-docker compose -f "${COMPOSE_FILE}" up -d
-docker compose -f "${COMPOSE_FILE}" ps
+docker compose pull
+docker compose up -d
+docker compose ps

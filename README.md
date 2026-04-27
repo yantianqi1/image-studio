@@ -2,7 +2,7 @@
 
 独立商业化仓库，承接用户生图、钱包计费、激活码、漫画创作、后台运营与外部 LLM Provider 接入。
 
-当前仓库已经具备本地联调骨架、GHCR 镜像构建工作流，以及面向服务器的 Docker Compose 镜像部署配置。
+当前仓库已经具备本地联调骨架、GHCR 镜像构建工作流，以及面向服务器的单一 Docker Compose 镜像部署配置。
 
 ## 服务拓扑
 
@@ -57,16 +57,10 @@
 
 ## 环境变量
 
-复制模板：
+复制唯一模板：
 
 ```bash
 cp .env.example .env
-```
-
-生产服务器使用镜像部署时复制生产模板：
-
-```bash
-cp .env.production.example .env
 ```
 
 关键变量说明：
@@ -168,11 +162,9 @@ pip install -r apps/api/requirements.txt -r apps/worker/requirements.txt
 cp .env.example .env
 ```
 
-4. 启动数据库
+4. 准备数据库
 
-```bash
-docker compose up -d postgres
-```
+本地进程联调需要一个可从宿主机访问的 PostgreSQL，并把 `.env` 里的 `DATABASE_URL` 指向它。正式 `docker-compose.yml` 不把数据库端口发布到宿主机。
 
 5. 启动 API
 
@@ -195,28 +187,21 @@ pnpm dev:public
 pnpm dev:admin
 ```
 
-8. 启动 nginx 统一入口
+8. 本地访问
 
-推荐本地访问：
+- 用户端：`http://localhost:7700/`
+- 后台端：`http://localhost:7701/`
+- API 健康检查：`http://localhost:7800/health`
 
-- 用户端：`http://localhost:8080/`
-- 后台端：`http://localhost:8081/`
-- 健康检查：`http://localhost:8080/health`
+### 方案 B：Docker Compose 镜像部署验证
 
-### 方案 B：Docker Compose 一键联调
-
-仓库根目录已经补齐一份开发态 `docker-compose.yml` 草案，使用官方基础镜像挂载源码并执行命令。
+仓库根目录只保留正式 `docker-compose.yml`，直接拉取 GHCR 镜像运行。
 
 启动：
 
 ```bash
-docker compose up --build
-```
-
-后台启动：
-
-```bash
-docker compose up --build -d
+docker compose pull
+docker compose up -d
 ```
 
 查看日志：
@@ -244,10 +229,10 @@ docker compose down -v
 服务器首次部署：
 
 ```bash
-cp .env.production.example .env
+cp .env.example .env
 docker login ghcr.io
-docker compose -f docker-compose.prod.yml pull
-docker compose -f docker-compose.prod.yml up -d
+docker compose pull
+docker compose up -d
 ```
 
 后续部署：
