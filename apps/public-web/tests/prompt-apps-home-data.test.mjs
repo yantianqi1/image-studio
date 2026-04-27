@@ -22,6 +22,11 @@ test("buildPromptAppCenterCards keeps the prompt app card data intact", () => {
   const { buildPromptAppCenterCards } = loadPromptAppsHomeData();
   const cards = buildPromptAppCenterCards([
     {
+      cover: {
+        badge: "海报",
+        label: "角色海报",
+        tone: "rose",
+      },
       description: "输入角色与备注，生成二次元动漫插画海报。",
       href: "/apps/character-poster",
       statusLabel: "内置提示词",
@@ -33,4 +38,9 @@ test("buildPromptAppCenterCards keeps the prompt app card data intact", () => {
   assert.equal(cards[0].title, "角色海报");
   assert.equal(cards[0].href, "/apps/character-poster");
   assert.equal(cards[0].statusLabel, "内置提示词");
+  assert.deepEqual(cards[0].cover, {
+    badge: "海报",
+    label: "角色海报",
+    tone: "rose",
+  });
 });

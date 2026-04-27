@@ -24,6 +24,8 @@ test("prompt app catalog exposes character poster app", () => {
   assert.deepEqual(Array.from(PROMPT_APPS, (app) => app.id), ["character-poster"]);
   assert.equal(PROMPT_APPS[0].title, "角色海报");
   assert.equal(PROMPT_APPS[0].href, "/apps/character-poster");
+  assert.equal(PROMPT_APPS[0].cover.label, "角色海报");
+  assert.equal(PROMPT_APPS[0].cover.tone, "rose");
 });
 
 test("character poster app is public and relies on image job API access rules", () => {

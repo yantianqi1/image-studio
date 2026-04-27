@@ -1,10 +1,19 @@
 export type PromptApp = Readonly<{
   access: "public-image-job-api";
+  cover: PromptAppCover;
   id: string;
   title: string;
   description: string;
   href: string;
   statusLabel: string;
+}>;
+
+export type PromptAppCoverTone = "rose";
+
+export type PromptAppCover = Readonly<{
+  badge: string;
+  label: string;
+  tone: PromptAppCoverTone;
 }>;
 
 export type CharacterPosterPromptInput = Readonly<{
@@ -16,6 +25,11 @@ export const PROMPT_APPS: readonly PromptApp[] = [
   {
     access: "public-image-job-api",
     id: "character-poster",
+    cover: {
+      badge: "海报",
+      label: "角色海报",
+      tone: "rose",
+    },
     title: "角色海报",
     description: "输入角色与备注，生成二次元动漫插画海报。",
     href: "/apps/character-poster",
