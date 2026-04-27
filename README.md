@@ -71,7 +71,9 @@ cp .env.example .env
 - `API_BASE_URL`：API 对外地址
 - `USER_SESSION_COOKIE_NAME`：用户会话 Cookie 名称
 - `ANONYMOUS_SESSION_COOKIE_NAME`：匿名用户 Cookie 名称
+- `ANONYMOUS_SESSION_COOKIE_SECURE`：匿名会话 Cookie 是否写入 `Secure` 标记；当前 HTTP 端口部署保持 `false`，启用 HTTPS 后改为 `true`
 - `ADMIN_SESSION_COOKIE_NAME`：管理员会话 Cookie 名称
+- `ADMIN_SESSION_COOKIE_SECURE`：管理员会话 Cookie 是否写入 `Secure` 标记；当前 HTTP 端口部署保持 `false`，启用 HTTPS 后改为 `true`
 - `SESSION_SECRET`：服务端会话相关密钥，生产环境必须替换
 - `APP_ENV`：`development` 或 `production`
 - `APP_VERSION`：版本号

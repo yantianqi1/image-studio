@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy import text
 
+from apps.api.app.core.config import get_settings
 from apps.api.app.infra.db.session import session_scope
 
 COOKIE_NAME = "studio_anonymous_session"
@@ -38,3 +39,16 @@ def test_anonymous_session_endpoint_reuses_existing_cookie(client):
         count = session.execute(text("select count(*) from anonymous_sessions")).scalar_one()
 
     assert count == 1
+
+
+def test_anonymous_session_cookie_secure_flag_is_configurable(client, monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("ANONYMOUS_SESSION_COOKIE_SECURE", "false")
+    get_settings.cache_clear()
+
+    response = client.post("/api/public/auth/anonymous-session")
+
+    set_cookie = response.headers["set-cookie"].lower()
+    assert response.status_code == 201
+    assert f"{COOKIE_NAME}=" in set_cookie
+    assert "; secure" not in set_cookie

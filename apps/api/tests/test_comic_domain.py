@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
+from apps.api.app.core.config import get_settings
 from apps.api.app.core.errors import AppError
 from apps.api.app.core.response import api_error
 from apps.api.app.domains.comic.router import public_router
@@ -117,6 +118,20 @@ def test_create_task_rejects_invalid_comic_style_preset_before_queueing() -> Non
 
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "comic_style_preset_invalid"
+
+
+def test_anonymous_comic_task_flow_works_with_http_production_cookie_config(monkeypatch) -> None:
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("ANONYMOUS_SESSION_COOKIE_SECURE", "false")
+    get_settings.cache_clear()
+    client = create_comic_client()
+    project_id = create_project(client)
+    save_chapter(client, project_id)
+    save_scene(client, project_id)
+
+    task = create_scene_render_task(client, project_id)
+
+    assert task["project_id"] == project_id
 
 
 def test_save_characters_chapter_and_scene() -> None:

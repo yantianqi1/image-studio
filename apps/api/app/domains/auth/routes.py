@@ -123,7 +123,7 @@ def set_admin_session_cookie(response: Response, token: str) -> None:
         token,
         httponly=True,
         samesite="lax",
-        secure=settings.app_env == "production",
+        secure=settings.admin_session_cookie_secure,
         max_age=settings.admin_session_max_age_seconds,
         path="/",
     )

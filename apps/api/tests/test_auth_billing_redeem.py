@@ -91,6 +91,24 @@ def test_admin_login_me_and_logout():
     assert unauthenticated_response.status_code == 401
 
 
+def test_admin_login_cookie_secure_flag_is_configurable(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("ADMIN_SESSION_COOKIE_SECURE", "false")
+    get_settings.cache_clear()
+    client = build_domain_client()
+    seed_admin()
+
+    login_response = client.post(
+        "/api/admin/auth/login",
+        json={"username": "root", "password": "admin-pass"},
+    )
+
+    set_cookie = login_response.headers["set-cookie"].lower()
+    assert login_response.status_code == 200
+    assert "studio_admin_session=" in set_cookie
+    assert "; secure" not in set_cookie
+
+
 def test_default_admin_bootstrap_updates_existing_password(monkeypatch):
     build_domain_client()
     monkeypatch.setenv("DEFAULT_ADMIN_USERNAME", "admin")

@@ -55,7 +55,7 @@ def set_anonymous_session_cookie(response: Response, token: str) -> None:
         token,
         httponly=True,
         samesite="lax",
-        secure=settings.app_env == "production",
+        secure=settings.anonymous_session_cookie_secure,
         max_age=settings.anonymous_session_max_age_seconds,
         path="/",
     )

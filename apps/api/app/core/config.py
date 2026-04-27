@@ -13,8 +13,10 @@ class AppSettings(BaseSettings):
     database_url: str = "sqlite:///./commercial_studio.db"
     user_session_cookie_name: str = "studio_user_session"
     anonymous_session_cookie_name: str = DEFAULT_ANONYMOUS_SESSION_COOKIE_NAME
+    anonymous_session_cookie_secure: bool = False
     anonymous_session_max_age_seconds: int = DEFAULT_ANONYMOUS_SESSION_MAX_AGE_SECONDS
     admin_session_cookie_name: str = "studio_admin_session"
+    admin_session_cookie_secure: bool = False
     admin_session_max_age_seconds: int = 2592000
     session_secret: str = "replace-me"
     signup_bonus_cents: int = 100
