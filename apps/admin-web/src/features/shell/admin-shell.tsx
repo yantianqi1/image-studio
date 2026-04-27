@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { AdminLogoutButton } from "@/features/shell/admin-logout-button";
+import { BrandMark } from "@/features/shell/brand-mark";
 
 const navItems = [
   { href: "/admin", label: "概览", icon: (
@@ -35,9 +36,14 @@ export function AdminShell({ title, description, children }: AdminShellProps) {
   return (
     <div className="admin-root">
       <aside className="admin-sidebar">
-        <div>
-          <p className="admin-brand">CS Admin</p>
-          <p className="admin-caption">image Studio 后台</p>
+        <div className="flex items-center gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[0.875rem] border border-black/10 bg-white shadow-sm">
+            <BrandMark />
+          </span>
+          <div>
+            <p className="admin-brand">CS Admin</p>
+            <p className="admin-caption">image Studio 后台</p>
+          </div>
         </div>
         <nav className="admin-nav">
           {navItems.map((item) => (

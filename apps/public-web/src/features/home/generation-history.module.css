@@ -24,13 +24,19 @@
   width: 2.25rem;
   align-items: center;
   justify-content: center;
-  border: 0;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
   border-radius: 0.875rem;
-  background: #111827;
-  color: #ffffff;
+  background: #ffffff;
+  color: #111827;
   font-size: 0.75rem;
   font-weight: 700;
   cursor: pointer;
+}
+
+.sidebarBrand:hover {
+  border-color: #d1d5db;
+  background: #f9fafb;
 }
 
 .sidebarSearch {

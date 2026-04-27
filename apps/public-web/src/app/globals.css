@@ -34,25 +34,6 @@ body {
   z-index: 0;
 }
 
-/* ── Brand Mark ── */
-.brand-mark {
-  display: inline-flex;
-  height: 2.25rem;
-  width: 2.25rem;
-  align-items: center;
-  justify-content: center;
-  border-radius: 0.75rem;
-  background: #111827;
-  color: #ffffff;
-  font-weight: 700;
-  font-size: 0.875rem;
-  transition: transform 180ms ease;
-}
-
-.brand-mark:hover {
-  transform: scale(1.05);
-}
-
 /* ── Section Panel (Card) ── */
 .section-panel {
   background: var(--glass-white);

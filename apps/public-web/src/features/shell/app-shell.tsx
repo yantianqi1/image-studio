@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { BrandMark } from "@/features/shell/brand-mark";
 import { ClientProviderControls } from "@/features/shell/client-provider-controls";
 import {
   APP_HEADER_CONTAINER_CLASS,
@@ -82,7 +83,9 @@ function BrandLink(props: Readonly<{ brandLabel: string; headerTitle?: string }>
   return (
     <div className="flex min-w-0 items-center gap-3 overflow-hidden">
       <Link href="/" className="flex min-w-0 shrink-0 items-center gap-3 rounded-2xl px-1 py-1.5 text-sm font-semibold tracking-[-0.01em] text-gray-900" aria-label="image Studio 首页">
-        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gray-900 text-xs font-bold text-white shadow-sm">IS</span>
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-black/10 bg-white shadow-sm">
+          <BrandMark />
+        </span>
         <span className="hidden truncate sm:inline">{props.brandLabel}</span>
       </Link>
       {props.headerTitle ? <span className="hidden min-w-0 truncate border-l border-gray-200 pl-3 text-sm font-semibold text-gray-900 sm:inline">{props.headerTitle}</span> : null}

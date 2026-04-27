@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 
 import { GenerationHistoryItem } from "@/features/home/generation-history-item";
 import type { GenerationHistoryItem as GenerationHistoryRecord } from "@/features/home/generation-history.types";
+import { BrandMark } from "@/features/shell/brand-mark";
 import styles from "./generation-history.module.css";
 
 type GenerationHistorySidebarProps = Readonly<{
@@ -106,7 +107,9 @@ export function GenerationHistorySidebar({
     <aside className={`${styles.sidebarShell} hidden lg:flex`}>
       <div className="flex items-start justify-between gap-3">
         <div className={styles.sidebarTitle}>
-          <div className={styles.sidebarBrand}>CS</div>
+          <div className={styles.sidebarBrand}>
+            <BrandMark />
+          </div>
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-400">History</p>
             <h2 className="mt-1 text-base font-semibold tracking-[-0.02em] text-gray-950">历史记录</h2>
@@ -183,7 +186,7 @@ function CollapsedSidebar({
   return (
     <aside className={`${styles.sidebarShell} ${styles.sidebarCollapsed} hidden lg:flex`}>
       <button className={styles.sidebarBrand} type="button" onClick={onToggleCollapsed} aria-label="展开历史记录">
-        CS
+        <BrandMark />
       </button>
       <div className={styles.collapsedActions}>
         <button className={styles.collapsedIconButton} type="button" onClick={onNewGeneration} aria-label="新建生成">

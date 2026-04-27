@@ -1,3 +1,4 @@
+import { BrandMark } from "@/features/shell/brand-mark";
 import styles from "./generation-workbench.module.css";
 
 export function TopBarActions({ walletLabel }: Readonly<{ walletLabel: string }>) {
@@ -7,7 +8,7 @@ export function TopBarActions({ walletLabel }: Readonly<{ walletLabel: string }>
         {walletLabel}
       </a>
       <a className={styles.topbarAvatar} href="/login" aria-label="登录或查看账号">
-        CS
+        <BrandMark />
       </a>
     </div>
   );

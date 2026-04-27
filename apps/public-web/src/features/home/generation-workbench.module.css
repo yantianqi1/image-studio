@@ -176,15 +176,12 @@
 .topbarAvatar {
   height: 2.25rem;
   width: 2.25rem;
-  border-radius: 9999px;
+  overflow: hidden;
+  border-radius: 0.875rem;
+  border-color: #e5e7eb;
+  background: #ffffff;
   font-size: 0.8125rem;
   font-weight: 700;
-}
-
-.topbarAvatar {
-  border-color: #111827;
-  background: #111827;
-  color: #ffffff;
 }
 
 .spinner {
