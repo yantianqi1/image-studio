@@ -5,10 +5,13 @@ from datetime import datetime
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, select
 
+from apps.api.app.domains.auth.service import create_user
+from apps.api.app.domains.billing.service import create_wallet
 from apps.api.app.domains.comic.models import ComicCharacterCard, ComicPanelPrompt, ComicStoryboard, ComicTask
 from apps.api.app.domains.image.models import Asset, ImageJob, ImageJobReferenceAsset, ImageJobResult
 from apps.api.app.infra.db.session import initialize_database, session_scope
 from apps.api.app.main import create_app
+from apps.worker.worker.tasks import comic_orchestration as worker_comic_orchestration
 from apps.worker.worker.tasks import comic_tasks as worker_comic_tasks
 
 
@@ -156,6 +159,34 @@ def test_pipeline_completion_does_not_create_image_jobs(monkeypatch) -> None:
     assert count_image_jobs() == 0
 
 
+def test_orchestration_marks_ownerless_completed_task_failed() -> None:
+    client = build_client()
+    task = seed_completed_task(client, prompt_count=1)
+    clear_task_owner(task["id"])
+
+    action = worker_comic_orchestration.run_next_comic_orchestration()
+
+    assert action == f"failed-owner-missing:{task['id']}"
+    detail = read_comic_task(task["id"])
+    assert detail.status == "failed"
+    assert detail.error_code == "comic_task_owner_missing"
+    assert detail.error_message == "comic task owner is missing"
+
+
+def test_orchestration_marks_app_error_failed_without_crashing() -> None:
+    client = build_client()
+    task = seed_completed_task(client, prompt_count=1, reference_ready=False)
+    assign_task_owner_without_balance(task["id"])
+
+    action = worker_comic_orchestration.run_next_comic_orchestration()
+
+    assert action == f"failed-app-error:{task['id']}"
+    detail = read_comic_task(task["id"])
+    assert detail.status == "failed"
+    assert detail.error_code == "balance_not_enough"
+    assert detail.error_message == "insufficient balance"
+
+
 def build_client() -> TestClient:
     initialize_database()
     return TestClient(create_app())
@@ -188,6 +219,33 @@ def seed_completed_task(
             session.add(build_prompt(task_model=task_model, storyboard_id=storyboard.id, index=index))
         session.commit()
     return task
+
+
+def clear_task_owner(task_id: str) -> None:
+    with session_scope() as session:
+        task_model = session.get(ComicTask, task_id)
+        task_model.user_id = None
+        task_model.anonymous_session_id = None
+        session.commit()
+
+
+def assign_task_owner_without_balance(task_id: str) -> None:
+    with session_scope() as session:
+        user = create_user(session, email="no-balance-worker@example.com", password="secret")
+        wallet = create_wallet(session, user_id=user.id)
+        wallet.balance_cents = 0
+        task_model = session.get(ComicTask, task_id)
+        task_model.user_id = user.id
+        task_model.anonymous_session_id = None
+        task_model.client_provider_config = None
+        session.commit()
+
+
+def read_comic_task(task_id: str) -> ComicTask:
+    with session_scope() as session:
+        task_model = session.get(ComicTask, task_id)
+        assert task_model is not None
+        return task_model
 
 
 def build_prompt(*, task_model: ComicTask, storyboard_id: int, index: int) -> ComicPanelPrompt:

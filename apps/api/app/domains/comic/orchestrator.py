@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import logging
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from apps.api.app.core.errors import AppError
 from apps.api.app.domains.auth.ownership import OwnerContext
 from apps.api.app.domains.comic.character_references import (
     approve_character_references,
@@ -16,11 +19,17 @@ from apps.api.app.domains.image.models import ImageJob
 
 COMIC_REFERENCE_IMAGE_FAILED_CODE = "comic_reference_image_failed"
 COMIC_PAGE_IMAGE_FAILED_CODE = "comic_page_image_failed"
+COMIC_TASK_OWNER_MISSING_CODE = "comic_task_owner_missing"
+
+logger = logging.getLogger(__name__)
 
 
 def run_next_comic_orchestration_step(session: Session) -> str | None:
     for task in list_completed_tasks(session):
-        action = continue_completed_task(session, task=task)
+        try:
+            action = continue_completed_task(session, task=task)
+        except AppError as exc:
+            return fail_completed_task_for_app_error(session, task=task, error=exc)
         if action is not None:
             return f"{action}:{task.id}"
     return None
@@ -39,20 +48,46 @@ def continue_completed_task(session: Session, *, task: ComicTask) -> str | None:
     failed_action = fail_on_terminal_image_errors(session, task=task, cards=cards, prompts=prompts)
     if failed_action is not None:
         return failed_action
+    owner = task_owner(task)
+    if owner_is_missing(owner):
+        mark_task_failed(
+            session,
+            task=task,
+            error_code=COMIC_TASK_OWNER_MISSING_CODE,
+            error_message="comic task owner is missing",
+        )
+        session.commit()
+        return "failed-owner-missing"
     if missing_reference_jobs(cards):
-        approve_character_references(session, task.id, owner=task_owner(task))
+        approve_character_references(session, task.id, owner=owner)
         return "queued-character-references"
-    reference_payload = sync_completed_character_references(session, task.id, owner=task_owner(task))
+    reference_payload = sync_completed_character_references(session, task.id, owner=owner)
     if not reference_payload["ready"]:
         return None
     if missing_page_jobs(prompts):
-        approve_task_image_generation(session, task.id, owner=task_owner(task))
+        approve_task_image_generation(session, task.id, owner=owner)
         return "queued-page-images"
     return None
 
 
 def task_owner(task: ComicTask) -> OwnerContext:
     return OwnerContext(user_id=task.user_id, anonymous_session_id=task.anonymous_session_id)
+
+
+def owner_is_missing(owner: OwnerContext) -> bool:
+    return owner.user_id is None and owner.anonymous_session_id is None
+
+
+def fail_completed_task_for_app_error(session: Session, *, task: ComicTask, error: AppError) -> str:
+    task_id = task.id
+    logger.exception("comic orchestration task %s failed: %s", task_id, error.message)
+    session.rollback()
+    refreshed_task = session.get(ComicTask, task_id)
+    if refreshed_task is None:
+        raise error
+    mark_task_failed(session, task=refreshed_task, error_code=error.code, error_message=error.message)
+    session.commit()
+    return f"failed-app-error:{task_id}"
 
 
 def fail_on_terminal_image_errors(
