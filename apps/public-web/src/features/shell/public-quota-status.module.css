@@ -1,0 +1,135 @@
+.status {
+  --quota-accent: #0f766e;
+  --quota-accent-strong: #115e59;
+  --quota-accent-soft: rgba(20, 184, 166, 0.2);
+  --quota-text: #0f172a;
+  --quota-muted: #64748b;
+
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 10.75rem;
+  max-width: 17rem;
+  height: 2.35rem;
+  overflow: hidden;
+  border: 1px solid var(--quota-accent-soft);
+  border-radius: 999px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(240, 253, 250, 0.86)),
+    radial-gradient(circle at 12% 0%, var(--quota-accent-soft), transparent 58%);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+  color: var(--quota-text);
+  padding: 0 0.72rem 0.18rem;
+}
+
+.status[data-tone="low"] {
+  --quota-accent: #b45309;
+  --quota-accent-strong: #92400e;
+  --quota-accent-soft: rgba(245, 158, 11, 0.24);
+}
+
+.status[data-tone="empty"],
+.status[data-tone="error"] {
+  --quota-accent: #be123c;
+  --quota-accent-strong: #9f1239;
+  --quota-accent-soft: rgba(244, 63, 94, 0.2);
+}
+
+.status[data-tone="loading"] {
+  --quota-accent: #475569;
+  --quota-accent-strong: #334155;
+  --quota-accent-soft: rgba(100, 116, 139, 0.18);
+}
+
+.dot {
+  width: 0.48rem;
+  height: 0.48rem;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--quota-accent);
+  box-shadow: 0 0 0 0.28rem var(--quota-accent-soft);
+}
+
+.label,
+.detail,
+.state {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.72rem;
+  font-weight: 750;
+  line-height: 1;
+}
+
+.label {
+  color: var(--quota-muted);
+}
+
+.value {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: baseline;
+  gap: 0.18rem;
+  color: var(--quota-accent-strong);
+  font-size: 0.95rem;
+  font-weight: 850;
+  line-height: 1;
+}
+
+.valueMuted {
+  color: var(--quota-muted);
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.state {
+  color: var(--quota-accent);
+}
+
+.detail {
+  max-width: 3.8rem;
+  color: var(--quota-muted);
+}
+
+.meter {
+  position: absolute;
+  right: 0.72rem;
+  bottom: 0.34rem;
+  left: 0.72rem;
+  height: 0.16rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.08);
+}
+
+.meterFill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--quota-accent), color-mix(in srgb, var(--quota-accent) 66%, white));
+  transition: width 220ms ease;
+}
+
+@media (max-width: 900px) {
+  .status {
+    min-width: 8.25rem;
+  }
+
+  .detail {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .status {
+    min-width: 6.6rem;
+    max-width: 7.4rem;
+    padding-inline: 0.6rem;
+  }
+
+  .label {
+    display: none;
+  }
+}

@@ -122,6 +122,42 @@ def test_admin_can_update_public_quota_settings(client: TestClient) -> None:
     assert data["public_quota_per_ip_limit"] == 3
 
 
+def test_public_quota_status_reports_daily_global_remaining(client: TestClient) -> None:
+    seed_admin()
+    admin_login(client)
+    update_public_quota_settings(mode="daily_global", daily_limit=2, per_ip_limit=5)
+    create_public_image_job(client, prompt="Quota status image")
+
+    response = client.get("/api/public/quota")
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["mode"] == "daily_global"
+    assert data["limit_count"] == 2
+    assert data["used_count"] == 1
+    assert data["remaining_count"] == 1
+    assert data["exhausted"] is False
+
+
+def test_public_quota_status_reports_current_ip_remaining(client: TestClient) -> None:
+    seed_admin()
+    admin_login(client)
+    update_public_quota_settings(mode="per_ip", daily_limit=5, per_ip_limit=2)
+    client.post(
+        "/api/public/image/jobs",
+        headers={"x-forwarded-for": "203.0.113.20"},
+        json={"prompt": "Current IP image", "model_code": "gpt-image-2", "requested_count": 1},
+    )
+
+    same_ip_response = client.get("/api/public/quota", headers={"x-forwarded-for": "203.0.113.20"})
+    different_ip_response = client.get("/api/public/quota", headers={"x-forwarded-for": "203.0.113.21"})
+
+    assert same_ip_response.status_code == 200
+    assert same_ip_response.json()["data"]["remaining_count"] == 1
+    assert different_ip_response.status_code == 200
+    assert different_ip_response.json()["data"]["remaining_count"] == 2
+
+
 def test_admin_rejects_zero_public_quota_limit(client: TestClient) -> None:
     seed_admin()
     admin_login(client)

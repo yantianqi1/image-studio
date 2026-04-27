@@ -72,6 +72,14 @@ export type PublicSiteSettings = Readonly<{
   updated_at: string;
 }>;
 
+export type PublicQuotaStatus = Readonly<{
+  mode: "daily_global" | "per_ip";
+  limit_count: number;
+  used_count: number;
+  remaining_count: number;
+  exhausted: boolean;
+}>;
+
 export type WalletSummary = Readonly<{
   balance_cents: number;
   locked_cents: number;
@@ -166,6 +174,15 @@ export type DeleteResult = Readonly<{
   id: string;
 }>;
 
+export const PUBLIC_QUOTA_REFRESH_EVENT = "commercial-studio:public-quota-refresh";
+
+function notifyPublicQuotaRefresh() {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.dispatchEvent(new Event(PUBLIC_QUOTA_REFRESH_EVENT));
+}
+
 export const publicApi = {
   createComicProject(input: CreateComicProjectRequest) {
     return apiFetch<ComicProject>("/comic/projects", {
@@ -177,6 +194,9 @@ export const publicApi = {
     return apiFetch<TaskItem>("/comic/tasks", {
       method: "POST",
       body: input,
+    }).then((task) => {
+      notifyPublicQuotaRefresh();
+      return task;
     });
   },
   getComicTask(taskId: string) {
@@ -209,6 +229,9 @@ export const publicApi = {
     return apiFetch<ImageGenerationResponse>("/image/jobs", {
       method: "POST",
       body: input,
+    }).then((job) => {
+      notifyPublicQuotaRefresh();
+      return job;
     });
   },
   getImageJob(jobId: number) {
@@ -230,6 +253,9 @@ export const publicApi = {
   },
   getSiteSettings() {
     return apiFetch<PublicSiteSettings>("/settings");
+  },
+  getPublicQuotaStatus() {
+    return apiFetch<PublicQuotaStatus>("/quota");
   },
   getImageJobs() {
     return apiFetch<readonly ImageGenerationResponse[]>("/image/jobs");

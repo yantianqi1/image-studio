@@ -65,6 +65,23 @@ test("publicApi imports comic character reference packs as multipart zip", async
   assert.equal(await calls[0].file.text(), "zip");
 });
 
+test("publicApi reads public quota status from quota endpoint", async () => {
+  const calls = [];
+  const { publicApi } = loadPublicApi({
+    apiFetch: async (path) => {
+      calls.push(path);
+      return { mode: "daily_global", limit_count: 20, used_count: 4, remaining_count: 16, exhausted: false };
+    },
+    apiUpload: unexpectedApiUpload,
+    apiDownload: unexpectedApiDownload,
+  });
+
+  const status = await publicApi.getPublicQuotaStatus();
+
+  assert.deepEqual(calls, ["/quota"]);
+  assert.equal(status.remaining_count, 16);
+});
+
 function unexpectedApiFetch() {
   throw new Error("apiFetch should not be called");
 }

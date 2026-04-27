@@ -9,6 +9,7 @@ import {
   APP_NAV_CONTAINER_CLASS,
   APP_NAV_ITEMS,
 } from "@/features/shell/app-navigation";
+import { PublicQuotaStatusBadge } from "@/features/shell/public-quota-status";
 
 type AppShellProps = Readonly<{
   children: ReactNode;
@@ -65,6 +66,7 @@ function AppHeader(props: AppHeaderProps) {
         <div className={APP_HEADER_LEFT_CLASS}>
           {props.leadingAction}
           <BrandLink brandLabel={props.brandLabel} headerTitle={props.headerTitle} />
+          <PublicQuotaStatusBadge />
         </div>
         <MainNav activeHref={props.activeHref} />
         <div className={APP_HEADER_RIGHT_CLASS}>

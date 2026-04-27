@@ -120,7 +120,12 @@ def seed_image_job_result(*, job_id: int, status: str) -> int:
     with session_scope() as session:
         job = session.get(ImageJob, job_id)
         job.status = status
-        asset = Asset(owner_user_id=None, storage_path=f"/tmp/ref-{job_id}.png", mime_type="image/png")
+        asset = Asset(
+            owner_user_id=job.user_id,
+            owner_anonymous_session_id=job.anonymous_session_id,
+            storage_path=f"/tmp/ref-{job_id}.png",
+            mime_type="image/png",
+        )
         session.add(asset)
         session.flush()
         session.add(ImageJobResult(job_id=job_id, result_index=1, asset_id=asset.id, asset_url=f"/api/public/image/assets/{asset.id}"))

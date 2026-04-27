@@ -179,8 +179,8 @@ def seed_reference_cards(*, task_id: str, ready: bool) -> None:
         task = session.get(ComicTask, task_id)
         storage_dir = Path(get_settings().generated_assets_dir)
         storage_dir.mkdir(parents=True, exist_ok=True)
-        hero_asset = add_asset(session, storage_dir / "hero.png", b"hero-reference") if ready else None
-        mentor_asset = add_asset(session, storage_dir / "mentor.png", b"mentor-reference") if ready else None
+        hero_asset = add_asset(session, task=task, path=storage_dir / "hero.png", content=b"hero-reference") if ready else None
+        mentor_asset = add_asset(session, task=task, path=storage_dir / "mentor.png", content=b"mentor-reference") if ready else None
         session.add_all([
             build_card(task=task, code="hero", asset_id=hero_asset.id if hero_asset else None),
             build_card(task=task, code="mentor", asset_id=mentor_asset.id if mentor_asset else None),
@@ -207,15 +207,25 @@ def seed_reference_card_with_asset(
         storage_dir.mkdir(parents=True, exist_ok=True)
         asset_path = storage_dir / storage_name
         asset_path.write_bytes(content)
-        asset = Asset(owner_user_id=None, storage_path=str(asset_path), mime_type=mime_type)
+        asset = Asset(
+            owner_user_id=task.user_id,
+            owner_anonymous_session_id=task.anonymous_session_id,
+            storage_path=str(asset_path),
+            mime_type=mime_type,
+        )
         session.add(asset)
         session.flush()
         session.add(build_card(task=task, code="hero", asset_id=asset.id))
 
 
-def add_asset(session, path: Path, content: bytes) -> Asset:
+def add_asset(session, *, task: ComicTask, path: Path, content: bytes) -> Asset:
     path.write_bytes(content)
-    asset = Asset(owner_user_id=None, storage_path=str(path), mime_type="image/png")
+    asset = Asset(
+        owner_user_id=task.user_id,
+        owner_anonymous_session_id=task.anonymous_session_id,
+        storage_path=str(path),
+        mime_type="image/png",
+    )
     session.add(asset)
     session.flush()
     return asset
