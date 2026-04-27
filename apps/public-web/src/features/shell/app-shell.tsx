@@ -2,7 +2,13 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { ClientProviderControls } from "@/features/shell/client-provider-controls";
-import { APP_NAV_CONTAINER_CLASS, APP_NAV_ITEMS } from "@/features/shell/app-navigation";
+import {
+  APP_HEADER_CONTAINER_CLASS,
+  APP_HEADER_LEFT_CLASS,
+  APP_HEADER_RIGHT_CLASS,
+  APP_NAV_CONTAINER_CLASS,
+  APP_NAV_ITEMS,
+} from "@/features/shell/app-navigation";
 
 type AppShellProps = Readonly<{
   children: ReactNode;
@@ -34,7 +40,7 @@ export function AppShell({
 
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
-      <AppHeader activeHref={activeHref} brandLabel={brandLabel} headerTitle={resolvedHeaderTitle} leadingAction={leadingAction} navAside={navAside} workspaceMode={workspaceMode} />
+      <AppHeader activeHref={activeHref} brandLabel={brandLabel} headerTitle={resolvedHeaderTitle} leadingAction={leadingAction} navAside={navAside} />
 
       <main className={workspaceMode ? "h-[calc(100vh-4rem)] w-full overflow-hidden px-3 py-3 sm:px-4 lg:px-5" : "mx-auto w-full max-w-[1440px] px-4 pb-10 pt-5 sm:px-6 lg:px-8 lg:pt-6"}>
         {hasHero ? <HeroSection description={description} eyebrow={eyebrow} title={title} /> : null}
@@ -50,20 +56,18 @@ type AppHeaderProps = Readonly<{
   headerTitle?: string;
   leadingAction?: ReactNode;
   navAside?: ReactNode;
-  workspaceMode: boolean;
 }>;
 
 function AppHeader(props: AppHeaderProps) {
-  const containerClass = props.workspaceMode
-    ? "relative flex h-16 w-full items-center gap-3 px-4 sm:px-5 lg:px-6"
-    : "relative mx-auto flex h-16 w-full max-w-[1440px] items-center gap-3 px-4 sm:px-6 lg:px-8";
   return (
     <header className="sticky top-0 z-30 border-b border-black/5 bg-white/90 backdrop-blur-xl">
-      <div className={containerClass}>
-        {props.leadingAction}
-        <BrandLink brandLabel={props.brandLabel} headerTitle={props.headerTitle} />
+      <div className={APP_HEADER_CONTAINER_CLASS}>
+        <div className={APP_HEADER_LEFT_CLASS}>
+          {props.leadingAction}
+          <BrandLink brandLabel={props.brandLabel} headerTitle={props.headerTitle} />
+        </div>
         <MainNav activeHref={props.activeHref} />
-        <div className="ml-auto flex min-w-0 items-center gap-2">
+        <div className={APP_HEADER_RIGHT_CLASS}>
           <ClientProviderControls />
           {props.navAside}
         </div>
@@ -74,12 +78,12 @@ function AppHeader(props: AppHeaderProps) {
 
 function BrandLink(props: Readonly<{ brandLabel: string; headerTitle?: string }>) {
   return (
-    <div className="flex min-w-0 items-center gap-3">
-      <Link href="/" className="flex items-center gap-3 rounded-2xl px-1 py-1.5 text-sm font-semibold tracking-[-0.01em] text-gray-900" aria-label="image Studio 首页">
+    <div className="flex min-w-0 items-center gap-3 overflow-hidden">
+      <Link href="/" className="flex min-w-0 shrink-0 items-center gap-3 rounded-2xl px-1 py-1.5 text-sm font-semibold tracking-[-0.01em] text-gray-900" aria-label="image Studio 首页">
         <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gray-900 text-xs font-bold text-white shadow-sm">IS</span>
-        <span className="hidden sm:inline">{props.brandLabel}</span>
+        <span className="hidden truncate sm:inline">{props.brandLabel}</span>
       </Link>
-      {props.headerTitle ? <span className="hidden border-l border-gray-200 pl-3 text-sm font-semibold text-gray-900 sm:inline">{props.headerTitle}</span> : null}
+      {props.headerTitle ? <span className="hidden min-w-0 truncate border-l border-gray-200 pl-3 text-sm font-semibold text-gray-900 sm:inline">{props.headerTitle}</span> : null}
     </div>
   );
 }
