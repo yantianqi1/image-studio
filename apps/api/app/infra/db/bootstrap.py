@@ -8,6 +8,7 @@ DOMAIN_MODEL_MODULES = (
     "apps.api.app.domains.llm.models",
     "apps.api.app.domains.image.models",
     "apps.api.app.domains.comic.models",
+    "apps.api.app.domains.public_quota.models",
     "apps.api.app.domains.settings.models",
 )
 

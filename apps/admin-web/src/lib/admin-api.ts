@@ -248,6 +248,9 @@ export const adminApi = {
       allow_public_signup: boolean;
       allow_anonymous_image: boolean;
       uploads_enabled: boolean;
+      public_quota_mode: "daily_global" | "per_ip";
+      public_quota_daily_global_limit: number;
+      public_quota_per_ip_limit: number;
     }>("/api/admin/settings");
   },
   updateSettings(input: {
@@ -255,12 +258,18 @@ export const adminApi = {
     allow_public_signup: boolean;
     allow_anonymous_image: boolean;
     uploads_enabled: boolean;
+    public_quota_mode: "daily_global" | "per_ip";
+    public_quota_daily_global_limit: number;
+    public_quota_per_ip_limit: number;
   }) {
     return apiFetch<{
       site_title: string;
       allow_public_signup: boolean;
       allow_anonymous_image: boolean;
       uploads_enabled: boolean;
+      public_quota_mode: "daily_global" | "per_ip";
+      public_quota_daily_global_limit: number;
+      public_quota_per_ip_limit: number;
     }>("/api/admin/settings", {
       method: "PATCH",
       body: JSON.stringify(input),

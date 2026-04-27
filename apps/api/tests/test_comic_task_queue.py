@@ -66,17 +66,16 @@ def test_create_task_only_enqueues_and_does_not_process(monkeypatch) -> None:
     assert task_detail["output_payload"] == {}
 
 
-def test_create_project_requires_login_or_client_provider() -> None:
+def test_create_project_supports_anonymous_browser() -> None:
     client = create_comic_client()
 
     response = client.post(
         "/api/public/comic/projects",
-        json={"title": "Blocked", "description": "No access", "genre": "Sci-Fi"},
+        json={"title": "Public Comic", "description": "No login", "genre": "Sci-Fi"},
     )
 
-    assert response.status_code == 401
-    assert response.json()["error"]["code"] == "login_or_client_provider_required"
-    assert response.json()["error"]["message"] == "请先登录，或配置浏览器端供应商密钥后重试"
+    assert response.status_code == 201
+    assert response.json()["data"]["title"] == "Public Comic"
 
 
 def test_create_task_stores_client_provider_context() -> None:
