@@ -12,8 +12,10 @@
 - `public-web`：`http://public-web:7700`
 - `admin-web`：`http://admin-web:7701`
 - `api`：`http://api:7800`
-- `nginx-public`：`http://localhost:8080`
-- `nginx-admin`：`http://localhost:8081`
+- 开发态 `nginx-public`：`http://localhost:8080`
+- 开发态 `nginx-admin`：`http://localhost:8081`
+- 生产态 `nginx-public`：`http://localhost:7700`
+- 生产态 `nginx-admin`：`http://localhost:7701`
 
 ## Docker Compose 内联配置
 
@@ -26,6 +28,7 @@
 
 - `infra/nginx/nginx.prod.conf`
 - `docker-compose.prod.yml` 会把它挂载到 `/etc/nginx/conf.d/default.conf`
+- 生产默认对外发布 `7700` 和 `7701`
 
 ## 生产域名建议
 

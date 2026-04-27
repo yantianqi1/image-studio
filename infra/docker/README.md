@@ -106,8 +106,8 @@ docker compose down -v
 
 `docker-compose.prod.yml` 只对外暴露：
 
-- `8080`：用户端 nginx 入口
-- `8081`：管理后台 nginx 入口
+- `7700`：用户端 nginx 入口
+- `7701`：管理后台 nginx 入口
 
 以下端口只在 Docker 网络内部使用，不对宿主机发布：
 
@@ -144,7 +144,7 @@ docker compose -f docker-compose.prod.yml up -d
 ```bash
 docker compose -f docker-compose.prod.yml ps
 docker compose -f docker-compose.prod.yml logs -f api worker
-curl -i http://localhost:8080/health
+curl -i http://localhost:7700/health
 ```
 
 ## generated-assets 卷
