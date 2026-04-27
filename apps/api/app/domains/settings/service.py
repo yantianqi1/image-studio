@@ -25,9 +25,19 @@ def update_settings_record(session: Session, payload: SettingsUpdateRequest) -> 
     record.allow_public_signup = payload.allow_public_signup
     record.allow_anonymous_image = payload.allow_anonymous_image
     record.uploads_enabled = payload.uploads_enabled
+    update_public_quota_settings(record, payload)
     record.updated_at = datetime.utcnow()
     session.flush()
     return record
+
+
+def update_public_quota_settings(record: SiteSettings, payload: SettingsUpdateRequest) -> None:
+    if payload.public_quota_mode is not None:
+        record.public_quota_mode = payload.public_quota_mode
+    if payload.public_quota_daily_global_limit is not None:
+        record.public_quota_daily_global_limit = payload.public_quota_daily_global_limit
+    if payload.public_quota_per_ip_limit is not None:
+        record.public_quota_per_ip_limit = payload.public_quota_per_ip_limit
 
 
 def require_public_signup_enabled(session: Session) -> None:
@@ -54,5 +64,8 @@ def settings_payload(record: SiteSettings) -> dict[str, object]:
         "allow_public_signup": record.allow_public_signup,
         "allow_anonymous_image": record.allow_anonymous_image,
         "uploads_enabled": record.uploads_enabled,
+        "public_quota_mode": record.public_quota_mode,
+        "public_quota_daily_global_limit": record.public_quota_daily_global_limit,
+        "public_quota_per_ip_limit": record.public_quota_per_ip_limit,
         "updated_at": record.updated_at.isoformat(),
     }

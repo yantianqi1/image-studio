@@ -292,7 +292,8 @@ body {
   box-shadow: var(--glass-shadow-hover);
 }
 
-.admin-checkbox-card input[type="checkbox"] {
+.admin-checkbox-card input[type="checkbox"],
+.admin-checkbox-card input[type="radio"] {
   margin-top: 0.125rem;
   accent-color: #111827;
   cursor: pointer;

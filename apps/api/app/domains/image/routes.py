@@ -20,6 +20,8 @@ from apps.api.app.domains.image.service import (
     list_jobs_for_owner,
 )
 from apps.api.app.domains.llm.client_provider import CLIENT_PROVIDER_SOURCE, read_client_provider_config
+from apps.api.app.domains.public_quota.constants import PUBLIC_QUOTA_FEATURE_IMAGE
+from apps.api.app.domains.public_quota.service import consume_public_quota, resolve_request_ip
 from apps.api.app.domains.llm.service import ensure_storage_dir
 from apps.api.app.domains.settings.service import require_anonymous_image_enabled, require_uploads_enabled
 
@@ -52,6 +54,14 @@ def create_image_job(
         client_access_id=client_config.client_id if owner.user_id is None and client_config else None,
         client_provider_config=client_config if owner.user_id is None else None,
     )
+    if should_consume_public_quota(owner=owner, has_client_provider=client_config is not None):
+        consume_public_quota(
+            session,
+            request_ip=resolve_request_ip(request),
+            feature=PUBLIC_QUOTA_FEATURE_IMAGE,
+            reference_type="image_job",
+            reference_id=str(job.id),
+        )
     session.commit()
     return api_ok(job_payload(job))
 
@@ -119,6 +129,10 @@ def resolve_image_job_source(*, owner, has_client_provider: bool) -> str:
     if has_client_provider:
         return CLIENT_PROVIDER_SOURCE
     return "anonymous"
+
+
+def should_consume_public_quota(*, owner, has_client_provider: bool) -> bool:
+    return owner.user_id is None and not has_client_provider
 
 
 @admin_router.get("/image-tasks")

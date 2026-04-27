@@ -66,6 +66,9 @@ export type PublicSiteSettings = Readonly<{
   allow_public_signup: boolean;
   allow_anonymous_image: boolean;
   uploads_enabled: boolean;
+  public_quota_mode: "daily_global" | "per_ip";
+  public_quota_daily_global_limit: number;
+  public_quota_per_ip_limit: number;
   updated_at: string;
 }>;
 

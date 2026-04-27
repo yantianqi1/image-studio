@@ -24,6 +24,8 @@ from apps.api.app.domains.comic.schemas import (
     ComicTaskRead,
 )
 from apps.api.app.domains.llm.client_provider import read_client_provider_config
+from apps.api.app.domains.public_quota.constants import PUBLIC_QUOTA_FEATURE_COMIC
+from apps.api.app.domains.public_quota.service import consume_public_quota, resolve_request_ip
 from apps.api.app.domains.comic.image_generation import (
     approve_task_image_generation,
     list_task_image_results,
@@ -164,7 +166,17 @@ def create_task_endpoint(
         owner=owner,
         client_provider_config=client_config if owner.user_id is None else None,
         client_provider_type=get_settings().openai_provider_type,
+        commit=False,
     )
+    if should_consume_public_quota(owner=owner, has_client_provider=client_config is not None):
+        consume_public_quota(
+            session,
+            request_ip=resolve_request_ip(request),
+            feature=PUBLIC_QUOTA_FEATURE_COMIC,
+            reference_type="comic_task",
+            reference_id=task.id,
+        )
+    session.commit()
     return api_ok(ComicTaskRead.model_validate(task, from_attributes=True).model_dump(mode="json"))
 
 
@@ -283,6 +295,10 @@ def list_task_image_results_endpoint(
     session: Session = Depends(get_db_session),
 ) -> dict:
     return api_ok(list_task_image_results(session, task_id, owner=resolve_request_owner(request, session)))
+
+
+def should_consume_public_quota(*, owner, has_client_provider: bool) -> bool:
+    return owner.user_id is None and not has_client_provider
 
 
 @admin_router.get("/comic-tasks")

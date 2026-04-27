@@ -191,6 +191,7 @@ def create_task(
     owner: OwnerContext,
     client_provider_config: ClientProviderConfig | None = None,
     client_provider_type: str | None = None,
+    commit: bool = True,
 ) -> ComicTask:
     require_project_for_owner(session, payload.project_id, owner)
     chapter = validate_task_chapter(session, payload.project_id, payload.chapter_id)
@@ -222,6 +223,8 @@ def create_task(
         available_at=datetime.utcnow(),
     )
     insert_task(session, task=task)
+    if not commit:
+        return task
     session.commit()
     return require_task(session, task.id)
 
