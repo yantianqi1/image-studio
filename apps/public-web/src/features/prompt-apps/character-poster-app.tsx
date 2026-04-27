@@ -32,6 +32,17 @@ type PosterForm = Readonly<{
   modelCode: string;
 }>;
 
+type CharacterPosterController = Readonly<{
+  form: PosterForm;
+  handleSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>;
+  imageModels: readonly PublicModelSummary[];
+  imageModelsState: ResourceState<readonly PublicModelSummary[]>;
+  resolvedModelCode: string;
+  selectedModel: PublicModelSummary | null;
+  setForm: (form: PosterForm) => void;
+  state: CharacterPosterState;
+}>;
+
 type SubmitDisabledInput = Readonly<{
   character: string;
   modelsState: ResourceState<readonly PublicModelSummary[]>;
@@ -41,6 +52,28 @@ type SubmitDisabledInput = Readonly<{
 }>;
 
 export function CharacterPosterApp() {
+  const controller = useCharacterPosterController();
+
+  return (
+    <AppShell activeHref="/apps" headerTitle="角色海报" workspaceMode>
+      <div className={styles.posterWorkspace}>
+        <PosterFormPanel
+          form={controller.form}
+          models={controller.imageModels}
+          modelsState={controller.imageModelsState}
+          resolvedModelCode={controller.resolvedModelCode}
+          selectedModel={controller.selectedModel}
+          state={controller.state}
+          onFormChange={controller.setForm}
+          onSubmit={controller.handleSubmit}
+        />
+        <PosterResultPanel state={controller.state} />
+      </div>
+    </AppShell>
+  );
+}
+
+function useCharacterPosterController(): CharacterPosterController {
   const [form, setForm] = useState<PosterForm>({ character: "", note: "", modelCode: "" });
   const [state, setState] = useState<CharacterPosterState>({ status: "idle" });
   const modelsState = useApiResource(() => publicApi.getModels());
@@ -51,50 +84,29 @@ export function CharacterPosterApp() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
-    if (getSubmitDisabled({
-      character: form.character,
-      modelsState: imageModelsState,
-      resolvedModelCode,
-      selectedModel,
-      state,
-    })) {
+    if (shouldBlockSubmit({ character: form.character, modelsState: imageModelsState, resolvedModelCode, selectedModel, state })) {
       return;
     }
-
     setState({ status: "submitting" });
     try {
-      const result = await publicApi.generateImage(
-        buildCharacterPosterImageRequest(form, resolvedModelCode),
-      );
+      const result = await publicApi.generateImage(buildCharacterPosterImageRequest(form, resolvedModelCode));
       const completed = await waitForImageJobResults(publicApi, result.id);
-      setState({
-        status: "success",
-        jobId: completed.job.id,
-        images: imageJobResultsToHistoryImages(completed.results),
-      });
+      setState({ status: "success", jobId: completed.job.id, images: imageJobResultsToHistoryImages(completed.results) });
     } catch (error: unknown) {
       setState({ status: "error", message: getCharacterPosterErrorMessage(error) });
     }
   }
 
-  return (
-    <AppShell activeHref="/apps" headerTitle="角色海报" workspaceMode>
-      <div className={styles.posterWorkspace}>
-        <PosterFormPanel
-          form={form}
-          models={imageModels}
-          modelsState={imageModelsState}
-          resolvedModelCode={resolvedModelCode}
-          selectedModel={selectedModel}
-          state={state}
-          onFormChange={setForm}
-          onSubmit={handleSubmit}
-        />
-        <PosterResultPanel state={state} />
-      </div>
-    </AppShell>
-  );
+  return {
+    form,
+    handleSubmit,
+    imageModels,
+    imageModelsState,
+    resolvedModelCode,
+    selectedModel,
+    setForm,
+    state,
+  };
 }
 
 function PosterFormPanel(props: Readonly<{
@@ -107,7 +119,7 @@ function PosterFormPanel(props: Readonly<{
   selectedModel: PublicModelSummary | null;
   state: CharacterPosterState;
 }>) {
-  const disabled = getSubmitDisabled({
+  const disabled = shouldBlockSubmit({
     character: props.form.character,
     modelsState: props.modelsState,
     resolvedModelCode: props.resolvedModelCode,
@@ -218,7 +230,7 @@ function ModelOptions(props: Readonly<{
   ));
 }
 
-function getSubmitDisabled(input: SubmitDisabledInput) {
+function shouldBlockSubmit(input: SubmitDisabledInput) {
   if (input.state.status === "submitting" || input.modelsState.status !== "ready") {
     return true;
   }
