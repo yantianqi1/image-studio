@@ -9,7 +9,7 @@ from sqlalchemy import create_engine, inspect, text
 from apps.api.app.core.config import get_settings
 from apps.api.app.infra.db.session import get_engine, get_session_factory, initialize_database
 
-HEAD_REVISION = "20260427_000007"
+HEAD_REVISION = "20260427_000008"
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 

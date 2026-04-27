@@ -68,7 +68,12 @@ def create_page_task_with_shared_reference_asset() -> tuple:
     with session_scope() as session:
         task_model = session.get(ComicTask, task["id"])
         mark_completed(task_model)
-        asset = Asset(owner_user_id=None, storage_path="/tmp/all-characters.png", mime_type="image/png")
+        asset = Asset(
+            owner_user_id=task_model.user_id,
+            owner_anonymous_session_id=task_model.anonymous_session_id,
+            storage_path="/tmp/all-characters.png",
+            mime_type="image/png",
+        )
         session.add(asset)
         session.flush()
         add_character_cards(session, task_model=task_model, reference_asset_id=asset.id)
@@ -132,7 +137,12 @@ def seed_job_result(job_id: int) -> int:
     with session_scope() as session:
         job = session.get(ImageJob, job_id)
         job.status = "succeeded"
-        asset = Asset(owner_user_id=None, storage_path=f"/tmp/ref-{job_id}.png", mime_type="image/png")
+        asset = Asset(
+            owner_user_id=job.user_id,
+            owner_anonymous_session_id=job.anonymous_session_id,
+            storage_path=f"/tmp/ref-{job_id}.png",
+            mime_type="image/png",
+        )
         session.add(asset)
         session.flush()
         session.add(ImageJobResult(job_id=job_id, result_index=1, asset_id=asset.id, asset_url=f"/api/public/image/assets/{asset.id}"))

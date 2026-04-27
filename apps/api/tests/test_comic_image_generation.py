@@ -332,7 +332,12 @@ def seed_job_states(prompt_ids: list[int]) -> None:
             job.status = status
             job.error_message = "provider rejected" if status == "failed" else None
             if status == "succeeded":
-                asset = Asset(storage_path="/tmp/comic-result.svg", mime_type="image/svg+xml")
+                asset = Asset(
+                    owner_user_id=job.user_id,
+                    owner_anonymous_session_id=job.anonymous_session_id,
+                    storage_path="/tmp/comic-result.svg",
+                    mime_type="image/svg+xml",
+                )
                 session.add(asset)
                 session.flush()
                 prompt.asset_id = asset.id

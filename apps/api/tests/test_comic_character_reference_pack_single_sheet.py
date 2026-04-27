@@ -34,7 +34,12 @@ def seed_cards_sharing_reference_asset(*, task_id: str) -> None:
         storage_dir.mkdir(parents=True, exist_ok=True)
         asset_path = storage_dir / "single-sheet.png"
         asset_path.write_bytes(b"single-sheet")
-        asset = Asset(owner_user_id=None, storage_path=str(asset_path), mime_type="image/png")
+        asset = Asset(
+            owner_user_id=task.user_id,
+            owner_anonymous_session_id=task.anonymous_session_id,
+            storage_path=str(asset_path),
+            mime_type="image/png",
+        )
         session.add(asset)
         session.flush()
         session.add_all([
