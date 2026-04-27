@@ -1,6 +1,9 @@
+"use client";
+
 import { useState } from "react";
 import Image from "next/image";
 
+import { ImagePreviewDialog, type ImagePreviewDialogImage } from "@/features/ui/image-preview-dialog";
 import type { StoryboardShot } from "./comic-utils";
 
 import { EmptyState, ErrorState, StatusBadge, toStatusTone } from "./comic-status";
@@ -20,7 +23,7 @@ type MangaPreviewPanelProps = Readonly<{
 }>;
 
 export function MangaPreviewPanel(props: MangaPreviewPanelProps) {
-  const [previewShot, setPreviewShot] = useState<StoryboardShot | null>(null);
+  const [previewImage, setPreviewImage] = useState<ImagePreviewDialogImage | null>(null);
   const tone = toStatusTone(props.status);
   const currentPage = props.selectedShot?.index ?? 1;
   const pageCount = Math.max(props.shots.length, 1);
@@ -44,7 +47,7 @@ export function MangaPreviewPanel(props: MangaPreviewPanelProps) {
           projectTitle={props.projectTitle}
           selectedShot={props.selectedShot}
           shots={props.shots}
-          onPreview={setPreviewShot}
+          onPreview={setPreviewImage}
         />
       </div>
       <div className={styles.chapterRow}>
@@ -55,9 +58,9 @@ export function MangaPreviewPanel(props: MangaPreviewPanelProps) {
           <button type="button" disabled={!canGoNext} onClick={() => moveToShot("next")}>下一页</button>
         </div>
       </div>
-      <PreviewContent {...props} tone={tone} />
+      <PreviewContent {...props} tone={tone} onPreview={setPreviewImage} />
       <MangaGenerationMeta selectedShot={props.selectedShot} />
-      <ImagePreviewOverlay shot={previewShot} onClose={() => setPreviewShot(null)} />
+      <ImagePreviewDialog image={previewImage} onClose={() => setPreviewImage(null)} />
     </section>
   );
 }
@@ -66,7 +69,7 @@ function PreviewActions(props: Readonly<{
   projectTitle: string;
   selectedShot: StoryboardShot | null;
   shots: readonly StoryboardShot[];
-  onPreview: (shot: StoryboardShot) => void;
+  onPreview: (image: ImagePreviewDialogImage) => void;
 }>) {
   const [exporting, setExporting] = useState<"idle" | "sequential" | "stitched">("idle");
   const [exportError, setExportError] = useState<string | null>(null);
@@ -100,7 +103,7 @@ function PreviewActions(props: Readonly<{
           <button
             className={styles.darkButton}
             type="button"
-            onClick={() => props.onPreview(selectedShot)}
+            onClick={() => props.onPreview(toPreviewImage(selectedShot))}
           >
             打开图片
           </button>
@@ -113,14 +116,14 @@ function PreviewActions(props: Readonly<{
   );
 }
 
-function PreviewContent(props: MangaPreviewPanelProps & Readonly<{ tone: ReturnType<typeof toStatusTone> }>) {
+function PreviewContent(props: MangaPreviewPanelProps & Readonly<{ tone: ReturnType<typeof toStatusTone>; onPreview: (image: ImagePreviewDialogImage) => void }>) {
   if (props.tone === "failed") {
     return <ErrorState title="漫画生成失败" message={props.errorMessage ?? "任务执行失败，请查看任务详情。"} onRetry={props.onRetry} />;
   }
   if (props.shots.length === 0) {
     return <EmptyState title={emptyPreviewTitle(props.status)} description={emptyPreviewDescription(props.status)} icon="▧" />;
   }
-  return <MangaPageGrid shots={props.shots} selectedShot={props.selectedShot} onSelectShot={props.onSelectShot} />;
+  return <MangaPageGrid shots={props.shots} selectedShot={props.selectedShot} onSelectShot={props.onSelectShot} onPreview={props.onPreview} />;
 }
 
 function emptyPreviewTitle(status: string): string {
@@ -141,11 +144,12 @@ function MangaPageGrid(props: Readonly<{
   shots: readonly StoryboardShot[];
   selectedShot: StoryboardShot | null;
   onSelectShot: (shotId: string) => void;
+  onPreview: (image: ImagePreviewDialogImage) => void;
 }>) {
   const selectedShot = props.selectedShot ?? props.shots[0];
   return (
     <div className={styles.previewStage}>
-      <FeaturedPage shot={selectedShot} />
+      <FeaturedPage shot={selectedShot} onPreview={props.onPreview} />
       <div className={styles.previewGrid}>
         {props.shots.map((shot) => (
           <PageCard
@@ -160,10 +164,20 @@ function MangaPageGrid(props: Readonly<{
   );
 }
 
-function FeaturedPage({ shot }: Readonly<{ shot: StoryboardShot }>) {
+function FeaturedPage({ shot, onPreview }: Readonly<{ shot: StoryboardShot; onPreview: (image: ImagePreviewDialogImage) => void }>) {
   return (
     <article className={styles.featuredPage}>
-      <PageVisual shot={shot} large />
+      {shot.assetUrl ? (
+        <button
+          className={styles.featuredPreviewButton}
+          type="button"
+          onClick={() => onPreview(toPreviewImage(shot))}
+        >
+          <PageVisual shot={shot} large />
+        </button>
+      ) : (
+        <PageVisual shot={shot} large />
+      )}
     </article>
   );
 }
@@ -220,24 +234,13 @@ function MangaGenerationMeta({ selectedShot }: Readonly<{ selectedShot: Storyboa
   );
 }
 
-function ImagePreviewOverlay(props: Readonly<{
-  shot: StoryboardShot | null;
-  onClose: () => void;
-}>) {
-  if (!props.shot?.assetUrl) {
-    return null;
+function toPreviewImage(shot: StoryboardShot): ImagePreviewDialogImage {
+  if (!shot.assetUrl) {
+    throw new Error("Cannot preview comic shot without asset URL.");
   }
-  return (
-    <div className={styles.previewOverlay} role="dialog" aria-modal="true" onClick={props.onClose}>
-      <figure className={styles.previewOverlayFigure} onClick={(event) => event.stopPropagation()}>
-        <Image
-          alt={props.shot.title}
-          height={1600}
-          src={props.shot.assetUrl}
-          unoptimized
-          width={1200}
-        />
-      </figure>
-    </div>
-  );
+
+  return {
+    src: shot.assetUrl,
+    alt: shot.title,
+  };
 }

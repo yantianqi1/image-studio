@@ -156,7 +156,21 @@
   background: #f9fafb;
 }
 
-.posterImageCard img {
+.posterImageButton {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+  padding: 0;
+}
+
+.posterImageButton:focus-visible {
+  outline: 3px solid rgba(17, 24, 39, 0.2);
+  outline-offset: -3px;
+}
+
+.posterImageButton img {
   display: block;
   width: 100%;
   aspect-ratio: 16 / 9;

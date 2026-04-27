@@ -5,6 +5,7 @@ import { PROJECT_TITLE_LIMIT } from "./comic-utils";
 import type { ComicWorkflowEvent } from "./comic-workflow-events";
 import layout from "./comic-workspace.module.css";
 import styles from "./comic-project.module.css";
+import referenceStyles from "./comic-reference-mode.module.css";
 
 type CreateState =
   | Readonly<{ status: "idle" }>
@@ -162,16 +163,20 @@ function ReferenceModeSelect(props: Readonly<{
   return (
     <div className={styles.fieldGroup}>
       <span>角色参考模式</span>
-      <div className={styles.chipRow}>
+      <div className={referenceStyles.referenceModeGrid}>
         {CHARACTER_REFERENCE_MODE_OPTIONS.map((option) => (
           <button
+            className={referenceStyles.referenceModeOption}
             key={option.value}
             type="button"
             data-active={props.value === option.value ? "true" : "false"}
             onClick={() => props.onChange(option.value)}
           >
-            <span>{option.label}</span>
-            <small>{option.detail}</small>
+            <span className={referenceStyles.referenceModeMarker} aria-hidden="true" />
+            <span className={referenceStyles.referenceModeText}>
+              <span>{option.label}</span>
+              <small>{option.detail}</small>
+            </span>
           </button>
         ))}
       </div>

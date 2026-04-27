@@ -139,38 +139,6 @@
   color: #15803d;
 }
 
-.chipRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.chipRow button {
-  display: grid;
-  gap: 2px;
-  border: 1px solid #e5e7eb;
-  border-radius: 999px;
-  background: #f9fafb;
-  padding: 7px 10px;
-  color: #4b5563;
-  font-size: 12px;
-  font-weight: 600;
-  text-align: left;
-}
-
-.chipRow button[data-active="true"] {
-  border-color: #111827;
-  background: #111827;
-  color: #fff;
-}
-
-.chipRow button small {
-  color: inherit;
-  font-size: 11px;
-  font-weight: 500;
-  opacity: 0.74;
-}
-
 .primaryButton {
   min-height: 46px;
   width: 100%;

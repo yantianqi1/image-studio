@@ -1,9 +1,12 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
+import { useState } from "react";
+
 import type { GenerationHistoryImage, GenerationHistoryItem } from "@/features/home/generation-history.types";
 import { deriveResultView, type ResultStep, type ResultView } from "@/features/home/generation-result-state";
 import type { GenerationSourceImage, GenerationState } from "@/features/home/generation-workbench.types";
+import { ImagePreviewDialog, type ImagePreviewDialogImage } from "@/features/ui/image-preview-dialog";
 import styles from "./generation-workbench.module.css";
 import resultStyles from "./generation-result-panel.module.css";
 
@@ -130,12 +133,44 @@ function SkeletonPreview() {
 }
 
 function ImageGrid({ historyItem, onUseAsSourceImage }: Readonly<{ historyItem: GenerationHistoryItem; onUseAsSourceImage?: (image: GenerationSourceImage) => void }>) {
+  const [previewImage, setPreviewImage] = useState<ImagePreviewDialogImage | null>(null);
   const gridClass = historyItem.images.length > 1 ? `${resultStyles.imageGrid} ${resultStyles.imageGridMany}` : resultStyles.imageGrid;
-  return <div className={gridClass}>{historyItem.images.map((image) => <ImageCard key={image.id} image={image} title={historyItem.title} onUseAsSourceImage={onUseAsSourceImage} />)}</div>;
+  return (
+    <>
+      <div className={gridClass}>
+        {historyItem.images.map((image) => (
+          <ImageCard
+            key={image.id}
+            image={image}
+            title={historyItem.title}
+            onPreview={setPreviewImage}
+            onUseAsSourceImage={onUseAsSourceImage}
+          />
+        ))}
+      </div>
+      <ImagePreviewDialog image={previewImage} onClose={() => setPreviewImage(null)} />
+    </>
+  );
 }
 
-function ImageCard({ image, title, onUseAsSourceImage }: Readonly<{ image: GenerationHistoryImage; title: string; onUseAsSourceImage?: (image: GenerationSourceImage) => void }>) {
-  return <article className={resultStyles.imageCard}><img src={image.url} alt={title} /><ResultActionBar hasImages imageUrl={image.url} image={image} onUseAsSourceImage={onUseAsSourceImage} /></article>;
+function ImageCard({
+  image,
+  title,
+  onPreview,
+  onUseAsSourceImage,
+}: Readonly<{ image: GenerationHistoryImage; title: string; onPreview: (image: ImagePreviewDialogImage) => void; onUseAsSourceImage?: (image: GenerationSourceImage) => void }>) {
+  return (
+    <article className={resultStyles.imageCard}>
+      <button
+        className={resultStyles.imagePreviewButton}
+        type="button"
+        onClick={() => onPreview({ src: image.url, alt: title })}
+      >
+        <img src={image.url} alt={title} />
+      </button>
+      <ResultActionBar hasImages imageUrl={image.url} image={image} onUseAsSourceImage={onUseAsSourceImage} />
+    </article>
+  );
 }
 
 function ErrorState({ historyItem, message, view }: Readonly<{ historyItem: GenerationHistoryItem | null; message: string; view: ResultView }>) {

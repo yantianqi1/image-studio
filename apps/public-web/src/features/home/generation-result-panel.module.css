@@ -211,7 +211,21 @@
   background: #ffffff;
   box-shadow: 0 12px 26px rgba(15, 23, 42, 0.04);
 }
-.imageCard img {
+.imagePreviewButton {
+  display: block;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  background: #f9fafb;
+  cursor: zoom-in;
+  padding: 0;
+}
+.imagePreviewButton:focus-visible {
+  outline: 3px solid rgba(17, 24, 39, 0.2);
+  outline-offset: -3px;
+}
+.imagePreviewButton img {
+  display: block;
   height: 100%;
   width: 100%;
   min-height: 0;

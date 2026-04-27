@@ -5,7 +5,7 @@ export const CHARACTER_REFERENCE_MODES = {
 
 export type CharacterReferenceMode = typeof CHARACTER_REFERENCE_MODES[keyof typeof CHARACTER_REFERENCE_MODES];
 
-export const DEFAULT_CHARACTER_REFERENCE_MODE: CharacterReferenceMode = CHARACTER_REFERENCE_MODES.perCharacter;
+export const DEFAULT_CHARACTER_REFERENCE_MODE: CharacterReferenceMode = CHARACTER_REFERENCE_MODES.singleSheet;
 
 export const CHARACTER_REFERENCE_MODE_OPTIONS: readonly Readonly<{
   value: CharacterReferenceMode;
