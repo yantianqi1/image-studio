@@ -11,6 +11,13 @@ export type ResourceState<T> =
 
 type Loader<T> = () => Promise<T>;
 
+export function startResourceRefresh<T>(current: ResourceState<T>): ResourceState<T> {
+  if (current.status === "ready") {
+    return current;
+  }
+  return { status: "loading" };
+}
+
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "未知请求错误";
 }
@@ -25,7 +32,7 @@ export function useApiResource<T>(loader: Loader<T>, refreshKey = 0) {
 
   useEffect(() => {
     let active = true;
-    setState({ status: "loading" });
+    setState((current) => startResourceRefresh(current));
 
     runLoader()
       .then((data) => {

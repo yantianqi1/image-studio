@@ -24,6 +24,8 @@ from apps.api.app.domains.settings.service import get_settings_record
 PUBLIC_QUOTA_EXHAUSTED_CODE = "public_quota_exhausted"
 PUBLIC_QUOTA_INVALID_CODE = "public_quota_invalid"
 PUBLIC_QUOTA_IP_UNAVAILABLE_CODE = "public_quota_ip_unavailable"
+EMPTY_USED_COUNT = 0
+MIN_REMAINING_COUNT = 0
 
 
 def consume_public_quota(
@@ -58,6 +60,30 @@ def consume_public_quota(
     session.add(usage)
     session.flush()
     return usage
+
+
+def get_public_quota_status(
+    session: Session,
+    *,
+    request_ip: str | None,
+    now: datetime | None = None,
+) -> dict[str, object]:
+    timestamp = normalize_timestamp(now)
+    record = get_settings_record(session)
+    mode = validate_quota_mode(record.public_quota_mode)
+    limit_count = resolve_limit_count(record, mode)
+    request_ip_hash = hash_request_ip(request_ip)
+    bucket_key = resolve_bucket_key(mode=mode, request_ip_hash=request_ip_hash, now=timestamp)
+    bucket = find_bucket(session, mode=mode, bucket_key=bucket_key)
+    used_count = bucket.used_count if bucket is not None else EMPTY_USED_COUNT
+    remaining_count = calculate_remaining_count(limit_count=limit_count, used_count=used_count)
+    return {
+        "mode": mode,
+        "limit_count": limit_count,
+        "used_count": used_count,
+        "remaining_count": remaining_count,
+        "exhausted": remaining_count <= MIN_REMAINING_COUNT,
+    }
 
 
 def resolve_request_ip(request: Request) -> str | None:
@@ -106,6 +132,21 @@ def resolve_bucket_key(*, mode: str, request_ip_hash: str | None, now: datetime)
     raise AppError(code=PUBLIC_QUOTA_IP_UNAVAILABLE_CODE, message="request ip is unavailable", status_code=422)
 
 
+def find_bucket(session: Session, *, mode: str, bucket_key: str) -> PublicQuotaBucket | None:
+    statement = select(PublicQuotaBucket).where(
+        PublicQuotaBucket.quota_mode == mode,
+        PublicQuotaBucket.quota_key == bucket_key,
+    )
+    return session.execute(statement).scalar_one_or_none()
+
+
+def calculate_remaining_count(*, limit_count: int, used_count: int) -> int:
+    remaining_count = limit_count - used_count
+    if remaining_count < MIN_REMAINING_COUNT:
+        return MIN_REMAINING_COUNT
+    return remaining_count
+
+
 def get_or_create_bucket(
     session: Session,
     *,
@@ -114,11 +155,7 @@ def get_or_create_bucket(
     limit_count: int,
     now: datetime,
 ) -> PublicQuotaBucket:
-    statement = select(PublicQuotaBucket).where(
-        PublicQuotaBucket.quota_mode == mode,
-        PublicQuotaBucket.quota_key == bucket_key,
-    )
-    bucket = session.execute(statement).scalar_one_or_none()
+    bucket = find_bucket(session, mode=mode, bucket_key=bucket_key)
     if bucket is None:
         bucket = PublicQuotaBucket(
             quota_mode=mode,

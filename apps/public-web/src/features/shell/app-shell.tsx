@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { ClientProviderControls } from "@/features/shell/client-provider-controls";
+import { PublicQuotaStatusBar } from "@/features/shell/public-quota-status";
 
 const navItems = [
   { href: "/", label: "生图" },
@@ -43,7 +44,7 @@ export function AppShell({
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
       <AppHeader activeHref={activeHref} brandLabel={brandLabel} headerTitle={resolvedHeaderTitle} leadingAction={leadingAction} navAside={navAside} workspaceMode={workspaceMode} />
 
-      <main className={workspaceMode ? "h-[calc(100vh-4rem)] w-full overflow-hidden px-3 py-3 sm:px-4 lg:px-5" : "mx-auto w-full max-w-[1440px] px-4 pb-10 pt-5 sm:px-6 lg:px-8 lg:pt-6"}>
+      <main className={workspaceMode ? "h-[calc(100vh-6.5rem)] w-full overflow-hidden px-3 py-3 sm:px-4 lg:px-5" : "mx-auto w-full max-w-[1440px] px-4 pb-10 pt-5 sm:px-6 lg:px-8 lg:pt-6"}>
         {hasHero ? <HeroSection description={description} eyebrow={eyebrow} title={title} /> : null}
         <section className={workspaceMode ? "h-full" : hasHero ? "mt-5" : ""}>{children}</section>
       </main>
@@ -75,6 +76,7 @@ function AppHeader(props: AppHeaderProps) {
           {props.navAside}
         </div>
       </div>
+      <PublicQuotaStatusBar workspaceMode={props.workspaceMode} />
     </header>
   );
 }

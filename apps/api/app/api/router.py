@@ -11,6 +11,7 @@ PUBLIC_DOMAIN_ROUTERS = (
     "apps.api.app.domains.image.routes",
     "apps.api.app.domains.comic.router",
     "apps.api.app.domains.settings.routes",
+    "apps.api.app.domains.public_quota.routes",
 )
 
 ADMIN_DOMAIN_ROUTERS = (
