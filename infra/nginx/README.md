@@ -22,6 +22,11 @@
 - `8080`：`/api/public/*`、`/health`、`/` 分别转发到 API 与 `public-web`
 - `8081`：`/api/admin/*`、`/health`、`/` 分别转发到 API 与 `admin-web`
 
+生产镜像部署使用独立配置文件：
+
+- `infra/nginx/nginx.prod.conf`
+- `docker-compose.prod.yml` 会把它挂载到 `/etc/nginx/conf.d/default.conf`
+
 ## 生产域名建议
 
 优先使用独立域名，避免 Next.js 子路径部署时需要额外配置 `basePath`。

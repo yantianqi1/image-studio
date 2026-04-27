@@ -2,7 +2,7 @@
 
 独立商业化仓库，承接用户生图、钱包计费、激活码、漫画创作、后台运营与外部 LLM Provider 接入。
 
-当前仓库已经具备本地联调骨架。本文档补齐一份可执行的本地运行草案，以及一份面向生产部署的最小落地草案。
+当前仓库已经具备本地联调骨架、GHCR 镜像构建工作流，以及面向服务器的 Docker Compose 镜像部署配置。
 
 ## 服务拓扑
 
@@ -63,6 +63,12 @@
 cp .env.example .env
 ```
 
+生产服务器使用镜像部署时复制生产模板：
+
+```bash
+cp .env.production.example .env
+```
+
 关键变量说明：
 
 - `DATABASE_URL`：API 与 worker 共用数据库连接
@@ -70,6 +76,7 @@ cp .env.example .env
 - `ADMIN_WEB_ORIGIN`：后台端对外地址，生产环境必须改为真实域名
 - `API_BASE_URL`：API 对外地址
 - `USER_SESSION_COOKIE_NAME`：用户会话 Cookie 名称
+- `ANONYMOUS_SESSION_COOKIE_NAME`：匿名用户 Cookie 名称
 - `ADMIN_SESSION_COOKIE_NAME`：管理员会话 Cookie 名称
 - `SESSION_SECRET`：服务端会话相关密钥，生产环境必须替换
 - `APP_ENV`：`development` 或 `production`
@@ -80,6 +87,7 @@ cp .env.example .env
 - `DEFAULT_ADMIN_PASSWORD`：默认管理员密码
 - `WORKER_NAME`：worker 进程名
 - `WORKER_POLL_INTERVAL_SECONDS`：worker 轮询间隔
+- `WORKER_IMAGE_JOB_CONCURRENCY`：worker 并发处理图片任务数量
 - `WORKER_STALE_RUNNING_JOB_SECONDS`：判定任务陈旧的阈值
 - `WORKER_STALE_JOB_ALERT_THRESHOLD`：触发 worker 告警的最小陈旧任务数
 
@@ -189,8 +197,6 @@ pnpm dev:admin
 
 8. 启动 nginx 统一入口
 
-说明：当前仓库还没有提交独立 nginx 配置文件；可先使用 [infra/nginx/README.md](/Volumes/Fanxiang%20S500Pro/项目/commercial-studio/infra/nginx/README.md) 中的示例配置，在本机临时起一个 nginx 容器或本地 nginx 进程。
-
 推荐本地访问：
 
 - 用户端：`http://localhost:8080/`
@@ -231,33 +237,32 @@ docker compose down
 docker compose down -v
 ```
 
-## 生产部署草案
+## 生产镜像部署
 
-当前仓库未提供 Dockerfile、迁移脚本入口与正式 nginx 配置文件，因此生产部署按“最小可落地草案”组织：
+仓库推送到 `main` 或 `v*.*.*` tag 后，`.github/workflows/build-ghcr-images.yml` 会构建并推送 `api`、`worker`、`public-web`、`admin-web` 四个 GHCR 镜像。
 
-1. 准备 `.env`
-2. 启动 `postgres`
-3. 启动 `api`
-4. 启动 `worker`
-5. 构建并启动 `public-web`
-6. 构建并启动 `admin-web`
-7. 通过 `nginx` 暴露统一域名与反向代理
-8. 将 `generated-assets` 挂载到持久化卷
+服务器首次部署：
 
-建议：
+```bash
+cp .env.production.example .env
+docker login ghcr.io
+docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml up -d
+```
 
-- `public-web` 与 `admin-web` 优先拆到两个域名；当前后台端未配置 Next.js `basePath`
-- `api` 不直接暴露公网端口，仅接受 nginx 或内网访问
-- `postgres` 只在内网开放
-- `SESSION_SECRET`、默认管理员密码必须通过部署环境注入
-- 首次上线完成后，及时替换默认管理员密码
+后续部署：
 
-更多细节见：
+```bash
+./scripts/deploy-prod.sh
+```
 
-- [infra/docker/README.md](/Volumes/Fanxiang%20S500Pro/项目/commercial-studio/infra/docker/README.md)
-- [infra/nginx/README.md](/Volumes/Fanxiang%20S500Pro/项目/commercial-studio/infra/nginx/README.md)
-- [db/migrations/README.md](/Volumes/Fanxiang%20S500Pro/项目/commercial-studio/db/migrations/README.md)
-- [db/seeds/README.md](/Volumes/Fanxiang%20S500Pro/项目/commercial-studio/db/seeds/README.md)
+默认访问：
+
+- 用户端：`http://服务器IP:8080/`
+- 后台端：`http://服务器IP:8081/`
+- API 健康检查：`http://服务器IP:8080/health`
+
+生产建议见 `infra/docker/README.md`、`infra/nginx/README.md`、`db/migrations/README.md`、`db/seeds/README.md`。
 
 ## 最小自检
 
@@ -272,7 +277,7 @@ curl http://localhost:7800/health
 ```bash
 curl -i -X POST http://localhost:7800/api/admin/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"username":"admin","password":"20021214Ytq"}'
+  -d '{"username":"admin","password":"change-me"}'
 ```
 
 worker 单次消费：
@@ -290,4 +295,4 @@ curl -i http://localhost:7800/api/admin/ops/worker-summary
 
 ## 当前阶段
 
-当前仓库已经超过“空骨架”阶段，具备可运行 MVP 基线，并补上了图片任务 worker 化、provider/model 管理、settings 生效与后台运营草案。本文档描述的是可联调、可演示、可继续演进的本地/生产草案，不是最终硬化后的上线手册。
+当前仓库具备可运行 MVP 基线、图片任务 worker 化、provider/model 管理、settings 生效与后台运营草案。
