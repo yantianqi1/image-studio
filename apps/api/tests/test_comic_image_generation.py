@@ -9,6 +9,7 @@ from apps.api.app.domains.comic.models import ComicCharacterCard, ComicPanelProm
 from apps.api.app.domains.image.models import Asset, ImageJob, ImageJobReferenceAsset, ImageJobResult
 from apps.api.app.infra.db.session import initialize_database, session_scope
 from apps.api.app.main import create_app
+from apps.worker.worker.tasks import comic_orchestration as worker_comic_orchestration
 from apps.worker.worker.tasks import comic_tasks as worker_comic_tasks
 
 
@@ -156,6 +157,20 @@ def test_pipeline_completion_does_not_create_image_jobs(monkeypatch) -> None:
     assert count_image_jobs() == 0
 
 
+def test_orchestration_marks_ownerless_completed_task_failed() -> None:
+    client = build_client()
+    task = seed_completed_task(client, prompt_count=1)
+    make_task_ownerless(task["id"])
+
+    action = worker_comic_orchestration.run_next_comic_orchestration()
+    detail = get_task_snapshot(task["id"])
+
+    assert action == f"failed-owner-missing:{task['id']}"
+    assert detail["status"] == "failed"
+    assert detail["error_code"] == "comic_task_owner_missing"
+    assert detail["error_message"] == "comic task owner is missing"
+
+
 def build_client() -> TestClient:
     initialize_database()
     return TestClient(create_app())
@@ -188,6 +203,24 @@ def seed_completed_task(
             session.add(build_prompt(task_model=task_model, storyboard_id=storyboard.id, index=index))
         session.commit()
     return task
+
+
+def make_task_ownerless(task_id: str) -> None:
+    with session_scope() as session:
+        task = session.get(ComicTask, task_id)
+        task.user_id = None
+        task.anonymous_session_id = None
+        session.commit()
+
+
+def get_task_snapshot(task_id: str) -> dict[str, str | None]:
+    with session_scope() as session:
+        task = session.get(ComicTask, task_id)
+        return {
+            "status": task.status,
+            "error_code": task.error_code,
+            "error_message": task.error_message,
+        }
 
 
 def build_prompt(*, task_model: ComicTask, storyboard_id: int, index: int) -> ComicPanelPrompt:

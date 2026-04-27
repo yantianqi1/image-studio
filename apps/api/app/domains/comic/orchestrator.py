@@ -16,6 +16,9 @@ from apps.api.app.domains.image.models import ImageJob
 
 COMIC_REFERENCE_IMAGE_FAILED_CODE = "comic_reference_image_failed"
 COMIC_PAGE_IMAGE_FAILED_CODE = "comic_page_image_failed"
+COMIC_TASK_OWNER_MISSING_CODE = "comic_task_owner_missing"
+COMIC_TASK_OWNER_MISSING_MESSAGE = "comic task owner is missing"
+FAILED_OWNER_MISSING_ACTION = "failed-owner-missing"
 
 
 def run_next_comic_orchestration_step(session: Session) -> str | None:
@@ -32,6 +35,9 @@ def list_completed_tasks(session: Session) -> list[ComicTask]:
 
 
 def continue_completed_task(session: Session, *, task: ComicTask) -> str | None:
+    owner_missing_action = fail_if_task_owner_missing(session, task=task)
+    if owner_missing_action is not None:
+        return owner_missing_action
     cards = list_character_cards(session, task_id=task.id)
     prompts = list_ready_panel_prompts(session, task_id=task.id)
     if not cards or not prompts:
@@ -53,6 +59,14 @@ def continue_completed_task(session: Session, *, task: ComicTask) -> str | None:
 
 def task_owner(task: ComicTask) -> OwnerContext:
     return OwnerContext(user_id=task.user_id, anonymous_session_id=task.anonymous_session_id)
+
+
+def fail_if_task_owner_missing(session: Session, *, task: ComicTask) -> str | None:
+    if task.user_id is not None or task.anonymous_session_id is not None:
+        return None
+    mark_task_failed(session, task=task, error_code=COMIC_TASK_OWNER_MISSING_CODE, error_message=COMIC_TASK_OWNER_MISSING_MESSAGE)
+    session.commit()
+    return FAILED_OWNER_MISSING_ACTION
 
 
 def fail_on_terminal_image_errors(
