@@ -8,12 +8,10 @@ export type PromptApp = Readonly<{
   statusLabel: string;
 }>;
 
-export type PromptAppCoverTone = "rose";
-
 export type PromptAppCover = Readonly<{
   badge: string;
+  imageSrc: string;
   label: string;
-  tone: PromptAppCoverTone;
 }>;
 
 export type CharacterPosterPromptInput = Readonly<{
@@ -27,8 +25,8 @@ export const PROMPT_APPS: readonly PromptApp[] = [
     id: "character-poster",
     cover: {
       badge: "海报",
+      imageSrc: "/app-covers/character-poster-hutao.png",
       label: "角色海报",
-      tone: "rose",
     },
     title: "角色海报",
     description: "输入角色与备注，生成二次元动漫插画海报。",

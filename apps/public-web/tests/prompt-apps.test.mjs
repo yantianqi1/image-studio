@@ -25,7 +25,7 @@ test("prompt app catalog exposes character poster app", () => {
   assert.equal(PROMPT_APPS[0].title, "角色海报");
   assert.equal(PROMPT_APPS[0].href, "/apps/character-poster");
   assert.equal(PROMPT_APPS[0].cover.label, "角色海报");
-  assert.equal(PROMPT_APPS[0].cover.tone, "rose");
+  assert.equal(PROMPT_APPS[0].cover.imageSrc, "/app-covers/character-poster-hutao.png");
 });
 
 test("character poster app is public and relies on image job API access rules", () => {

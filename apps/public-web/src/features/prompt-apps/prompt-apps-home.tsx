@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 import { AppShell } from "@/features/shell/app-shell";
@@ -10,11 +11,7 @@ export function PromptAppsHome() {
   const cards = buildPromptAppCenterCards(PROMPT_APPS);
 
   return (
-    <AppShell
-      activeHref="/apps"
-      description="将常用创作流程整理成可直接进入的小应用入口。"
-      title="应用"
-    >
+    <AppShell activeHref="/apps">
       <div className={styles.appGrid}>
         {cards.map((card) => (
           <Link key={card.href} className={styles.appCard} href={card.href} aria-label={`${card.title} 应用`}>
@@ -41,14 +38,16 @@ function AppCover({
   cover: (typeof PROMPT_APPS)[number]["cover"];
 }>) {
   return (
-    <div className={styles.appCover} data-tone={cover.tone} aria-hidden="true">
-      <div className={styles.appCoverGlow} />
+    <div className={styles.appCover} aria-hidden="true">
+      <Image
+        fill
+        alt=""
+        className={styles.appCoverImage}
+        sizes="(min-width: 1024px) 31vw, (min-width: 640px) 46vw, 100vw"
+        src={cover.imageSrc}
+      />
+      <div className={styles.appCoverShade} />
       <div className={styles.appCoverHeader}>
-        <div className={styles.appCoverDots}>
-          <span />
-          <span />
-          <span />
-        </div>
         <span className={styles.appCoverBadge}>{cover.badge}</span>
       </div>
 
@@ -56,16 +55,6 @@ function AppCover({
         <div className={styles.appCoverPanelText}>
           <p className={styles.appCoverPanelTitle}>{cover.label}</p>
         </div>
-        <div className={styles.appCoverPanelGrid}>
-          <span />
-          <span />
-          <span />
-        </div>
-      </div>
-
-      <div className={styles.appCoverStack}>
-        <div />
-        <div />
       </div>
     </div>
   );

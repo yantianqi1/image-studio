@@ -24,29 +24,28 @@
 }
 
 .appCover {
-  --cover-base: #be123c;
   --cover-edge: rgba(255, 255, 255, 0.2);
   position: relative;
   overflow: hidden;
   aspect-ratio: 16 / 10;
   border: 1px solid var(--cover-edge);
   border-radius: 0.85rem;
-  background: linear-gradient(135deg, var(--cover-base) 0%, #111827 100%);
+  background: #111827;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
-.appCover[data-tone="rose"] {
-  --cover-base: #be123c;
-  --cover-edge: rgba(255, 255, 255, 0.22);
-}
-
-.appCoverGlow {
+.appCoverImage {
   position: absolute;
   inset: 0;
-  background:
-    radial-gradient(circle at 16% 18%, rgba(255, 255, 255, 0.24), transparent 26%),
-    radial-gradient(circle at 88% 8%, rgba(255, 255, 255, 0.12), transparent 28%),
-    linear-gradient(145deg, transparent 38%, rgba(255, 255, 255, 0.08) 39%, transparent 60%);
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.appCoverShade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(17, 24, 39, 0.05) 0%, rgba(17, 24, 39, 0.14) 42%, rgba(17, 24, 39, 0.52) 100%);
 }
 
 .appCoverHeader {
@@ -56,53 +55,28 @@
   left: 0.9rem;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 0.75rem;
-}
-
-.appCoverDots {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.appCoverDots span {
-  width: 0.48rem;
-  height: 0.48rem;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.78);
-}
-
-.appCoverDots span:nth-child(2) {
-  opacity: 0.62;
-}
-
-.appCoverDots span:nth-child(3) {
-  opacity: 0.42;
 }
 
 .appCoverBadge {
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(17, 24, 39, 0.36);
   padding: 0.32rem 0.55rem;
-  color: rgba(255, 255, 255, 0.86);
+  color: #ffffff;
   font-size: 0.66rem;
   font-weight: 800;
+  text-shadow: 0 1px 1px rgba(17, 24, 39, 0.28);
 }
 
 .appCoverPanel {
   position: absolute;
-  right: 0.9rem;
+  right: 1rem;
   bottom: 0.9rem;
-  left: 0.9rem;
+  left: 1rem;
   display: grid;
-  gap: 0.75rem;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 0.85rem;
-  background: rgba(255, 255, 255, 0.13);
-  padding: 0.8rem;
-  backdrop-filter: blur(14px);
+  gap: 0.35rem;
 }
 
 .appCoverPanelText {
@@ -112,52 +86,12 @@
 .appCoverPanelTitle {
   overflow: hidden;
   color: #ffffff;
-  font-size: 1rem;
+  font-size: 1.05rem;
   font-weight: 800;
   line-height: 1.2;
+  text-shadow: 0 2px 8px rgba(17, 24, 39, 0.48);
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.appCoverPanelGrid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.45rem;
-}
-
-.appCoverPanelGrid span {
-  min-height: 2.15rem;
-  border-radius: 0.55rem;
-  background: rgba(255, 255, 255, 0.18);
-}
-
-.appCoverPanelGrid span:nth-child(2) {
-  background: rgba(255, 255, 255, 0.25);
-}
-
-.appCoverPanelGrid span:nth-child(3) {
-  background: rgba(255, 255, 255, 0.14);
-}
-
-.appCoverStack {
-  position: absolute;
-  top: 3.2rem;
-  right: 1.05rem;
-  display: grid;
-  gap: 0.42rem;
-}
-
-.appCoverStack div {
-  width: 2.35rem;
-  height: 3rem;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 0.8rem;
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.appCoverStack div:nth-child(2) {
-  margin-left: 0.7rem;
-  background: rgba(255, 255, 255, 0.18);
 }
 
 .appBody {
