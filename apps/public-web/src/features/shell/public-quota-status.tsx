@@ -13,10 +13,9 @@ const LOW_QUOTA_RATIO = 0.25;
 const LOADING_PERCENT = 42;
 const EMPTY_VALUE = "--";
 
-export function PublicQuotaStatusBar({ workspaceMode = false }: Readonly<{ workspaceMode?: boolean }>) {
+export function PublicQuotaStatusBadge() {
   const [refreshKey, setRefreshKey] = useState(0);
   const state = useApiResource(publicApi.getPublicQuotaStatus, refreshKey);
-  const innerClassName = `${styles.inner} ${workspaceMode ? styles.innerWorkspace : ""}`;
 
   useEffect(() => {
     const refresh = () => setRefreshKey((current) => current + REFRESH_STEP);
@@ -24,19 +23,15 @@ export function PublicQuotaStatusBar({ workspaceMode = false }: Readonly<{ works
     return () => window.removeEventListener(PUBLIC_QUOTA_REFRESH_EVENT, refresh);
   }, []);
 
-  return (
-    <div className={styles.strip}>
-      <div className={innerClassName}>
-        {state.status === "ready" ? (
-          <QuotaStatusView status={state.data} />
-        ) : state.status === "error" ? (
-          <QuotaErrorView message={state.message} />
-        ) : (
-          <QuotaLoadingView />
-        )}
-      </div>
-    </div>
-  );
+  if (state.status === "ready") {
+    return <QuotaStatusView status={state.data} />;
+  }
+
+  if (state.status === "error") {
+    return <QuotaErrorView message={state.message} />;
+  }
+
+  return <QuotaLoadingView />;
 }
 
 function QuotaStatusView({ status }: Readonly<{ status: PublicQuotaStatus }>) {
@@ -45,19 +40,18 @@ function QuotaStatusView({ status }: Readonly<{ status: PublicQuotaStatus }>) {
   const title = `共享额度：剩余 ${status.remaining_count} / ${status.limit_count}，已用 ${status.used_count}`;
 
   return (
-    <div className={styles.status} data-tone={tone} title={title}>
-      <span className={styles.badge}>共享额度</span>
+    <div className={styles.status} data-tone={tone} title={title} aria-label={`共享额度：剩余 ${status.remaining_count} / ${status.limit_count}`}>
+      <span className={styles.dot} aria-hidden="true" />
+      <span className={styles.label}>共享额度</span>
       <span className={styles.value}>
         {status.remaining_count}
         <span className={styles.valueMuted}>/ {status.limit_count}</span>
       </span>
-      <div className={styles.meter} aria-hidden="true">
-        <span className={styles.meterFill} style={{ width: `${getQuotaPercent(status)}%` }} />
-      </div>
-      <span className={styles.detail}>
-        {modeCopy.label} · {modeCopy.hint}
-      </span>
       <span className={styles.state}>{getQuotaStateLabel(status)}</span>
+      <span className={styles.detail}>{modeCopy.label}</span>
+      <span className={styles.meter} aria-hidden="true">
+        <span className={styles.meterFill} style={{ width: `${getQuotaPercent(status)}%` }} />
+      </span>
     </div>
   );
 }
@@ -65,16 +59,16 @@ function QuotaStatusView({ status }: Readonly<{ status: PublicQuotaStatus }>) {
 function QuotaLoadingView() {
   return (
     <div className={styles.status} data-tone="loading" aria-label="共享额度读取中">
-      <span className={styles.badge}>共享额度</span>
+      <span className={styles.dot} aria-hidden="true" />
+      <span className={styles.label}>共享额度</span>
       <span className={styles.value}>
         {EMPTY_VALUE}
         <span className={styles.valueMuted}>/ {EMPTY_VALUE}</span>
       </span>
-      <div className={styles.meter} aria-hidden="true">
-        <span className={styles.meterFill} style={{ width: `${LOADING_PERCENT}%` }} />
-      </div>
-      <span className={styles.detail}>读取当前可用额度</span>
       <span className={styles.state}>加载中</span>
+      <span className={styles.meter} aria-hidden="true">
+        <span className={styles.meterFill} style={{ width: `${LOADING_PERCENT}%` }} />
+      </span>
     </div>
   );
 }
@@ -82,16 +76,16 @@ function QuotaLoadingView() {
 function QuotaErrorView({ message }: Readonly<{ message: string }>) {
   return (
     <div className={styles.status} data-tone="error" title={message} aria-label={`共享额度读取失败：${message}`}>
-      <span className={styles.badge}>共享额度</span>
+      <span className={styles.dot} aria-hidden="true" />
+      <span className={styles.label}>共享额度</span>
       <span className={styles.value}>
         {EMPTY_VALUE}
         <span className={styles.valueMuted}>/ {EMPTY_VALUE}</span>
       </span>
-      <div className={styles.meter} aria-hidden="true">
-        <span className={styles.meterFill} style={{ width: "0%" }} />
-      </div>
-      <span className={styles.detail}>请求失败：{message}</span>
       <span className={styles.state}>异常</span>
+      <span className={styles.meter} aria-hidden="true">
+        <span className={styles.meterFill} style={{ width: "0%" }} />
+      </span>
     </div>
   );
 }
