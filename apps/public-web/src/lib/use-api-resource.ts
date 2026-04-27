@@ -11,11 +11,23 @@ export type ResourceState<T> =
 
 type Loader<T> = () => Promise<T>;
 
+type ResourceSnapshot<T> = Readonly<{
+  refreshKey: number;
+  state: ResourceState<T>;
+}>;
+
 export function startResourceRefresh<T>(current: ResourceState<T>): ResourceState<T> {
   if (current.status === "ready") {
     return current;
   }
   return { status: "loading" };
+}
+
+export function resolveResourceSnapshot<T>(snapshot: ResourceSnapshot<T>, refreshKey: number): ResourceState<T> {
+  if (snapshot.refreshKey === refreshKey) {
+    return snapshot.state;
+  }
+  return startResourceRefresh(snapshot.state);
 }
 
 function getErrorMessage(error: unknown) {
@@ -27,25 +39,31 @@ function getErrorStatusCode(error: unknown) {
 }
 
 export function useApiResource<T>(loader: Loader<T>, refreshKey = 0) {
-  const [state, setState] = useState<ResourceState<T>>({ status: "loading" });
+  const [snapshot, setSnapshot] = useState<ResourceSnapshot<T>>({
+    refreshKey,
+    state: { status: "loading" },
+  });
   const runLoader = useEffectEvent(loader);
+  const state = resolveResourceSnapshot(snapshot, refreshKey);
 
   useEffect(() => {
     let active = true;
-    setState((current) => startResourceRefresh(current));
 
     runLoader()
       .then((data) => {
         if (active) {
-          setState({ status: "ready", data });
+          setSnapshot({ refreshKey, state: { status: "ready", data } });
         }
       })
       .catch((error: unknown) => {
         if (active) {
-          setState({
-            status: "error",
-            message: getErrorMessage(error),
-            statusCode: getErrorStatusCode(error),
+          setSnapshot({
+            refreshKey,
+            state: {
+              status: "error",
+              message: getErrorMessage(error),
+              statusCode: getErrorStatusCode(error),
+            },
           });
         }
       });

@@ -54,3 +54,18 @@ test("startResourceRefresh keeps ready data visible during a refresh", () => {
   assert.equal(startResourceRefresh({ status: "loading" }).status, "loading");
   assert.equal(startResourceRefresh({ status: "error", message: "network" }).status, "loading");
 });
+
+test("resolveResourceSnapshot keeps ready data visible while a new refresh is pending", () => {
+  const { resolveResourceSnapshot } = loadUseApiResource();
+  const readySnapshot = {
+    refreshKey: 2,
+    state: { status: "ready", data: [{ id: "shot_1" }] },
+  };
+
+  assert.deepEqual(resolveResourceSnapshot(readySnapshot, 2), readySnapshot.state);
+  assert.deepEqual(resolveResourceSnapshot(readySnapshot, 3), readySnapshot.state);
+  assert.equal(
+    resolveResourceSnapshot({ refreshKey: 2, state: { status: "error", message: "network" } }, 3).status,
+    "loading",
+  );
+});

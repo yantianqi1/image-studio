@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 
 import {
   clearClientProviderConfig,
@@ -11,23 +11,20 @@ import {
 } from "@/lib/client-provider-config";
 
 const EMPTY_DRAFT: ClientProviderDraft = { baseUrl: "", apiKey: "" };
+const CLIENT_PROVIDER_DRAFT_CHANGED_EVENT = "commercial-studio-client-provider-draft-changed";
+const EMPTY_DRAFT_SNAPSHOT = JSON.stringify(EMPTY_DRAFT);
 
 export function ClientProviderControls() {
-  const [draft, setDraft] = useState<ClientProviderDraft>(EMPTY_DRAFT);
-
-  useEffect(() => {
-    const stored = readStoredClientProviderConfig();
-    setDraft({ baseUrl: stored.baseUrl, apiKey: stored.apiKey });
-  }, []);
+  const draft = parseClientProviderDraftSnapshot(useClientProviderDraftSnapshot());
 
   function updateDraft(nextDraft: ClientProviderDraft) {
-    const saved = saveClientProviderDraft(nextDraft);
-    setDraft({ baseUrl: saved.baseUrl, apiKey: saved.apiKey });
+    saveClientProviderDraft(nextDraft);
+    notifyClientProviderDraftChanged();
   }
 
   function clearDraft() {
     clearClientProviderConfig();
-    setDraft(EMPTY_DRAFT);
+    notifyClientProviderDraftChanged();
   }
 
   const enabled = hasCompleteClientProviderConfig(draft);
@@ -64,4 +61,40 @@ export function ClientProviderControls() {
       </button>
     </div>
   );
+}
+
+function useClientProviderDraftSnapshot(): string {
+  return useSyncExternalStore(
+    subscribeClientProviderDraft,
+    readClientProviderDraft,
+    () => EMPTY_DRAFT_SNAPSHOT,
+  );
+}
+
+function readClientProviderDraft(): string {
+  const stored = readStoredClientProviderConfig();
+  return JSON.stringify({ baseUrl: stored.baseUrl, apiKey: stored.apiKey });
+}
+
+function parseClientProviderDraftSnapshot(snapshot: string): ClientProviderDraft {
+  return JSON.parse(snapshot) as ClientProviderDraft;
+}
+
+function subscribeClientProviderDraft(onStoreChange: () => void): () => void {
+  if (typeof window === "undefined") {
+    return () => undefined;
+  }
+  window.addEventListener("storage", onStoreChange);
+  window.addEventListener(CLIENT_PROVIDER_DRAFT_CHANGED_EVENT, onStoreChange);
+  return () => {
+    window.removeEventListener("storage", onStoreChange);
+    window.removeEventListener(CLIENT_PROVIDER_DRAFT_CHANGED_EVENT, onStoreChange);
+  };
+}
+
+function notifyClientProviderDraftChanged() {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.dispatchEvent(new Event(CLIENT_PROVIDER_DRAFT_CHANGED_EVENT));
 }

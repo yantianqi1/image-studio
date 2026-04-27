@@ -104,7 +104,7 @@ export function GenerationHistorySidebar({
   );
 
   return (
-    <aside className={`${styles.sidebarShell} hidden lg:flex`}>
+    <aside className={`${styles.sidebarShell} ${styles.desktopSidebar}`}>
       <div className="flex items-start justify-between gap-3">
         <div className={styles.sidebarTitle}>
           <div className={styles.sidebarBrand}>
@@ -184,7 +184,7 @@ function CollapsedSidebar({
   onToggleCollapsed?: () => void;
 }>) {
   return (
-    <aside className={`${styles.sidebarShell} ${styles.sidebarCollapsed} hidden lg:flex`}>
+    <aside className={`${styles.sidebarShell} ${styles.sidebarCollapsed} ${styles.desktopSidebar}`}>
       <button className={styles.sidebarBrand} type="button" onClick={onToggleCollapsed} aria-label="展开历史记录">
         <BrandMark />
       </button>

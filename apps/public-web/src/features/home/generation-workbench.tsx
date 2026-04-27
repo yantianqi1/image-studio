@@ -46,6 +46,9 @@ export function GenerationWorkbench() {
   const [historySearch, setHistorySearch] = useState("");
   const [historySidebarCollapsed, setHistorySidebarCollapsed] = useState(false);
   const history = useGenerationHistory();
+  const activeHistory = history.activeHistory;
+  const completeHistory = history.completeHistory;
+  const failHistory = history.failHistory;
   const modelsState = useApiResource(() => publicApi.getModels());
   const imageModelsState = getImageModelsState(modelsState);
   const settingsState = useApiResource(() => publicApi.getSiteSettings());
@@ -73,20 +76,18 @@ export function GenerationWorkbench() {
   }, [historySidebarCollapsed]);
 
   useEffect(() => {
-    const selectedHistory = history.activeHistory;
-    const taskId = selectedHistory?.taskId;
-    if (!taskId || !shouldResumeImageJobHistory(selectedHistory)) {
+    const taskId = activeHistory?.taskId;
+    if (!taskId || !shouldResumeImageJobHistory(activeHistory)) {
       return;
     }
 
     let active = true;
-    setState({ status: "submitting" });
     waitForImageJobResults(publicApi, taskId)
       .then((completed) => {
         if (!active) {
           return;
         }
-        history.completeHistory(selectedHistory.id, {
+        completeHistory(activeHistory.id, {
           status: "success",
           taskId: completed.job.id,
           taskStatus: completed.job.status,
@@ -100,14 +101,14 @@ export function GenerationWorkbench() {
           return;
         }
         const message = error instanceof Error ? error.message : "生成任务失败";
-        history.failHistory(selectedHistory.id, message);
+        failHistory(activeHistory.id, message);
         setState({ status: "error", message });
       });
 
     return () => {
       active = false;
     };
-  }, [history.activeHistory?.id, history.activeHistory?.taskId, history.completeHistory, history.failHistory]);
+  }, [activeHistory, completeHistory, failHistory]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();

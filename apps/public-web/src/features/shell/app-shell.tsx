@@ -6,6 +6,7 @@ import { ClientProviderControls } from "@/features/shell/client-provider-control
 import {
   APP_HEADER_CONTAINER_CLASS,
   APP_HEADER_LEFT_CLASS,
+  APP_MOBILE_NAV_CONTAINER_CLASS,
   APP_HEADER_RIGHT_CLASS,
   APP_NAV_CONTAINER_CLASS,
   APP_NAV_ITEMS,
@@ -44,7 +45,7 @@ export function AppShell({
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
       <AppHeader activeHref={activeHref} brandLabel={brandLabel} headerTitle={resolvedHeaderTitle} leadingAction={leadingAction} navAside={navAside} />
 
-      <main className={workspaceMode ? "h-[calc(100vh-4rem)] w-full overflow-hidden px-3 py-3 sm:px-4 lg:px-5" : "mx-auto w-full max-w-[1440px] px-4 pb-10 pt-5 sm:px-6 lg:px-8 lg:pt-6"}>
+      <main className={workspaceMode ? "h-[calc(100dvh-7rem)] w-full overflow-hidden px-3 py-3 sm:px-4 md:h-[calc(100dvh-4rem)] lg:px-5" : "mx-auto w-full max-w-[1440px] px-4 pb-10 pt-5 sm:px-6 lg:px-8 lg:pt-6"}>
         {hasHero ? <HeroSection description={description} eyebrow={eyebrow} title={title} /> : null}
         <section className={workspaceMode ? "h-full" : hasHero ? "mt-5" : ""}>{children}</section>
       </main>
@@ -75,6 +76,7 @@ function AppHeader(props: AppHeaderProps) {
           {props.navAside}
         </div>
       </div>
+      <MobileNav activeHref={props.activeHref} />
     </header>
   );
 }
@@ -95,7 +97,15 @@ function BrandLink(props: Readonly<{ brandLabel: string; headerTitle?: string }>
 
 function MainNav({ activeHref }: Readonly<{ activeHref?: string }>) {
   return (
-    <nav className={APP_NAV_CONTAINER_CLASS}>
+    <nav className={APP_NAV_CONTAINER_CLASS} aria-label="功能切换">
+      {APP_NAV_ITEMS.map((item) => <NavLink key={item.href} active={activeHref === item.href} href={item.href} label={item.label} />)}
+    </nav>
+  );
+}
+
+function MobileNav({ activeHref }: Readonly<{ activeHref?: string }>) {
+  return (
+    <nav className={APP_MOBILE_NAV_CONTAINER_CLASS} aria-label="移动端功能切换">
       {APP_NAV_ITEMS.map((item) => <NavLink key={item.href} active={activeHref === item.href} href={item.href} label={item.label} />)}
     </nav>
   );

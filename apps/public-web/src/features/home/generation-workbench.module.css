@@ -237,16 +237,22 @@
   .workspaceCollapsed {
     display: grid;
     height: 100%;
+    align-content: start;
+    align-items: start;
+    grid-auto-rows: max-content;
     grid-template-columns: 1fr;
     overflow-y: auto;
   }
 
   .controlColumn,
   .resultColumn {
+    height: auto;
+    min-height: auto;
     overflow: visible;
   }
 
   .resultPanel {
+    height: auto;
     min-height: 620px;
   }
 }

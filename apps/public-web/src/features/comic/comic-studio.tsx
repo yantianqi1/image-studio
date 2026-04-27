@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useState } from "react";
 
 import { AppShell } from "@/features/shell/app-shell";
 import { publicApi, type ComicProject, type ComicTaskImageResult, type TaskItem } from "@/lib/public-api";
@@ -73,6 +73,7 @@ type StudioModel = Readonly<{
 }>;
 
 type ReferencePackStatus = "idle" | "exporting" | "importing" | "error" | "success";
+type OwnerStateSnapshot = Readonly<{ refreshKey: number; state: ResourceState<null> }>;
 
 export function ComicStudio() {
   const studio = useComicStudio();
@@ -131,12 +132,22 @@ function useComicStudio(): StudioModel {
   const [referencePackMessage, setReferencePackMessage] = useState<string | undefined>();
   const [refreshKey, setRefreshKey] = useState(0);
   const [ownerRefreshKey, setOwnerRefreshKey] = useState(0);
-  const [ownerState, setOwnerState] = useState<ResourceState<null>>({ status: "loading" });
+  const [ownerSnapshot, setOwnerSnapshot] = useState<OwnerStateSnapshot>({
+    refreshKey: ownerRefreshKey,
+    state: { status: "loading" },
+  });
   const [selectedShotId, setSelectedShotId] = useState<string | null>(null);
   const [createState, setCreateState] = useState<CreateState>({ status: "idle" });
   const [workflowStatus, setWorkflowStatus] = useState<ComicWorkspaceStatus | null>(null);
   const [workflowError, setWorkflowError] = useState<string | undefined>();
   const [workflowEvents, setWorkflowEvents] = useState<readonly ComicWorkflowEvent[]>([]);
+  const ownerState: ResourceState<null> = ownerSnapshot.refreshKey === ownerRefreshKey
+    ? ownerSnapshot.state
+    : { status: "loading" };
+  const handleOwnerChangedEvent = useEffectEvent(() => {
+    resetOwnerScopedDisplayState();
+    setOwnerRefreshKey((current) => current + 1);
+  });
 
   const rawProjectsState = useApiResource(() => loadOwnerScopedCollection(ownerState, publicApi.getComicProjects), refreshKey);
   const rawTasksState = useApiResource(() => loadOwnerScopedCollection(ownerState, publicApi.getComicTasks), refreshKey);
@@ -162,22 +173,26 @@ function useComicStudio(): StudioModel {
 
   useEffect(() => {
     let active = true;
-    setOwnerState({ status: "loading" });
     ensureComicAnonymousSession()
       .then(() => {
         if (!active) return;
-        setOwnerState({ status: "ready", data: null });
+        setOwnerSnapshot({ refreshKey: ownerRefreshKey, state: { status: "ready", data: null } });
         handleRefresh();
       })
       .catch((error: unknown) => {
-        if (active) setOwnerState({ status: "error", message: errorMessage(error, "漫画身份初始化失败") });
+        if (active) {
+          setOwnerSnapshot({
+            refreshKey: ownerRefreshKey,
+            state: { status: "error", message: errorMessage(error, "漫画身份初始化失败") },
+          });
+        }
       });
     return () => {
       active = false;
     };
   }, [ownerRefreshKey]);
 
-  useEffect(() => listenComicOwnerChanged(handleOwnerChanged), []);
+  useEffect(() => listenComicOwnerChanged(handleOwnerChangedEvent), []);
 
   useEffect(() => {
     if (!shouldAutoRefreshComic(workspaceStatus)) {
@@ -306,11 +321,6 @@ function useComicStudio(): StudioModel {
 
   function handleRefresh() {
     setRefreshKey((current) => current + 1);
-  }
-
-  function handleOwnerChanged() {
-    resetOwnerScopedDisplayState();
-    setOwnerRefreshKey((current) => current + 1);
   }
 
   function resetOwnerScopedDisplayState() {

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import Image from "next/image";
 
 import type { StoryboardShot } from "./comic-utils";
 
@@ -190,7 +191,16 @@ function PageCard(props: Readonly<{
 
 function PageVisual({ shot, large = false }: Readonly<{ shot: StoryboardShot; large?: boolean }>) {
   if (shot.assetUrl) {
-    return <img className={large ? styles.featuredImage : styles.pageImage} src={shot.assetUrl} alt={shot.title} />;
+    return (
+      <Image
+        alt={shot.title}
+        className={large ? styles.featuredImage : styles.pageImage}
+        height={large ? 1600 : 640}
+        src={shot.assetUrl}
+        unoptimized
+        width={large ? 1200 : 480}
+      />
+    );
   }
   return (
     <div className={large ? styles.featuredPlaceholder : styles.comicPlaceholder}>
@@ -220,7 +230,13 @@ function ImagePreviewOverlay(props: Readonly<{
   return (
     <div className={styles.previewOverlay} role="dialog" aria-modal="true" onClick={props.onClose}>
       <figure className={styles.previewOverlayFigure} onClick={(event) => event.stopPropagation()}>
-        <img src={props.shot.assetUrl} alt={props.shot.title} />
+        <Image
+          alt={props.shot.title}
+          height={1600}
+          src={props.shot.assetUrl}
+          unoptimized
+          width={1200}
+        />
       </figure>
     </div>
   );

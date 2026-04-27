@@ -40,6 +40,7 @@ const AUTO_REFRESH_STATUSES = new Set([
 ]);
 
 export const TASK_TYPE_SCENE_RENDER = "scene-render";
+const EMPTY_IMAGE_RESULTS_STATE: ResourceState<readonly ComicTaskImageResult[]> = { status: "ready", data: [] };
 
 export function buildTaskInputPayload(
   premise: string,
@@ -78,8 +79,7 @@ export function useComicTaskImageResults(taskId: string | number | null, refresh
 
   useEffect(() => {
     if (taskId === null) {
-      setState({ status: "ready", data: [] });
-      return;
+      return undefined;
     }
     let active = true;
     publicApi.getComicTaskImageResults(String(taskId))
@@ -90,7 +90,7 @@ export function useComicTaskImageResults(taskId: string | number | null, refresh
     };
   }, [taskId, refreshKey]);
 
-  return state;
+  return taskId === null ? EMPTY_IMAGE_RESULTS_STATE : state;
 }
 
 export async function waitForComicTask(taskId: string, onTaskUpdate: (task: TaskItem) => void): Promise<void> {

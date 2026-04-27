@@ -4,6 +4,8 @@ import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
 
+const appShellSource = readFileSync(new URL("../src/features/shell/app-shell.tsx", import.meta.url), "utf8");
+
 function loadAppNavigation() {
   const source = readFileSync(new URL("../src/features/shell/app-navigation.ts", import.meta.url), "utf8");
   const compiled = ts.transpileModule(source, {
@@ -19,7 +21,7 @@ function loadAppNavigation() {
 }
 
 test("app navigation exposes 应用 after 生图", () => {
-  const { APP_HEADER_CONTAINER_CLASS, APP_HEADER_LEFT_CLASS, APP_HEADER_RIGHT_CLASS, APP_NAV_CONTAINER_CLASS, APP_NAV_ITEMS } = loadAppNavigation();
+  const { APP_HEADER_CONTAINER_CLASS, APP_HEADER_LEFT_CLASS, APP_HEADER_RIGHT_CLASS, APP_MOBILE_NAV_CONTAINER_CLASS, APP_NAV_CONTAINER_CLASS, APP_NAV_ITEMS } = loadAppNavigation();
 
   assert.equal(APP_NAV_ITEMS.length, 6);
   assert.equal(APP_NAV_ITEMS[0].label, "生图");
@@ -34,5 +36,12 @@ test("app navigation exposes 应用 after 生图", () => {
   assert.match(APP_HEADER_LEFT_CLASS, /col-start-1/);
   assert.match(APP_HEADER_RIGHT_CLASS, /md:col-start-3/);
   assert.match(APP_NAV_CONTAINER_CLASS, /grid-cols-6/);
+  assert.match(APP_MOBILE_NAV_CONTAINER_CLASS, /md:hidden/);
+  assert.match(APP_MOBILE_NAV_CONTAINER_CLASS, /grid-cols-6/);
   assert.doesNotMatch(APP_NAV_CONTAINER_CLASS, /absolute/);
+});
+
+test("app shell renders a mobile module switch below the header row", () => {
+  assert.match(appShellSource, /<MobileNav activeHref=\{props\.activeHref\} \/>/);
+  assert.match(appShellSource, /function MobileNav/);
 });
