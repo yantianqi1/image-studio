@@ -38,7 +38,7 @@ function AppCover({
   cover: (typeof PROMPT_APPS)[number]["cover"];
 }>) {
   return (
-    <div className={styles.appCover} aria-hidden="true">
+    <div className={getAppCoverClassName(cover)} aria-hidden="true">
       <Image
         fill
         alt=""
@@ -58,4 +58,10 @@ function AppCover({
       </div>
     </div>
   );
+}
+
+function getAppCoverClassName(cover: (typeof PROMPT_APPS)[number]["cover"]) {
+  return cover.aspectRatio === "3:4"
+    ? `${styles.appCover} ${styles.appCoverPortrait}`
+    : styles.appCover;
 }

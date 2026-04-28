@@ -17,48 +17,48 @@ import type { ResourceState } from "@/lib/use-api-resource";
 import { useApiResource } from "@/lib/use-api-resource";
 
 import {
-  buildCharacterPosterImageRequest,
-  canSubmitCharacterPoster,
-  type CharacterPosterState,
-  getCharacterPosterErrorMessage,
-} from "./character-poster-app-state";
+  buildEncyclopediaCardImageRequest,
+  canSubmitEncyclopediaCard,
+  type EncyclopediaCardState,
+  getEncyclopediaCardErrorMessage,
+} from "./encyclopedia-card-app-state";
 import { PosterResultPanel } from "./character-poster-result-panel";
 import styles from "./prompt-apps.module.css";
 
 const NOTE_ROWS = 6;
 
-type PosterForm = Readonly<{
-  character: string;
-  note: string;
+type EncyclopediaForm = Readonly<{
   modelCode: string;
+  note: string;
+  topic: string;
 }>;
 
-type CharacterPosterController = Readonly<{
-  form: PosterForm;
+type EncyclopediaController = Readonly<{
+  form: EncyclopediaForm;
   handleSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   imageModels: readonly PublicModelSummary[];
   imageModelsState: ResourceState<readonly PublicModelSummary[]>;
   resolvedModelCode: string;
   selectedModel: PublicModelSummary | null;
-  setForm: (form: PosterForm) => void;
-  state: CharacterPosterState;
+  setForm: (form: EncyclopediaForm) => void;
+  state: EncyclopediaCardState;
 }>;
 
 type SubmitDisabledInput = Readonly<{
-  character: string;
   modelsState: ResourceState<readonly PublicModelSummary[]>;
   resolvedModelCode: string;
   selectedModel: PublicModelSummary | null;
-  state: CharacterPosterState;
+  state: EncyclopediaCardState;
+  topic: string;
 }>;
 
-export function CharacterPosterApp() {
-  const controller = useCharacterPosterController();
+export function EncyclopediaCardApp() {
+  const controller = useEncyclopediaController();
 
   return (
-    <AppShell activeHref="/apps" headerTitle="角色海报" leadingAction={<PromptAppBackLink />} workspaceMode>
+    <AppShell activeHref="/apps" headerTitle="科普百科图" leadingAction={<PromptAppBackLink />} workspaceMode>
       <div className={styles.posterWorkspace}>
-        <PosterFormPanel
+        <EncyclopediaFormPanel
           form={controller.form}
           models={controller.imageModels}
           modelsState={controller.imageModelsState}
@@ -83,9 +83,9 @@ function PromptAppBackLink() {
   );
 }
 
-function useCharacterPosterController(): CharacterPosterController {
-  const [form, setForm] = useState<PosterForm>({ character: "", note: "", modelCode: "" });
-  const [state, setState] = useState<CharacterPosterState>({ status: "idle" });
+function useEncyclopediaController(): EncyclopediaController {
+  const [form, setForm] = useState<EncyclopediaForm>({ modelCode: "", note: "", topic: "" });
+  const [state, setState] = useState<EncyclopediaCardState>({ status: "idle" });
   const modelsState = useApiResource(() => publicApi.getModels());
   const imageModelsState = getImageModelsState(modelsState);
   const { imageModels, resolvedModelCode, selectedModel } = imageModelsState.status === "ready"
@@ -94,57 +94,44 @@ function useCharacterPosterController(): CharacterPosterController {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (shouldBlockSubmit({ character: form.character, modelsState: imageModelsState, resolvedModelCode, selectedModel, state })) {
+    if (shouldBlockSubmit({ modelsState: imageModelsState, resolvedModelCode, selectedModel, state, topic: form.topic })) {
       return;
     }
     setState({ status: "submitting" });
     try {
-      const result = await publicApi.generateImage(buildCharacterPosterImageRequest(form, resolvedModelCode));
+      const result = await publicApi.generateImage(buildEncyclopediaCardImageRequest(form, resolvedModelCode));
       const completed = await waitForImageJobResults(publicApi, result.id);
       setState({ status: "success", jobId: completed.job.id, images: imageJobResultsToHistoryImages(completed.results) });
     } catch (error: unknown) {
-      setState({ status: "error", message: getCharacterPosterErrorMessage(error) });
+      setState({ status: "error", message: getEncyclopediaCardErrorMessage(error) });
     }
   }
 
-  return {
-    form,
-    handleSubmit,
-    imageModels,
-    imageModelsState,
-    resolvedModelCode,
-    selectedModel,
-    setForm,
-    state,
-  };
+  return { form, handleSubmit, imageModels, imageModelsState, resolvedModelCode, selectedModel, setForm, state };
 }
 
-function PosterFormPanel(props: Readonly<{
-  form: PosterForm;
+function EncyclopediaFormPanel(props: Readonly<{
+  form: EncyclopediaForm;
   models: readonly PublicModelSummary[];
   modelsState: ResourceState<readonly PublicModelSummary[]>;
-  onFormChange: (form: PosterForm) => void;
+  onFormChange: (form: EncyclopediaForm) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   resolvedModelCode: string;
   selectedModel: PublicModelSummary | null;
-  state: CharacterPosterState;
+  state: EncyclopediaCardState;
 }>) {
   const disabled = shouldBlockSubmit({
-    character: props.form.character,
     modelsState: props.modelsState,
     resolvedModelCode: props.resolvedModelCode,
     selectedModel: props.selectedModel,
     state: props.state,
+    topic: props.form.topic,
   });
 
   return (
     <form className={styles.posterPanel} onSubmit={props.onSubmit}>
-      <div className={styles.posterPanelHeader}>
-        <span className={styles.appStatus}>内置提示词</span>
-        <h1 className={styles.posterHeading}>角色海报</h1>
-        <p className={styles.posterLead}>输入角色信息，生成横版二次元插画海报。</p>
-      </div>
-      <CharacterInput form={props.form} onFormChange={props.onFormChange} />
+      <PanelHeader />
+      <TopicInput form={props.form} onFormChange={props.onFormChange} />
       <NoteInput form={props.form} onFormChange={props.onFormChange} />
       <ModelSelect
         form={props.form}
@@ -154,34 +141,44 @@ function PosterFormPanel(props: Readonly<{
         resolvedModelCode={props.resolvedModelCode}
       />
       <button className={styles.posterSubmit} disabled={disabled} type="submit">
-        {props.state.status === "submitting" ? "生成中" : "生成海报"}
+        {props.state.status === "submitting" ? "生成中" : "生成百科图"}
       </button>
     </form>
   );
 }
 
-function CharacterInput(props: Readonly<{
-  form: PosterForm;
-  onFormChange: (form: PosterForm) => void;
+function PanelHeader() {
+  return (
+    <div className={styles.posterPanelHeader}>
+      <span className={styles.appStatus}>内置提示词</span>
+      <h1 className={styles.posterHeading}>科普百科图</h1>
+      <p className={styles.posterLead}>输入主题词，生成竖版模块化科普信息图。</p>
+    </div>
+  );
+}
+
+function TopicInput(props: Readonly<{
+  form: EncyclopediaForm;
+  onFormChange: (form: EncyclopediaForm) => void;
 }>) {
   return (
     <label className={styles.fieldGroup}>
-      <span>角色</span>
+      <span>主题</span>
       <input
         className={styles.textInput}
-        name="character"
-        placeholder="例如：张夏"
+        name="topic"
+        placeholder="例如：狸花猫"
         required
-        value={props.form.character}
-        onChange={(event) => props.onFormChange({ ...props.form, character: event.target.value })}
+        value={props.form.topic}
+        onChange={(event) => props.onFormChange({ ...props.form, topic: event.target.value })}
       />
     </label>
   );
 }
 
 function NoteInput(props: Readonly<{
-  form: PosterForm;
-  onFormChange: (form: PosterForm) => void;
+  form: EncyclopediaForm;
+  onFormChange: (form: EncyclopediaForm) => void;
 }>) {
   return (
     <label className={styles.fieldGroup}>
@@ -189,7 +186,7 @@ function NoteInput(props: Readonly<{
       <textarea
         className={styles.textarea}
         name="note"
-        placeholder="可补充作品、身份、场景或风格倾向。"
+        placeholder="可补充受众、栏目重点或想突出的知识方向。"
         rows={NOTE_ROWS}
         value={props.form.note}
         onChange={(event) => props.onFormChange({ ...props.form, note: event.target.value })}
@@ -199,10 +196,10 @@ function NoteInput(props: Readonly<{
 }
 
 function ModelSelect(props: Readonly<{
-  form: PosterForm;
+  form: EncyclopediaForm;
   models: readonly PublicModelSummary[];
   modelsState: ResourceState<readonly PublicModelSummary[]>;
-  onFormChange: (form: PosterForm) => void;
+  onFormChange: (form: EncyclopediaForm) => void;
   resolvedModelCode: string;
 }>) {
   const statusText = getModelsStatusText(props.modelsState, props.models.length);
@@ -247,10 +244,7 @@ function shouldBlockSubmit(input: SubmitDisabledInput) {
   if (!input.selectedModel) {
     return true;
   }
-  return !canSubmitCharacterPoster({
-    character: input.character,
-    modelCode: input.resolvedModelCode,
-  });
+  return !canSubmitEncyclopediaCard({ modelCode: input.resolvedModelCode, topic: input.topic });
 }
 
 function getModelsStatusText(

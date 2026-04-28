@@ -1,0 +1,4 @@
+interface:
+  display_name: "Prompt App Builder"
+  short_description: "把预设提示词封装成项目内置小应用流程"
+  default_prompt: "Use $prompt-app-builder to turn this preset prompt into a high-quality embedded mini app."

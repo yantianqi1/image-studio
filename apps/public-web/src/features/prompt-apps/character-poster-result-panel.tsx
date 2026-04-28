@@ -9,10 +9,13 @@ import styles from "./prompt-apps.module.css";
 
 export function PosterResultPanel({ state }: Readonly<{ state: CharacterPosterState }>) {
   const [previewImage, setPreviewImage] = useState<ImagePreviewDialogImage | null>(null);
+  const resultStageClassName = state.status === "success"
+    ? `${styles.resultStage} ${styles.resultStagePreview}`
+    : styles.resultStage;
 
   return (
     <aside className={styles.posterResult}>
-      <div className={styles.resultStage}>
+      <div className={resultStageClassName}>
         <span className={styles.resultLabel}>{getResultLabel(state)}</span>
         {state.status === "idle" ? <p>填写左侧表单后，结果会显示在这里。</p> : null}
         {state.status === "submitting" ? <p>任务已提交，正在等待图片结果。</p> : null}
@@ -25,8 +28,12 @@ export function PosterResultPanel({ state }: Readonly<{ state: CharacterPosterSt
 }
 
 function PosterImageGrid(props: Readonly<{ images: readonly CharacterPosterImage[]; jobId: number; onPreview: (image: ImagePreviewDialogImage) => void }>) {
+  const gridClassName = props.images.length === 1
+    ? `${styles.posterImageGrid} ${styles.posterImageGridSingle}`
+    : styles.posterImageGrid;
+
   return (
-    <div className={styles.posterImageGrid}>
+    <div className={gridClassName}>
       {props.images.map((image) => (
         <figure className={styles.posterImageCard} key={image.id}>
           <button
