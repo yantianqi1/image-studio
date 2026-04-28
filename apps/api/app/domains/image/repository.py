@@ -133,6 +133,20 @@ def list_job_results(session: Session, job_id: int) -> list[ImageJobResult]:
     return list(session.execute(statement).scalars())
 
 
+def list_results_for_jobs(session: Session, job_ids: list[int]) -> dict[int, list[ImageJobResult]]:
+    if not job_ids:
+        return {}
+    statement = (
+        select(ImageJobResult)
+        .where(ImageJobResult.job_id.in_(job_ids))
+        .order_by(ImageJobResult.job_id.asc(), ImageJobResult.result_index.asc())
+    )
+    results_by_job_id = {job_id: [] for job_id in job_ids}
+    for result in session.execute(statement).scalars():
+        results_by_job_id.setdefault(result.job_id, []).append(result)
+    return results_by_job_id
+
+
 def list_reference_asset_ids(session: Session, *, job_id: int) -> list[int]:
     statement = select(ImageJobReferenceAsset.asset_id).where(ImageJobReferenceAsset.job_id == job_id)
     return list(session.execute(statement.order_by(ImageJobReferenceAsset.sequence.asc())).scalars())

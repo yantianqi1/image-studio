@@ -1,4 +1,5 @@
 import { apiFetch } from "@/lib/api-client";
+import type { AdminImageJob } from "@/lib/admin-image-job-types";
 
 export type WorkerSummary = Readonly<{
   image_jobs: {
@@ -230,9 +231,7 @@ export const adminApi = {
     });
   },
   imageJobs() {
-    return apiFetch<readonly { id: number; prompt: string; status: string; source: string; created_at: string }[]>(
-      "/api/admin/image/jobs",
-    );
+    return apiFetch<readonly AdminImageJob[]>("/api/admin/image/jobs");
   },
   workerSummary() {
     return apiFetch<WorkerSummary>("/api/admin/ops/worker-summary");

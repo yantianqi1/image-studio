@@ -1,0 +1,92 @@
+from fastapi.testclient import TestClient
+from sqlalchemy import select
+
+from apps.api.app.domains.auth.service import create_admin_account
+from apps.api.app.domains.image import service as image_service
+from apps.api.app.domains.image.models import ImageJobResult
+from apps.api.app.domains.llm.service import RenderedImage
+from apps.api.app.infra.db.session import initialize_database, session_scope
+from apps.api.app.main import create_app
+from apps.worker.worker.tasks import image_jobs as worker_image_jobs
+
+
+def build_client() -> TestClient:
+    initialize_database()
+    return TestClient(create_app())
+
+
+def register_user(client: TestClient) -> None:
+    response = client.post(
+        "/api/public/auth/register",
+        json={"email": "admin-image@example.com", "password": "top-secret"},
+    )
+    assert response.status_code == 201
+
+
+def seed_admin() -> None:
+    with session_scope() as session:
+        create_admin_account(session=session, username="root", password="admin-pass")
+
+
+def admin_login(client: TestClient) -> None:
+    response = client.post("/api/admin/auth/login", json={"username": "root", "password": "admin-pass"})
+    assert response.status_code == 200
+
+
+def create_image_job(client: TestClient, *, prompt: str) -> dict[str, object]:
+    response = client.post(
+        "/api/public/image/jobs",
+        json={"prompt": prompt, "model_code": "gpt-image-2", "requested_count": 1},
+    )
+    assert response.status_code == 201
+    return response.json()["data"]
+
+
+def build_rendered_image_from_job(_session=None, *, prompt: str, model_code: str, **_kwargs) -> RenderedImage:
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32">'
+        f"<text>{prompt}:{model_code}</text>"
+        "</svg>"
+    )
+    return RenderedImage(
+        content=svg.encode("utf-8"),
+        mime_type="image/svg+xml",
+        revised_prompt=prompt,
+        provider_request_id=f"test:{model_code}",
+    )
+
+
+def test_admin_image_jobs_include_results(monkeypatch):
+    monkeypatch.setattr(image_service, "render_image", build_rendered_image_from_job, raising=False)
+    client = build_client()
+    register_user(client)
+    seed_admin()
+    job = create_image_job(client, prompt="Admin visible image")
+    worker_image_jobs.run_next_image_job()
+    admin_login(client)
+
+    response = client.get("/api/admin/image/jobs")
+
+    assert response.status_code == 200
+    jobs = response.json()["data"]
+    target = next(item for item in jobs if item["id"] == job["id"])
+    assert target["results"][0]["asset_url"].startswith("/api/admin/image/assets/")
+    assert target["results"][0]["revised_prompt"] == "Admin visible image"
+
+
+def test_admin_can_read_any_image_job_result_asset(monkeypatch):
+    monkeypatch.setattr(image_service, "render_image", build_rendered_image_from_job, raising=False)
+    client = build_client()
+    register_user(client)
+    seed_admin()
+    job = create_image_job(client, prompt="Cross owner admin image")
+    worker_image_jobs.run_next_image_job()
+    with session_scope() as session:
+        result = session.execute(select(ImageJobResult).where(ImageJobResult.job_id == job["id"])).scalar_one()
+        asset_id = result.asset_id
+    admin_login(client)
+
+    response = client.get(f"/api/admin/image/assets/{asset_id}")
+
+    assert response.status_code == 200
+    assert "Cross owner admin image" in response.text

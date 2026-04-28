@@ -8,15 +8,16 @@ from apps.api.app.core.deps import get_db_session
 from apps.api.app.core.response import api_ok
 from apps.api.app.domains.auth.ownership import ensure_anonymous_owner, resolve_request_owner
 from apps.api.app.domains.auth.service import require_admin
+from apps.api.app.domains.image.admin_service import list_admin_jobs_with_results
 from apps.api.app.domains.image.assets import persist_uploaded_asset
 from apps.api.app.domains.image.schemas import CreateImageJobRequest
 from apps.api.app.domains.image.service import (
     create_job,
     delete_job,
+    get_asset,
     get_asset_for_owner,
     get_job_for_owner,
     list_job_results_for_owner,
-    list_jobs,
     list_jobs_for_owner,
 )
 from apps.api.app.domains.llm.client_provider import CLIENT_PROVIDER_SOURCE, read_client_provider_config
@@ -139,7 +140,23 @@ def should_consume_public_quota(*, owner, has_client_provider: bool) -> bool:
 @admin_router.get("/image/jobs")
 def get_admin_jobs(request: Request, session: Session = Depends(get_db_session)):
     require_admin(request, session)
-    return api_ok([job_payload(job) for job in list_jobs(session)])
+    return api_ok([
+        admin_job_payload(job, results=results)
+        for job, results in list_admin_jobs_with_results(session)
+    ])
+
+
+@admin_router.get("/image/assets/{asset_id}")
+def get_admin_image_asset(asset_id: int, request: Request, session: Session = Depends(get_db_session)):
+    require_admin(request, session)
+    asset = get_asset(session, asset_id)
+    return FileResponse(Path(asset.storage_path), media_type=asset.mime_type)
+
+
+def admin_job_payload(job, *, results) -> dict[str, object]:
+    payload = job_payload(job)
+    payload["results"] = [admin_result_payload(result) for result in results]
+    return payload
 
 
 def job_payload(job) -> dict[str, object]:
@@ -177,6 +194,12 @@ def result_payload(result) -> dict[str, object]:
         "revised_prompt": result.revised_prompt,
         "provider_request_id": result.provider_request_id,
     }
+
+
+def admin_result_payload(result) -> dict[str, object]:
+    payload = result_payload(result)
+    payload["asset_url"] = f"/api/admin/image/assets/{result.asset_id}"
+    return payload
 
 
 def upload_payload(asset) -> dict[str, object]:
