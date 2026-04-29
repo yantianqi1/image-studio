@@ -97,7 +97,7 @@ export const PROMPT_APPS: readonly PromptApp[] = [
     cover: {
       aspectRatio: "9:16",
       badge: "城市",
-      imageSrc: "/app-covers/city-poster.svg",
+      imageSrc: "/app-covers/city-poster.png",
       label: "城市宣传海报",
     },
     title: "城市宣传海报",

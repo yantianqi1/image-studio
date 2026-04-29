@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
@@ -142,15 +142,16 @@ test("prompt app catalog exposes city poster app", () => {
   assert.equal(app.title, "城市宣传海报");
   assert.equal(app.href, "/apps/city-poster");
   assert.equal(app.cover.label, "城市宣传海报");
-  assert.equal(app.cover.imageSrc, "/app-covers/city-poster.svg");
+  assert.equal(app.cover.imageSrc, "/app-covers/city-poster.png");
   assert.equal(app.cover.aspectRatio, "9:16");
   assert.equal(app.statusLabel, "内置提示词");
 });
 
-test("city poster app cover asset declares a stable 9:16 SVG viewport", () => {
-  const viewport = readSvgViewport("apps/public-web/public/app-covers/city-poster.svg");
+test("city poster app cover asset uses the provided preview PNG", () => {
+  const coverDimensions = readPngDimensions("apps/public-web/public/app-covers/city-poster.png");
+  const sourceDimensions = readPngDimensions("app_image/城市参考-西安.png");
 
-  assert.equal(viewport.width * 16, viewport.height * 9);
+  assert.deepEqual(coverDimensions, sourceDimensions);
 });
 
 test("character poster app is public and relies on image job API access rules", () => {
@@ -264,16 +265,5 @@ function readPngDimensions(path) {
   return {
     width: header.readUInt32BE(16),
     height: header.readUInt32BE(20),
-  };
-}
-
-function readSvgViewport(path) {
-  assert.equal(existsSync(path), true);
-  const source = readFileSync(path, "utf8");
-  const match = source.match(/viewBox="0 0 (?<width>\d+) (?<height>\d+)"/);
-  assert.ok(match?.groups);
-  return {
-    width: Number(match.groups.width),
-    height: Number(match.groups.height),
   };
 }
