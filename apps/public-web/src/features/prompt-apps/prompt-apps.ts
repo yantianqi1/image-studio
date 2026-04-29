@@ -2,6 +2,8 @@ export type { CityPosterPromptInput } from "./city-poster-prompt";
 export { buildCityPosterPrompt } from "./city-poster-prompt";
 export type { KoreanIdolContactSheetPromptInput } from "./korean-idol-contact-sheet-prompt";
 export { buildKoreanIdolContactSheetPrompt } from "./korean-idol-contact-sheet-prompt";
+export type { SongPoemScenePromptInput } from "./song-poem-scene-prompt";
+export { buildSongPoemScenePrompt } from "./song-poem-scene-prompt";
 
 export type PromptApp = Readonly<{
   access: "public-image-job-api";
@@ -103,6 +105,19 @@ export const PROMPT_APPS: readonly PromptApp[] = [
     title: "城市宣传海报",
     description: "输入城市和备注，生成新春国潮城市宣传海报。",
     href: "/apps/city-poster",
+    statusLabel: "内置提示词",
+  },
+  {
+    access: "public-image-job-api",
+    id: "song-poem-scene",
+    cover: {
+      badge: "宋词",
+      imageSrc: "/app-covers/song-poem-scene.svg",
+      label: "宋词双境图",
+    },
+    title: "宋词双境图",
+    description: "输入对应小诗，生成墙内墙外分割的宋代诗意场景。",
+    href: "/apps/song-poem-scene",
     statusLabel: "内置提示词",
   },
 ];

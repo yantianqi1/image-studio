@@ -4,8 +4,18 @@ import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
 
+const promptModuleMap = new Map([
+  ["./city-poster-prompt", "../src/features/prompt-apps/city-poster-prompt.ts"],
+  ["./korean-idol-contact-sheet-prompt", "../src/features/prompt-apps/korean-idol-contact-sheet-prompt.ts"],
+  ["./song-poem-scene-prompt", "../src/features/prompt-apps/song-poem-scene-prompt.ts"],
+]);
+
 function loadPromptApps() {
-  const source = readFileSync(new URL("../src/features/prompt-apps/prompt-apps.ts", import.meta.url), "utf8");
+  return loadTsModule("../src/features/prompt-apps/prompt-apps.ts", promptModuleMap);
+}
+
+function loadTsModule(path, requireMap = new Map()) {
+  const source = readFileSync(new URL(path, import.meta.url), "utf8");
   const compiled = ts.transpileModule(source, {
     compilerOptions: {
       module: ts.ModuleKind.CommonJS,
@@ -16,49 +26,13 @@ function loadPromptApps() {
     exports: {},
     module: { exports: {} },
     require: (path) => {
-      if (path === "./korean-idol-contact-sheet-prompt") {
-        return loadKoreanIdolContactSheetPrompt();
-      }
-      if (path === "./city-poster-prompt") {
-        return loadCityPosterPrompt();
+      const modulePath = requireMap.get(path);
+      if (modulePath) {
+        return loadTsModule(modulePath, requireMap);
       }
       throw new Error(`Unexpected require: ${path}`);
     },
   };
-  sandbox.exports = sandbox.module.exports;
-  vm.runInNewContext(compiled, sandbox);
-  return sandbox.module.exports;
-}
-
-function loadKoreanIdolContactSheetPrompt() {
-  const source = readFileSync(
-    new URL("../src/features/prompt-apps/korean-idol-contact-sheet-prompt.ts", import.meta.url),
-    "utf8",
-  );
-  const compiled = ts.transpileModule(source, {
-    compilerOptions: {
-      module: ts.ModuleKind.CommonJS,
-      target: ts.ScriptTarget.ES2022,
-    },
-  }).outputText;
-  const sandbox = { exports: {}, module: { exports: {} } };
-  sandbox.exports = sandbox.module.exports;
-  vm.runInNewContext(compiled, sandbox);
-  return sandbox.module.exports;
-}
-
-function loadCityPosterPrompt() {
-  const source = readFileSync(
-    new URL("../src/features/prompt-apps/city-poster-prompt.ts", import.meta.url),
-    "utf8",
-  );
-  const compiled = ts.transpileModule(source, {
-    compilerOptions: {
-      module: ts.ModuleKind.CommonJS,
-      target: ts.ScriptTarget.ES2022,
-    },
-  }).outputText;
-  const sandbox = { exports: {}, module: { exports: {} } };
   sandbox.exports = sandbox.module.exports;
   vm.runInNewContext(compiled, sandbox);
   return sandbox.module.exports;
@@ -73,6 +47,7 @@ test("prompt app catalog exposes character poster app", () => {
     "silhouette-universe-poster",
     "korean-idol-contact-sheet",
     "city-poster",
+    "song-poem-scene",
   ]);
   assert.equal(PROMPT_APPS[0].title, "角色海报");
   assert.equal(PROMPT_APPS[0].href, "/apps/character-poster");
@@ -152,6 +127,23 @@ test("city poster app cover asset uses the provided preview PNG", () => {
   const sourceDimensions = readPngDimensions("app_image/城市参考-西安.png");
 
   assert.deepEqual(coverDimensions, sourceDimensions);
+});
+
+test("prompt app catalog exposes song poem scene app", () => {
+  const { PROMPT_APPS } = loadPromptApps();
+  const app = PROMPT_APPS.find((item) => item.id === "song-poem-scene");
+
+  assert.equal(app.title, "宋词双境图");
+  assert.equal(app.href, "/apps/song-poem-scene");
+  assert.equal(app.cover.label, "宋词双境图");
+  assert.equal(app.cover.imageSrc, "/app-covers/song-poem-scene.svg");
+  assert.equal(app.statusLabel, "内置提示词");
+});
+
+test("song poem scene app cover asset uses a stable 16:9 SVG viewport", () => {
+  const source = readFileSync("apps/public-web/public/app-covers/song-poem-scene.svg", "utf8");
+
+  assert.match(source, /<svg[^>]+viewBox="0 0 1600 900"/);
 });
 
 test("character poster app is public and relies on image job API access rules", () => {
@@ -271,6 +263,22 @@ test("buildCityPosterPrompt trims input and omits empty note wrapper", () => {
 
   assert.match(prompt, /【城市】= \{成都\}/);
   assert.doesNotMatch(prompt.split("\n")[0], /（）/);
+});
+
+test("buildSongPoemScenePrompt inserts custom poem and keeps the hidden scene template", () => {
+  const { buildSongPoemScenePrompt } = loadPromptApps();
+  const prompt = buildSongPoemScenePrompt({
+    note: "光影更清亮，情绪更怅然",
+    poem: "花褪残红青杏小。燕子飞时，绿水人家绕。",
+  });
+  const trimmed = buildSongPoemScenePrompt({ note: "   ", poem: "  墙里秋千墙外道  " });
+
+  assert.match(prompt, /【对应小诗】= \{花褪残红青杏小。燕子飞时，绿水人家绕。\}（光影更清亮，情绪更怅然）/);
+  assert.match(prompt, /一堵高大的青砖墙作为画面中央分割线/);
+  assert.match(prompt, /墙体成为两个世界的界线/);
+  assert.match(prompt, /16:9/);
+  assert.match(trimmed, /【对应小诗】= \{墙里秋千墙外道\}/);
+  assert.doesNotMatch(trimmed.split("\n")[0], /（）/);
 });
 
 function readPngDimensions(path) {
