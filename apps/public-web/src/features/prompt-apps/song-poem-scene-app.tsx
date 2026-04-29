@@ -16,10 +16,10 @@ export function SongPoemSceneApp() {
       buildImageRequest={buildSongPoemSceneRequest}
       canSubmit={canSubmitSongPoemSceneForm}
       getErrorMessage={getSongPoemSceneErrorMessage}
-      headerTitle="宋词双境图"
-      lead="输入对应小诗，生成墙内墙外对照的宋代诗意场景。"
+      headerTitle="诗词双境图"
+      lead="输入对应诗词，生成墙内墙外对照的中国古典诗意场景。"
       notePlaceholder="可补充季节、光线、情绪浓度或画面题签。"
-      primaryLabel="对应小诗"
+      primaryLabel="对应诗词"
       primaryName="poem"
       primaryPlaceholder="例如：花褪残红青杏小"
       submitLabel="生成画面"

@@ -23,13 +23,13 @@ test("song poem scene page exposes poem form and app center back link", () => {
   const appSource = readRequiredSource(appFile, "song poem scene app");
   const sharedAppSource = readRequiredSource(sharedAppFile, "shared prompt image generate app");
 
-  assert.match(appSource, /headerTitle="宋词双境图"/);
+  assert.match(appSource, /headerTitle="诗词双境图"/);
   assert.match(sharedAppSource, /aria-label="返回应用中心"/);
   assert.match(sharedAppSource, /href="\/apps"/);
-  assert.match(appSource, /primaryLabel="对应小诗"/);
+  assert.match(appSource, /primaryLabel="对应诗词"/);
   assert.match(appSource, /primaryName="poem"/);
   assert.match(appSource, /primaryPlaceholder="例如：花褪残红青杏小"/);
-  assert.match(appSource, /输入对应小诗，生成墙内墙外对照的宋代诗意场景。/);
+  assert.match(appSource, /输入对应诗词，生成墙内墙外对照的中国古典诗意场景。/);
 });
 
 test("song poem scene page keeps the full prompt template hidden", () => {

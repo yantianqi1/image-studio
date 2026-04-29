@@ -1,4 +1,4 @@
-# 宋词双境图 Prompt App Plan
+# 诗词双境图 Prompt App Plan
 
 1. Add tests for catalog metadata, prompt builder, state helper, and route source.
 2. Verify the new tests fail because the app does not exist yet.

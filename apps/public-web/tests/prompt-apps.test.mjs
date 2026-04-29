@@ -133,9 +133,10 @@ test("prompt app catalog exposes song poem scene app", () => {
   const { PROMPT_APPS } = loadPromptApps();
   const app = PROMPT_APPS.find((item) => item.id === "song-poem-scene");
 
-  assert.equal(app.title, "宋词双境图");
+  assert.equal(app.title, "诗词双境图");
   assert.equal(app.href, "/apps/song-poem-scene");
-  assert.equal(app.cover.label, "宋词双境图");
+  assert.equal(app.cover.badge, "诗词");
+  assert.equal(app.cover.label, "诗词双境图");
   assert.equal(app.cover.imageSrc, "/app-covers/song-poem-scene.svg");
   assert.equal(app.statusLabel, "内置提示词");
 });
@@ -265,7 +266,7 @@ test("buildCityPosterPrompt trims input and omits empty note wrapper", () => {
   assert.doesNotMatch(prompt.split("\n")[0], /（）/);
 });
 
-test("buildSongPoemScenePrompt inserts custom poem and keeps the hidden scene template", () => {
+test("buildSongPoemScenePrompt inserts custom poetry and keeps the hidden scene template", () => {
   const { buildSongPoemScenePrompt } = loadPromptApps();
   const prompt = buildSongPoemScenePrompt({
     note: "光影更清亮，情绪更怅然",
@@ -273,11 +274,13 @@ test("buildSongPoemScenePrompt inserts custom poem and keeps the hidden scene te
   });
   const trimmed = buildSongPoemScenePrompt({ note: "   ", poem: "  墙里秋千墙外道  " });
 
-  assert.match(prompt, /【对应小诗】= \{花褪残红青杏小。燕子飞时，绿水人家绕。\}（光影更清亮，情绪更怅然）/);
+  assert.match(prompt, /【对应诗词】= \{花褪残红青杏小。燕子飞时，绿水人家绕。\}（光影更清亮，情绪更怅然）/);
+  assert.match(prompt, /中国古典诗意场景图/);
   assert.match(prompt, /一堵高大的青砖墙作为画面中央分割线/);
   assert.match(prompt, /墙体成为两个世界的界线/);
   assert.match(prompt, /16:9/);
-  assert.match(trimmed, /【对应小诗】= \{墙里秋千墙外道\}/);
+  assert.doesNotMatch(prompt, /宋代|宋词/);
+  assert.match(trimmed, /【对应诗词】= \{墙里秋千墙外道\}/);
   assert.doesNotMatch(trimmed.split("\n")[0], /（）/);
 });
 

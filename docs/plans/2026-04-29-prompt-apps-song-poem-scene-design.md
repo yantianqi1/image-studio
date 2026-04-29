@@ -1,10 +1,10 @@
-# 宋词双境图 Prompt App Design
+# 诗词双境图 Prompt App Design
 
 ## Goals
 
-- 新增公开小应用「宋词双境图」。
-- 将用户提供的宋代诗意场景提示词封装为隐藏模板。
-- 暴露「对应小诗」为用户可自定义输入，并保留可选备注用于画面微调。
+- 新增公开小应用「诗词双境图」。
+- 将用户提供的中国古典诗意场景提示词封装为隐藏模板。
+- 暴露「对应诗词」为用户可自定义输入，并保留可选备注用于画面微调。
 - 通过现有 public image job API 创建 `generate` 图片任务。
 
 ## Non-goals
@@ -16,9 +16,9 @@
 ## Route And Fields
 
 - Route: `/apps/song-poem-scene`
-- Title: `宋词双境图`
+- Title: `诗词双境图`
 - Slug: `song-poem-scene`
-- Required field: `对应小诗`
+- Required field: `对应诗词`
 - Optional field: `备注`
 - Mode: `generate`
 - Count: `requested_count: 1`
@@ -34,7 +34,7 @@
 ## Tests
 
 - catalog metadata and cover asset.
-- prompt builder inserts and trims `对应小诗`, and omits empty note wrapper.
+- prompt builder inserts and trims `对应诗词`, and omits empty note wrapper.
 - state helper validates poem/model and builds generate request.
 - page route wires the app component.
 - page source must not contain long fixed prompt phrases; those phrases must live in the prompt builder module.
