@@ -236,12 +236,26 @@
 @media (max-width: 760px) {
   .previewGrid {
     grid-template-columns: 1fr;
+    overflow: visible;
   }
 
   .chapterRow,
   .pageMeta {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .previewStage {
+    overflow: visible;
+    padding: 16px;
+  }
+
+  .previewActionsWrap {
+    justify-items: stretch;
+  }
+
+  .previewActions {
+    justify-content: flex-start;
   }
 }
 

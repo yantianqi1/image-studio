@@ -150,5 +150,11 @@
 @media (max-width: 760px) {
   .stepTrack {
     grid-template-columns: 1fr;
+    padding: 12px 18px;
+  }
+
+  .storyboardList {
+    overflow: visible;
+    padding: 16px 18px;
   }
 }

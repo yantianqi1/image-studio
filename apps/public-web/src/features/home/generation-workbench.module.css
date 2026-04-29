@@ -236,12 +236,14 @@
   .workspace,
   .workspaceCollapsed {
     display: grid;
-    height: 100%;
+    height: auto;
+    min-height: 0;
     align-content: start;
     align-items: start;
     grid-auto-rows: max-content;
     grid-template-columns: 1fr;
-    overflow-y: auto;
+    gap: 0.75rem;
+    overflow: visible;
   }
 
   .controlColumn,
@@ -253,6 +255,18 @@
 
   .resultPanel {
     height: auto;
-    min-height: 620px;
+    min-height: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .workbenchCard {
+    border-radius: 1.1rem;
+    padding: 1rem;
+  }
+
+  .textareaShell,
+  .priceSummary {
+    border-radius: 0.9rem;
   }
 }

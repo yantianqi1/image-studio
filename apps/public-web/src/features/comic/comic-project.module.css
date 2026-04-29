@@ -278,8 +278,19 @@
 }
 
 @media (max-width: 760px) {
+  .innerCard {
+    border: 0;
+    background: transparent;
+    padding: 0;
+  }
+
   .studioIntro {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .eventStream ol {
+    max-height: none;
+    overflow: visible;
   }
 }

@@ -201,11 +201,23 @@
   .workspace {
     grid-template-columns: 1fr;
     gap: 12px;
-    overflow-y: auto;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
   }
 
   .panel {
-    min-height: 520px;
+    min-height: 0;
+    border-radius: 20px;
+  }
+
+  .panelScroll {
+    overflow: visible;
+    padding: 16px;
+  }
+
+  .panelHeader {
+    padding: 18px 18px 12px;
   }
 
   .workspace > .panel:last-child {
