@@ -1,10 +1,14 @@
 import type { NextConfig } from "next";
 
 const API_BASE_URL = process.env.API_BASE_URL ?? "http://127.0.0.1:7800";
+const API_PROXY_BODY_LIMIT = "50mb";
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1", "localhost"],
   devIndicators: false,
+  experimental: {
+    proxyClientMaxBodySize: API_PROXY_BODY_LIMIT,
+  },
   transpilePackages: ["@commercial-studio/ui"],
   async rewrites() {
     return [

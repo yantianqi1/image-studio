@@ -121,6 +121,7 @@ cp .env.example .env
 - Docker 运行时，必须把该目录同时挂载到 `api` 与 `worker`
 - 生产环境应挂载到持久化卷；如果切换到对象存储，再调整对应实现
 - 公开上传入口使用 `POST /api/public/image/uploads`
+- 生产 Nginx 入口显式允许最大 `50MB` 请求体；超过时返回统一 JSON 错误 `payload_too_large`，不返回 HTML 错误页。确需关闭该代理限制时，将 `infra/nginx/nginx.prod.conf` 中的 `client_max_body_size` 改为 `0` 并重载 Nginx。
 
 ## 数据库迁移
 

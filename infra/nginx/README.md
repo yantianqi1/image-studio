@@ -22,6 +22,7 @@
 - `infra/nginx/nginx.prod.conf` -> `/etc/nginx/conf.d/default.conf`
 - `7700`：`/api/public/*`、`/health`、`/` 分别转发到 API 与 `public-web`
 - `7701`：`/api/admin/*`、`/health`、`/` 分别转发到 API 与 `admin-web`
+- 两个入口都显式配置 `client_max_body_size 50m`，避免 Nginx 默认 `1MB` 上传限制在到达 API 前返回 HTML 413。超过该限制时返回统一 JSON envelope；如需关闭代理层限制，可改为 `client_max_body_size 0` 并重载 Nginx。
 
 ## 生产域名建议
 
