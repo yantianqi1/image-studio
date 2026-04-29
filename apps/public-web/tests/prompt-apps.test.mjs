@@ -222,11 +222,25 @@ test("buildKoreanIdolContactSheetPrompt inserts reference line when uploaded", (
     note: "偏清晨、干净室内",
   });
 
-  assert.match(prompt, /【参考图】= 使用上传图片中的同一位成年女性人物作为九张照片唯一身份参考。/);
+  assert.match(prompt, /【参考图】= 使用上传图片中的同一位成年人物作为九张照片唯一身份参考/);
   assert.match(prompt, /【备注】= \{偏清晨、干净室内\}/);
   assert.match(prompt, /9:16 vertical/);
   assert.match(prompt, /3x3 grid collage/);
   assert.match(prompt, /professional photoshoot contact sheet/);
+});
+
+test("buildKoreanIdolContactSheetPrompt follows reference outfit and styling when uploaded", () => {
+  const { buildKoreanIdolContactSheetPrompt } = loadPromptApps();
+  const prompt = buildKoreanIdolContactSheetPrompt({
+    hasReferenceImage: true,
+    note: "保留原图红色外套和短发",
+  });
+
+  assert.match(prompt, /参考图中的人物身份、服装、发型、妆容、配饰和整体气质/);
+  assert.match(prompt, /不要替换为固定服装模板/);
+  assert.match(prompt, /用户备注优先于默认风格描述/);
+  assert.match(prompt, /【备注】= \{保留原图红色外套和短发\}/);
+  assert.doesNotMatch(prompt, /same white oversized button-up shirt/);
 });
 
 test("buildKoreanIdolContactSheetPrompt uses original identity without upload", () => {
@@ -236,7 +250,7 @@ test("buildKoreanIdolContactSheetPrompt uses original identity without upload", 
   assert.match(prompt, /原创成年韩系女性偶像人物/);
   assert.doesNotMatch(prompt, /上传图片/);
   assert.doesNotMatch(prompt, /【备注】=/);
-  assert.match(prompt, /adult Korean female idol portrait photoshoot series/);
+  assert.match(prompt, /adult Korean idol editorial portrait photoshoot series/);
 });
 
 test("buildCityPosterPrompt inserts city and note", () => {
