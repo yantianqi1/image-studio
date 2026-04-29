@@ -57,10 +57,10 @@ test("waitForImageJobResults surfaces terminal failure", async () => {
   );
 });
 
-test("shouldResumeImageJobHistory retries failed local history with a task id", () => {
+test("shouldResumeImageJobHistory ignores terminal failed history with a task id", () => {
   const { shouldResumeImageJobHistory } = loadPolling();
 
-  assert.equal(shouldResumeImageJobHistory({ status: "failed", taskId: 78, images: [] }), true);
+  assert.equal(shouldResumeImageJobHistory({ status: "failed", taskId: 78, images: [] }), false);
 });
 
 test("shouldResumeImageJobHistory ignores completed history with images", () => {
