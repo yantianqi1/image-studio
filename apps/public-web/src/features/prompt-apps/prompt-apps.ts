@@ -112,7 +112,7 @@ export const PROMPT_APPS: readonly PromptApp[] = [
     id: "song-poem-scene",
     cover: {
       badge: "诗词",
-      imageSrc: "/app-covers/song-poem-scene.svg",
+      imageSrc: "/app-covers/song-poem-scene.png",
       label: "诗词双境图",
     },
     title: "诗词双境图",

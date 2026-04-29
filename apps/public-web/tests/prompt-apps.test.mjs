@@ -137,14 +137,14 @@ test("prompt app catalog exposes song poem scene app", () => {
   assert.equal(app.href, "/apps/song-poem-scene");
   assert.equal(app.cover.badge, "诗词");
   assert.equal(app.cover.label, "诗词双境图");
-  assert.equal(app.cover.imageSrc, "/app-covers/song-poem-scene.svg");
+  assert.equal(app.cover.imageSrc, "/app-covers/song-poem-scene.png");
   assert.equal(app.statusLabel, "内置提示词");
 });
 
-test("song poem scene app cover asset uses a stable 16:9 SVG viewport", () => {
-  const source = readFileSync("apps/public-web/public/app-covers/song-poem-scene.svg", "utf8");
+test("song poem scene app cover asset uses the provided 16:9 image", () => {
+  const dimensions = readPngDimensions("apps/public-web/public/app-covers/song-poem-scene.png");
 
-  assert.match(source, /<svg[^>]+viewBox="0 0 1600 900"/);
+  assert.deepEqual(dimensions, { width: 1672, height: 941 });
 });
 
 test("character poster app is public and relies on image job API access rules", () => {
