@@ -13,7 +13,8 @@ const stylesSource = readFileSync(
 );
 
 test("prompt app home applies portrait cover class from catalog data", () => {
-  assert.match(homeSource, /cover\.aspectRatio === "3:4"/);
+  assert.match(homeSource, /isPortraitCover\(cover\)/);
+  assert.match(homeSource, /cover\.aspectRatio === "9:16"/);
   assert.match(homeSource, /styles\.appCoverPortrait/);
 });
 
@@ -24,7 +25,7 @@ test("portrait prompt app covers keep the shared card frame", () => {
   assert.doesNotMatch(portraitBlock, /aspect-ratio:/);
 });
 
-test("portrait prompt app covers contain the 3:4 image with side breathing room", () => {
+test("portrait prompt app covers contain vertical images with side breathing room", () => {
   const portraitImageBlock = stylesSource.match(/\.appCoverPortrait \.appCoverImage\s*\{[\s\S]*?\n\}/)?.[0] ?? "";
 
   assert.match(portraitImageBlock, /object-fit:\s*contain;/);

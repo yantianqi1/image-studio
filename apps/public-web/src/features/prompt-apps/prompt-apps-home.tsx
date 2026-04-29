@@ -61,7 +61,11 @@ function AppCover({
 }
 
 function getAppCoverClassName(cover: (typeof PROMPT_APPS)[number]["cover"]) {
-  return cover.aspectRatio === "3:4"
+  return isPortraitCover(cover)
     ? `${styles.appCover} ${styles.appCoverPortrait}`
     : styles.appCover;
+}
+
+function isPortraitCover(cover: (typeof PROMPT_APPS)[number]["cover"]) {
+  return cover.aspectRatio === "3:4" || cover.aspectRatio === "9:16";
 }

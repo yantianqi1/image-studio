@@ -12,6 +12,32 @@ function loadPromptApps() {
       target: ts.ScriptTarget.ES2022,
     },
   }).outputText;
+  const sandbox = {
+    exports: {},
+    module: { exports: {} },
+    require: (path) => {
+      if (path === "./korean-idol-contact-sheet-prompt") {
+        return loadKoreanIdolContactSheetPrompt();
+      }
+      throw new Error(`Unexpected require: ${path}`);
+    },
+  };
+  sandbox.exports = sandbox.module.exports;
+  vm.runInNewContext(compiled, sandbox);
+  return sandbox.module.exports;
+}
+
+function loadKoreanIdolContactSheetPrompt() {
+  const source = readFileSync(
+    new URL("../src/features/prompt-apps/korean-idol-contact-sheet-prompt.ts", import.meta.url),
+    "utf8",
+  );
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
+  }).outputText;
   const sandbox = { exports: {}, module: { exports: {} } };
   sandbox.exports = sandbox.module.exports;
   vm.runInNewContext(compiled, sandbox);
@@ -21,7 +47,12 @@ function loadPromptApps() {
 test("prompt app catalog exposes character poster app", () => {
   const { PROMPT_APPS } = loadPromptApps();
 
-  assert.deepEqual(Array.from(PROMPT_APPS, (app) => app.id), ["character-poster", "encyclopedia-card"]);
+  assert.deepEqual(Array.from(PROMPT_APPS, (app) => app.id), [
+    "character-poster",
+    "encyclopedia-card",
+    "silhouette-universe-poster",
+    "korean-idol-contact-sheet",
+  ]);
   assert.equal(PROMPT_APPS[0].title, "角色海报");
   assert.equal(PROMPT_APPS[0].href, "/apps/character-poster");
   assert.equal(PROMPT_APPS[0].cover.label, "角色海报");
@@ -44,6 +75,43 @@ test("encyclopedia card app cover asset is a 3:4 PNG", () => {
   const dimensions = readPngDimensions("apps/public-web/public/app-covers/encyclopedia-card-hajimi.png");
 
   assert.equal(dimensions.width * 4, dimensions.height * 3);
+});
+
+test("prompt app catalog exposes silhouette universe poster app", () => {
+  const { PROMPT_APPS } = loadPromptApps();
+  const app = PROMPT_APPS.find((item) => item.id === "silhouette-universe-poster");
+
+  assert.equal(app.title, "轮廓宇宙海报");
+  assert.equal(app.href, "/apps/silhouette-universe-poster");
+  assert.equal(app.cover.label, "轮廓宇宙海报");
+  assert.equal(app.cover.imageSrc, "/app-covers/silhouette-universe-poster.png");
+  assert.equal(app.cover.aspectRatio, "3:4");
+  assert.equal(app.statusLabel, "内置提示词");
+});
+
+test("silhouette universe poster app cover asset is a 3:4 PNG", () => {
+  const dimensions = readPngDimensions("apps/public-web/public/app-covers/silhouette-universe-poster.png");
+
+  assert.equal(dimensions.width * 4, dimensions.height * 3);
+});
+
+test("prompt app catalog exposes korean idol contact sheet app", () => {
+  const { PROMPT_APPS } = loadPromptApps();
+  const app = PROMPT_APPS.find((item) => item.id === "korean-idol-contact-sheet");
+
+  assert.equal(app.title, "韩系偶像九宫格");
+  assert.equal(app.href, "/apps/korean-idol-contact-sheet");
+  assert.equal(app.cover.label, "韩系偶像九宫格");
+  assert.equal(app.cover.imageSrc, "/app-covers/korean-idol-contact-sheet.png");
+  assert.equal(app.cover.aspectRatio, "9:16");
+  assert.equal(app.statusLabel, "内置提示词");
+});
+
+test("korean idol contact sheet app cover asset uses the provided preview PNG", () => {
+  const coverDimensions = readPngDimensions("apps/public-web/public/app-covers/korean-idol-contact-sheet.png");
+  const sourceDimensions = readPngDimensions("app_image/九宫格.png");
+
+  assert.deepEqual(coverDimensions, sourceDimensions);
 });
 
 test("character poster app is public and relies on image job API access rules", () => {
@@ -87,6 +155,43 @@ test("buildEncyclopediaCardPrompt trims input and omits empty note wrapper", () 
 
   assert.match(prompt, /【主题】= \{狸花猫\}/);
   assert.doesNotMatch(prompt.split("\n")[0], /（）/);
+});
+
+test("buildSilhouetteUniversePosterPrompt inserts topic and note", () => {
+  const { buildSilhouetteUniversePosterPrompt } = loadPromptApps();
+  const prompt = buildSilhouetteUniversePosterPrompt({ topic: "海底图书馆", note: "偏神圣、安静" });
+
+  assert.match(prompt, /【主题】= \{海底图书馆\}（偏神圣、安静）/);
+  assert.match(prompt, /轮廓宇宙 \/ 收藏版叙事海报/);
+  assert.match(prompt, /主轮廓载体/);
+  assert.match(prompt, /梦幻水彩质感与纸张印刷品气质/);
+});
+
+test("buildSilhouetteUniversePosterPrompt trims input and omits empty note wrapper", () => {
+  const { buildSilhouetteUniversePosterPrompt } = loadPromptApps();
+  const prompt = buildSilhouetteUniversePosterPrompt({ topic: "  海底图书馆  ", note: "   " });
+
+  assert.match(prompt, /【主题】= \{海底图书馆\}/);
+  assert.doesNotMatch(prompt.split("\n")[0], /（）/);
+});
+
+test("buildKoreanIdolContactSheetPrompt inserts optional note", () => {
+  const { buildKoreanIdolContactSheetPrompt } = loadPromptApps();
+  const prompt = buildKoreanIdolContactSheetPrompt({ note: "偏清晨、干净室内" });
+
+  assert.match(prompt, /【参考图】= 使用上传图片中的同一位成年女性人物作为九张照片唯一身份参考。/);
+  assert.match(prompt, /【备注】= \{偏清晨、干净室内\}/);
+  assert.match(prompt, /9:16 vertical/);
+  assert.match(prompt, /3x3 grid collage/);
+  assert.match(prompt, /professional photoshoot contact sheet/);
+});
+
+test("buildKoreanIdolContactSheetPrompt trims note and omits empty note line", () => {
+  const { buildKoreanIdolContactSheetPrompt } = loadPromptApps();
+  const prompt = buildKoreanIdolContactSheetPrompt({ note: "   " });
+
+  assert.doesNotMatch(prompt, /【备注】=/);
+  assert.match(prompt, /adult Korean female idol portrait photoshoot series/);
 });
 
 function readPngDimensions(path) {

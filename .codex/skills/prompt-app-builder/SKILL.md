@@ -7,7 +7,7 @@ description: Build or update commercial-studio embedded prompt mini apps from a 
 
 ## Purpose
 
-Turn a user-provided preset prompt into a project-native mini app under `apps/public-web/src/features/prompt-apps/`. Keep the full prompt hidden, expose only the variable fields users need, and submit through the existing public image job API.
+Turn a user-provided preset prompt into a project-native mini app under `apps/public-web/src/features/prompt-apps/`. Keep the full prompt hidden, expose only the variable fields users need, and submit through the existing public image job API. Treat `prompt-apps.ts` as the catalog surface, not as the long-prompt storage layer.
 
 ## First Decisions
 
@@ -28,10 +28,14 @@ If the prompt contains unsafe sexualization, minors, non-consensual, violent, or
 
 Use the existing prompt app structure:
 
-- Catalog and hidden prompt builders: `apps/public-web/src/features/prompt-apps/prompt-apps.ts`
+- Catalog and light prompt exports: `apps/public-web/src/features/prompt-apps/prompt-apps.ts`
+- Long prompt builders: `apps/public-web/src/features/prompt-apps/<slug>-prompt.ts`
+- Shared generate-only scaffold when multiple apps share the same shape: `apps/public-web/src/features/prompt-apps/prompt-image-generate-app.tsx`
+- Shared result panel when the same output UI is reused across apps: `apps/public-web/src/features/prompt-apps/prompt-app-result-panel.tsx`
 - App center: `apps/public-web/src/features/prompt-apps/prompt-apps-home.tsx`
 - Shared CSS: `apps/public-web/src/features/prompt-apps/prompt-apps.module.css`
-- Result panel: `apps/public-web/src/features/prompt-apps/character-poster-result-panel.tsx`
+- App cover assets: `apps/public-web/public/app-covers/<slug>.*`
+- Existing result panel: `apps/public-web/src/features/prompt-apps/character-poster-result-panel.tsx`
 - Existing example page: `apps/public-web/src/features/prompt-apps/character-poster-app.tsx`
 - Existing route pattern: `apps/public-web/src/app/apps/<slug>/page.tsx`
 - Public API: `apps/public-web/src/lib/public-api.ts`
@@ -67,10 +71,14 @@ Do not change backend APIs unless the requested app cannot be represented by the
      - `access: "public-image-job-api"`
    - Add a typed prompt input, e.g. `<Name>PromptInput`.
    - Add `build<Name>Prompt(input)`.
+   - Export the builder from `prompt-apps.ts` so tests and callers keep one public surface.
+   - Keep long fixed prose out of React pages and out of the catalog file; place it in the dedicated prompt builder file.
    - Convert `{placeholder}` to a required form field line:
      - `【主题】= {${topic}}（${note}）`
      - Omit the parenthesized note when empty.
-   - Keep the full preset prompt in the builder file, not in the React page.
+   - When adding a second app with the same `topic / note / modelCode` shape, reuse or extract a shared scaffold instead of copying model loading, submit, polling, and error handling again.
+   - If the preset prompt is long or likely to grow past a single screen, keep it in `apps/public-web/src/features/prompt-apps/<slug>-prompt.ts` and import it from the catalog file.
+   - Add a matching cover asset under `apps/public-web/public/app-covers/`; default to a 3:4 portrait cover unless the app is explicitly landscape.
 
 5. **State helper**
    - Create `apps/public-web/src/features/prompt-apps/<slug>-app-state.ts`.
@@ -93,9 +101,10 @@ Do not change backend APIs unless the requested app cannot be represented by the
      - `<AppShell activeHref="/apps" headerTitle="<title>" leadingAction={<PromptAppBackLink />} workspaceMode>`
      - `styles.posterWorkspace`
      - `styles.posterPanel`
-     - `PosterResultPanel`
+     - `PosterResultPanel` or a shared prompt-app result panel when the output UI is identical
      - same model loading, empty, and error labels.
    - Required fields should disable submit until valid.
+   - Keep page components thin: they should wire config, state, and copy, not host the full prompt text.
    - For upload/reference-image apps, reuse `publicApi.uploadImageAsset(file)` and store `{ assetId, assetUrl, mimeType }`; do not continue silently after upload failure.
 
 7. **Styling**
@@ -109,6 +118,8 @@ Do not change backend APIs unless the requested app cannot be represented by the
    - Add `apps/public-web/tests/<slug>-app-state.test.mjs`.
    - Add `apps/public-web/tests/<slug>-page.test.mjs`.
    - For hidden prompts, assert the React page source does not contain long fixed prompt phrases.
+   - Assert the long prose lives in the builder module, not the page module.
+   - Assert catalog cover metadata and cover asset existence; for PNG check dimensions, for SVG check the file exists and declares a stable viewport.
    - For image-reference apps, assert request mode/source asset behavior.
 
 9. **Verification**
@@ -122,7 +133,9 @@ Do not change backend APIs unless the requested app cannot be represented by the
    - If 7700 is already running, smoke check:
      - `curl -sS -o /tmp/<slug>.html -w "%{http_code}\n" http://127.0.0.1:7700/apps/<slug>`
      - `curl -sS -o /tmp/apps.html -w "%{http_code}\n" http://127.0.0.1:7700/apps`
+     - Inspect the saved HTML with targeted `rg` or `grep -q`; do not dump the whole page to the terminal.
    - If 7700 is not running, start only with `pnpm dev:public`; do not switch ports silently.
+   - Run `wc -l` on touched feature and test files before finalizing; split files that approach the project line limit instead of adding one more copy-pasted page.
 
 ## Quality Rules
 
@@ -131,4 +144,6 @@ Do not change backend APIs unless the requested app cannot be represented by the
 - Do not add mock success paths, silent fallbacks, caps, or fake generated data.
 - Surface backend and upload failures as explicit errors.
 - Keep functions under 50 lines and files under 300 lines; split helpers when needed.
+- Prefer generic names for shared prompt-app components once they are reused by more than one app.
+- Treat `apps/public-web/src/features/prompt-apps/prompt-apps.ts` as a registry and type surface, not a dumping ground for long narrative prompts.
 - Avoid broad refactors. Touch only prompt-app feature files, tests, route files, and the plan docs needed for the app.
