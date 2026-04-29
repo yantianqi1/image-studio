@@ -3,6 +3,7 @@ import { filterImageModels } from "@/features/home/generation-models";
 import {
   DEFAULT_ASPECT_RATIO,
   MIN_REQUESTED_COUNT,
+  type GenerationSourceImage,
   type GenerationState,
   type ImageFormState,
 } from "@/features/home/generation-workbench.types";
@@ -105,4 +106,16 @@ export function getFormFromHistory(history: GenerationHistoryItem | null): Image
     requested_count: history.count,
     aspect_ratio: history.aspectRatio,
   };
+}
+
+export function getReferenceImagesFromHistory(
+  history: GenerationHistoryItem | null,
+): readonly GenerationSourceImage[] {
+  if (!history) {
+    return [];
+  }
+  if (history.referenceImages !== undefined) {
+    return history.referenceImages;
+  }
+  return history.sourceImage ? [history.sourceImage] : [];
 }

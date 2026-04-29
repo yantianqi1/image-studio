@@ -41,7 +41,7 @@ def create_image_job(
     client_config = read_client_provider_config(request)
     if owner.user_id is None and client_config is None:
         require_anonymous_image_enabled(session)
-    if payload.mode == "edit":
+    if payload.mode == "edit" or payload.reference_asset_ids:
         require_uploads_enabled(session)
     job = create_job(
         session,
@@ -52,6 +52,7 @@ def create_image_job(
         requested_count=payload.requested_count,
         mode=payload.mode,
         source_asset_id=payload.source_asset_id,
+        reference_asset_ids=payload.reference_asset_ids,
         client_access_id=client_config.client_id if owner.user_id is None and client_config else None,
         client_provider_config=client_config if owner.user_id is None else None,
     )

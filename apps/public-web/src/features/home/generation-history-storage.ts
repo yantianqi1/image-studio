@@ -5,6 +5,7 @@ import {
   type GenerationHistoryItem,
   type GenerationHistoryUpdate,
 } from "@/features/home/generation-history.types";
+import type { GenerationSourceImage } from "@/features/home/generation-workbench.types";
 
 function now() {
   return new Date().toISOString();
@@ -31,6 +32,16 @@ function sortHistories(items: readonly GenerationHistoryItem[]) {
 
 function clampHistories(items: readonly GenerationHistoryItem[]) {
   return sortHistories(items).slice(0, MAX_GENERATION_HISTORY_ITEMS);
+}
+
+function resolveReferenceImages(
+  sourceImage: GenerationSourceImage | null | undefined,
+  referenceImages: readonly GenerationSourceImage[] | undefined,
+) {
+  if (referenceImages !== undefined) {
+    return referenceImages;
+  }
+  return sourceImage ? [sourceImage] : [];
 }
 
 function isHistoryItem(value: unknown): value is GenerationHistoryItem {
@@ -96,6 +107,7 @@ export function createGenerationHistory(
   draft: GenerationHistoryDraft,
 ) {
   const createdAt = now();
+  const referenceImages = resolveReferenceImages(draft.sourceImage, draft.referenceImages);
   const history: GenerationHistoryItem = {
     id: draft.id ?? generateHistoryId(),
     title: draft.title?.trim() || createHistoryTitle(draft.prompt),
@@ -106,7 +118,8 @@ export function createGenerationHistory(
     aspectRatio: draft.aspectRatio,
     status: draft.status ?? "pending",
     images: draft.images ?? [],
-    sourceImage: draft.sourceImage ?? null,
+    sourceImage: draft.sourceImage ?? referenceImages[0] ?? null,
+    referenceImages,
     errorMessage: draft.errorMessage,
     taskId: draft.taskId,
     taskStatus: draft.taskStatus,
@@ -141,6 +154,7 @@ export function updateGenerationHistory(
         status: patch.status ?? item.status,
         images: patch.images ?? item.images,
         sourceImage: patch.sourceImage === undefined ? item.sourceImage : patch.sourceImage,
+        referenceImages: patch.referenceImages === undefined ? item.referenceImages : patch.referenceImages,
         errorMessage:
           patch.errorMessage === undefined ? item.errorMessage : patch.errorMessage ?? undefined,
         taskId: patch.taskId === undefined ? item.taskId : patch.taskId ?? undefined,

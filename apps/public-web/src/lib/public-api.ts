@@ -22,6 +22,7 @@ export type ImageGenerationRequest = Readonly<{
   requested_count: number;
   mode?: "generate" | "edit";
   source_asset_id?: number;
+  reference_asset_ids?: readonly number[];
 }>;
 
 export type ImageGenerationResponse = Readonly<{

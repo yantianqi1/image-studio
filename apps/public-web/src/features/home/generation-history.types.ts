@@ -1,3 +1,5 @@
+import type { GenerationSourceImage } from "@/features/home/generation-workbench.types";
+
 export const GENERATION_HISTORY_STORAGE_KEY = "commercial_studio_generation_history";
 export const MAX_GENERATION_HISTORY_ITEMS = 50;
 
@@ -26,7 +28,8 @@ export type GenerationHistoryItem = Readonly<{
   aspectRatio: string;
   status: GenerationHistoryStatus;
   images: readonly GenerationHistoryImage[];
-  sourceImage?: import("@/features/home/generation-workbench.types").GenerationSourceImage | null;
+  sourceImage?: GenerationSourceImage | null;
+  referenceImages?: readonly GenerationSourceImage[];
   errorMessage?: string | null;
   taskId?: number | null;
   taskStatus?: string | null;
@@ -44,7 +47,8 @@ export type GenerationHistoryDraft = Readonly<{
   aspectRatio: string;
   status?: GenerationHistoryStatus;
   images?: readonly GenerationHistoryImage[];
-  sourceImage?: import("@/features/home/generation-workbench.types").GenerationSourceImage | null;
+  sourceImage?: GenerationSourceImage | null;
+  referenceImages?: readonly GenerationSourceImage[];
   errorMessage?: string | null;
   taskId?: number | null;
   taskStatus?: string | null;
@@ -59,7 +63,8 @@ export type GenerationHistoryUpdate = Readonly<{
   aspectRatio?: string;
   status?: GenerationHistoryStatus;
   images?: readonly GenerationHistoryImage[];
-  sourceImage?: import("@/features/home/generation-workbench.types").GenerationSourceImage | null;
+  sourceImage?: GenerationSourceImage | null;
+  referenceImages?: readonly GenerationSourceImage[];
   errorMessage?: string | null;
   taskId?: number | null;
   taskStatus?: string | null;

@@ -5,16 +5,18 @@ import type { GenerationSourceImage, SourceUploadState } from "@/features/home/g
 import styles from "./generation-prompt-image-upload.module.css";
 
 type PromptImageUploadProps = Readonly<{
-  sourceImage: GenerationSourceImage | null;
+  referenceImages: readonly GenerationSourceImage[];
   uploadState: SourceUploadState;
   onClear: () => void;
-  onUpload: (file: File) => Promise<void> | void;
+  onRemove: (index: number) => void;
+  onUpload: (files: readonly File[]) => Promise<void> | void;
 }>;
 
 export function GenerationPromptImageUpload({
-  sourceImage,
+  referenceImages,
   uploadState,
   onClear,
+  onRemove,
   onUpload,
 }: PromptImageUploadProps) {
   const isUploading = uploadState.status === "uploading";
@@ -23,25 +25,57 @@ export function GenerationPromptImageUpload({
     <div className={styles.uploadBar}>
       <div className={styles.uploadCopy}>
         <span className={styles.uploadTitle}>图生图 / 图片编辑</span>
-        <span className={styles.uploadText}>上传源图后，提交任务会进入图片编辑模式。</span>
+        <span className={styles.uploadText}>上传一张或多张参考图后，提交任务会进入图片编辑模式。</span>
       </div>
       <div className={styles.uploadActionGroup}>
-        {sourceImage ? <SourceThumb sourceImage={sourceImage} onClear={onClear} /> : null}
+        <ReferenceThumbs referenceImages={referenceImages} onRemove={onRemove} />
+        {referenceImages.length > 0 ? <ClearButton onClear={onClear} /> : null}
         <UploadButton disabled={isUploading} uploadState={uploadState} onUpload={onUpload} />
       </div>
     </div>
   );
 }
 
-function SourceThumb({
-  sourceImage,
-  onClear,
-}: Readonly<{ sourceImage: GenerationSourceImage; onClear: () => void }>) {
+function ReferenceThumbs({
+  referenceImages,
+  onRemove,
+}: Readonly<{ referenceImages: readonly GenerationSourceImage[]; onRemove: (index: number) => void }>) {
+  if (referenceImages.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className={styles.referenceList}>
+      {referenceImages.map((image, index) => (
+        <ReferenceThumb
+          key={`${image.assetId}-${index}`}
+          image={image}
+          index={index}
+          onRemove={onRemove}
+        />
+      ))}
+    </div>
+  );
+}
+
+function ReferenceThumb({
+  image,
+  index,
+  onRemove,
+}: Readonly<{ image: GenerationSourceImage; index: number; onRemove: (index: number) => void }>) {
   return (
     <div className={styles.sourceThumb}>
-      <img src={sourceImage.assetUrl} alt="图片编辑源图" />
-      <button type="button" onClick={onClear} aria-label="移除编辑源图">×</button>
+      <img src={image.assetUrl} alt="图片编辑参考图" />
+      <button type="button" onClick={() => onRemove(index)} aria-label="移除参考图">×</button>
     </div>
+  );
+}
+
+function ClearButton({ onClear }: Readonly<{ onClear: () => void }>) {
+  return (
+    <button className={styles.clearAllButton} type="button" onClick={onClear}>
+      清空
+    </button>
   );
 }
 
@@ -52,7 +86,7 @@ function UploadButton({
 }: Readonly<{
   disabled: boolean;
   uploadState: SourceUploadState;
-  onUpload: (file: File) => Promise<void> | void;
+  onUpload: (files: readonly File[]) => Promise<void> | void;
 }>) {
   return (
     <label className={styles.iconButton} aria-label="上传图片">
@@ -60,6 +94,7 @@ function UploadButton({
         accept="image/*"
         className="sr-only"
         disabled={disabled}
+        multiple
         type="file"
         onChange={(event) => handleFileChange(event.currentTarget, onUpload)}
       />
@@ -78,11 +113,14 @@ function ImageIcon() {
   );
 }
 
-function handleFileChange(input: HTMLInputElement, onUpload: (file: File) => Promise<void> | void) {
-  const file = input.files?.[0];
+function handleFileChange(
+  input: HTMLInputElement,
+  onUpload: (files: readonly File[]) => Promise<void> | void,
+) {
+  const files = Array.from(input.files ?? []);
   input.value = "";
-  if (!file) {
+  if (files.length === 0) {
     return;
   }
-  void onUpload(file);
+  void onUpload(files);
 }

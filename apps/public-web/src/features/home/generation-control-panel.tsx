@@ -22,12 +22,13 @@ type ControlPanelProps = Readonly<{
   modelsState: ResourceState<readonly PublicModelSummary[]>;
   resolvedModelCode: string;
   state: GenerationState;
-  sourceImage: GenerationSourceImage | null;
+  referenceImages: readonly GenerationSourceImage[];
   uploadState: SourceUploadState;
   onFormChange: Dispatch<SetStateAction<ImageFormState>>;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => Promise<void> | void;
-  onClearSourceImage: () => void;
-  onSourceUpload: (file: File) => Promise<void> | void;
+  onClearReferenceImages: () => void;
+  onRemoveReferenceImage: (index: number) => void;
+  onReferenceUpload: (files: readonly File[]) => Promise<void> | void;
 }>;
 
 
@@ -44,12 +45,13 @@ export function GenerationControlPanel({
   modelsState,
   resolvedModelCode,
   state,
-  sourceImage,
+  referenceImages,
   uploadState,
   onFormChange,
   onSubmit,
-  onClearSourceImage,
-  onSourceUpload,
+  onClearReferenceImages,
+  onRemoveReferenceImage,
+  onReferenceUpload,
 }: ControlPanelProps) {
   const isSubmitDisabled =
     state.status === "submitting" ||
@@ -65,11 +67,12 @@ export function GenerationControlPanel({
         </button>
         <PromptField
           form={form}
-          sourceImage={sourceImage}
+          referenceImages={referenceImages}
           uploadState={uploadState}
-          onClearSourceImage={onClearSourceImage}
+          onClearReferenceImages={onClearReferenceImages}
+          onRemoveReferenceImage={onRemoveReferenceImage}
           onFormChange={onFormChange}
-          onSourceUpload={onSourceUpload}
+          onReferenceUpload={onReferenceUpload}
         />
         <ModelField
           modelsState={modelsState}
@@ -86,18 +89,20 @@ export function GenerationControlPanel({
 
 function PromptField({
   form,
-  sourceImage,
+  referenceImages,
   uploadState,
-  onClearSourceImage,
+  onClearReferenceImages,
+  onRemoveReferenceImage,
   onFormChange,
-  onSourceUpload,
+  onReferenceUpload,
 }: Readonly<{
   form: ImageFormState;
-  sourceImage: GenerationSourceImage | null;
+  referenceImages: readonly GenerationSourceImage[];
   uploadState: SourceUploadState;
-  onClearSourceImage: () => void;
+  onClearReferenceImages: () => void;
+  onRemoveReferenceImage: (index: number) => void;
   onFormChange: Dispatch<SetStateAction<ImageFormState>>;
-  onSourceUpload: (file: File) => Promise<void> | void;
+  onReferenceUpload: (files: readonly File[]) => Promise<void> | void;
 }>) {
   return (
     <label className="grid gap-2 text-sm font-medium text-gray-900">
@@ -126,10 +131,11 @@ function PromptField({
           </button>
         </div>
         <GenerationPromptImageUpload
-          sourceImage={sourceImage}
+          referenceImages={referenceImages}
           uploadState={uploadState}
-          onClear={onClearSourceImage}
-          onUpload={onSourceUpload}
+          onClear={onClearReferenceImages}
+          onRemove={onRemoveReferenceImage}
+          onUpload={onReferenceUpload}
         />
       </div>
     </label>

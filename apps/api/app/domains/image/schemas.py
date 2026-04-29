@@ -1,4 +1,8 @@
+from typing import Annotated
+
 from pydantic import BaseModel, Field
+
+ReferenceAssetId = Annotated[int, Field(ge=1)]
 
 
 class CreateImageJobRequest(BaseModel):
@@ -7,3 +11,4 @@ class CreateImageJobRequest(BaseModel):
     requested_count: int = Field(default=1, ge=1, le=4)
     mode: str = Field(default="generate", pattern="^(generate|edit)$")
     source_asset_id: int | None = Field(default=None, ge=1)
+    reference_asset_ids: list[ReferenceAssetId] = Field(default_factory=list)

@@ -268,6 +268,55 @@ def test_openai_compatible_reference_assets_use_multipart_adapter(monkeypatch) -
     assert results_response.json()["data"][0]["provider_request_id"] == "req-ref-1"
 
 
+def test_public_image_job_accepts_reference_asset_ids(monkeypatch) -> None:
+    client = build_client()
+    seed_admin()
+    admin_login(client)
+    provider = create_openai_provider(client)
+    create_sellable_model(client, provider_id=provider["id"])
+    register_user(client, email="provider-public-reference@example.com")
+    first_upload = client.post("/api/public/image/uploads", files={"file": ("first.png", b"first", "image/png")})
+    second_upload = client.post("/api/public/image/uploads", files={"file": ("second.jpg", b"second", "image/jpeg")})
+    captured: dict[str, object] = {}
+
+    def fake_post(url: str, *, headers, data=None, files=None, timeout: float, **_kwargs):
+        captured["url"] = url
+        captured["headers"] = headers
+        captured["data"] = data
+        captured["file_fields"] = [item[0] for item in files or []]
+        captured["filenames"] = [item[1][0] for item in files or []]
+        captured["contents"] = [item[1][1].read() for item in files or []]
+        captured["timeout"] = timeout
+        payload = {"data": [{"b64_json": base64.b64encode(b"referenced-png").decode("ascii")}]}
+        return FakeHttpResponse(status_code=200, payload=payload, headers={"x-request-id": "req-public-ref-1"})
+
+    monkeypatch.setenv("OPENAI_PROVIDER_KEY", "sk-test")
+    monkeypatch.setattr("apps.api.app.domains.llm.openai_image.httpx.post", fake_post)
+    create_response = client.post(
+        "/api/public/image/jobs",
+        json={
+            "prompt": "Use both public references",
+            "model_code": "remote-image",
+            "requested_count": 1,
+            "mode": "generate",
+            "reference_asset_ids": [first_upload.json()["data"]["id"], second_upload.json()["data"]["id"]],
+        },
+    )
+
+    assert create_response.status_code == 201
+    job_id = create_response.json()["data"]["id"]
+    processed_job_id = worker_image_jobs.run_next_image_job()
+    results_response = client.get(f"/api/public/image/jobs/{job_id}/results")
+
+    assert processed_job_id == job_id
+    assert captured["url"] == "https://example.test/v1/images/edits"
+    assert captured["headers"] == {"Authorization": "Bearer sk-test"}
+    assert captured["file_fields"] == ["image", "image"]
+    assert captured["filenames"] == ["upload-1.png", "upload-2.jpg"]
+    assert captured["contents"] == [b"first", b"second"]
+    assert results_response.json()["data"][0]["provider_request_id"] == "req-public-ref-1"
+
+
 def test_openai_job_fails_when_api_key_env_missing(monkeypatch) -> None:
     client = build_client()
     seed_admin()
