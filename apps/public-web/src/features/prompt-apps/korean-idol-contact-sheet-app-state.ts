@@ -19,6 +19,11 @@ export type KoreanIdolContactSheetImageRequest = Readonly<{
   prompt: string;
   model_code: string;
   requested_count: number;
+  mode: "generate";
+}> | Readonly<{
+  prompt: string;
+  model_code: string;
+  requested_count: number;
   mode: "edit";
   source_asset_id: number;
 }>;
@@ -36,18 +41,27 @@ export type KoreanIdolContactSheetState =
   | Readonly<{ status: "error"; message: string }>;
 
 export function canSubmitKoreanIdolContactSheet(form: KoreanIdolContactSheetSubmitState) {
-  return form.sourceAssetId !== null && form.modelCode.trim().length > 0;
+  return form.modelCode.trim().length > 0;
 }
 
 export function buildKoreanIdolContactSheetImageRequest(
   form: KoreanIdolContactSheetPromptState,
   modelCode: string,
-  sourceAssetId: number,
+  sourceAssetId: number | null,
 ): KoreanIdolContactSheetImageRequest {
-  return {
-    prompt: buildKoreanIdolContactSheetPrompt({ note: form.note }),
+  const requestBase = {
+    prompt: buildKoreanIdolContactSheetPrompt({ hasReferenceImage: sourceAssetId !== null, note: form.note }),
     model_code: modelCode,
     requested_count: KOREAN_IDOL_CONTACT_SHEET_REQUESTED_COUNT,
+  };
+  if (sourceAssetId === null) {
+    return {
+      ...requestBase,
+      mode: "generate",
+    };
+  }
+  return {
+    ...requestBase,
     mode: "edit",
     source_asset_id: sourceAssetId,
   };

@@ -16,11 +16,11 @@ export function ReferenceImageField(props: Readonly<{
 
   return (
     <div className={`${styles.fieldGroup} ${uploadStyles.uploadField}`}>
-      <span>参考图</span>
+      <span>参考图（可选）</span>
       <div className={uploadStyles.uploadBox}>
         <div className={uploadStyles.uploadMeta}>
           <span className={uploadStyles.uploadTitle}>上传人物参考图</span>
-          <span className={uploadStyles.uploadHint}>参考图必填，用于保持九张照片中的脸部、发型与整体身份一致。</span>
+          <span className={uploadStyles.uploadHint}>上传后用于保持九张照片中的脸部、发型与整体身份一致；不上传则生成原创人物。</span>
         </div>
         {props.sourceImage ? <SourcePreview sourceImage={props.sourceImage} /> : null}
         <UploadActions disabled={disabled} sourceImage={props.sourceImage} onClear={props.onClear} onUpload={props.onUpload} />

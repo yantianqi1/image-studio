@@ -1,101 +1,109 @@
 import type { ChangeEvent, FormEvent } from "react";
 
-import type { GenerationSourceImage, SourceUploadState } from "@/features/home/generation-workbench.types";
 import type { PublicModelSummary } from "@/lib/public-api";
 import type { ResourceState } from "@/lib/use-api-resource";
 
-import {
-  canSubmitKoreanIdolContactSheet,
-  type KoreanIdolContactSheetForm,
-  type KoreanIdolContactSheetState,
-} from "./korean-idol-contact-sheet-app-state";
-import { ReferenceImageField } from "./korean-idol-contact-sheet-upload";
+import type {
+  PromptImageGenerateAppProps,
+  PromptImageGenerateForm,
+  PromptImageGenerateState,
+} from "./prompt-image-generate-app";
 import styles from "./prompt-apps.module.css";
 
-const NOTE_ROWS = 4;
+const NOTE_ROWS = 6;
 
 type SubmitDisabledInput = Readonly<{
+  canSubmit: PromptImageGenerateAppProps["canSubmit"];
   modelsState: ResourceState<readonly PublicModelSummary[]>;
+  primary: string;
   resolvedModelCode: string;
   selectedModel: PublicModelSummary | null;
-  sourceAssetId: number | null;
-  state: KoreanIdolContactSheetState;
-  uploadState: SourceUploadState;
+  state: PromptImageGenerateState;
 }>;
 
-export function KoreanIdolContactSheetFormPanel(props: Readonly<{
-  form: KoreanIdolContactSheetForm;
+export function PromptImageGenerateFormPanel(props: Readonly<{
+  app: PromptImageGenerateAppProps;
+  form: PromptImageGenerateForm;
   models: readonly PublicModelSummary[];
   modelsState: ResourceState<readonly PublicModelSummary[]>;
-  onClearSourceImage: () => void;
-  onFormChange: (form: KoreanIdolContactSheetForm) => void;
-  onSourceUpload: (file: File) => Promise<void>;
+  onFormChange: (form: PromptImageGenerateForm) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   resolvedModelCode: string;
   selectedModel: PublicModelSummary | null;
-  sourceImage: GenerationSourceImage | null;
-  state: KoreanIdolContactSheetState;
-  uploadState: SourceUploadState;
+  state: PromptImageGenerateState;
 }>) {
-  const disabled = isKoreanIdolContactSheetSubmitDisabled({
+  const disabled = isPromptImageGenerateSubmitDisabled({
+    canSubmit: props.app.canSubmit,
     modelsState: props.modelsState,
+    primary: props.form.primary,
     resolvedModelCode: props.resolvedModelCode,
     selectedModel: props.selectedModel,
-    sourceAssetId: props.sourceImage?.assetId ?? null,
     state: props.state,
-    uploadState: props.uploadState,
   });
 
   return (
     <form className={styles.posterPanel} onSubmit={props.onSubmit}>
-      <PanelHeader />
-      <ReferenceImageField
-        sourceImage={props.sourceImage}
-        uploadState={props.uploadState}
-        onClear={props.onClearSourceImage}
-        onUpload={props.onSourceUpload}
-      />
-      <NoteInput form={props.form} onFormChange={props.onFormChange} />
+      <PanelHeader lead={props.app.lead} title={props.app.headerTitle} />
+      <PrimaryInput form={props.form} app={props.app} onFormChange={props.onFormChange} />
+      <NoteInput form={props.form} notePlaceholder={props.app.notePlaceholder} onFormChange={props.onFormChange} />
       <ModelSelect
         form={props.form}
         models={props.models}
         modelsState={props.modelsState}
-        onFormChange={props.onFormChange}
         resolvedModelCode={props.resolvedModelCode}
+        onFormChange={props.onFormChange}
       />
       <button className={styles.posterSubmit} disabled={disabled} type="submit">
-        {props.state.status === "submitting" ? "生成中" : "生成九宫格"}
+        {props.state.status === "submitting" ? "生成中" : props.app.submitLabel}
       </button>
     </form>
   );
 }
 
-export function isKoreanIdolContactSheetSubmitDisabled(input: SubmitDisabledInput) {
-  if (input.state.status === "submitting" || input.uploadState.status === "uploading") {
+export function isPromptImageGenerateSubmitDisabled(input: SubmitDisabledInput) {
+  if (input.state.status === "submitting" || input.modelsState.status !== "ready") {
     return true;
   }
-  if (input.modelsState.status !== "ready" || !input.selectedModel) {
+  if (!input.selectedModel) {
     return true;
   }
-  return !canSubmitKoreanIdolContactSheet({
-    modelCode: input.resolvedModelCode,
-    sourceAssetId: input.sourceAssetId,
-  });
+  return !input.canSubmit({ modelCode: input.resolvedModelCode, primary: input.primary });
 }
 
-function PanelHeader() {
+function PanelHeader(props: Readonly<{ lead: string; title: string }>) {
   return (
     <div className={styles.posterPanelHeader}>
       <span className={styles.appStatus}>内置提示词</span>
-      <h1 className={styles.posterHeading}>韩系偶像九宫格</h1>
-      <p className={styles.posterLead}>上传参考图可保持同一人物身份；不上传则生成原创竖版九宫格写真拼图。</p>
+      <h1 className={styles.posterHeading}>{props.title}</h1>
+      <p className={styles.posterLead}>{props.lead}</p>
     </div>
   );
 }
 
+function PrimaryInput(props: Readonly<{
+  app: PromptImageGenerateAppProps;
+  form: PromptImageGenerateForm;
+  onFormChange: (form: PromptImageGenerateForm) => void;
+}>) {
+  return (
+    <label className={styles.fieldGroup}>
+      <span>{props.app.primaryLabel}</span>
+      <input
+        className={styles.textInput}
+        name={props.app.primaryName}
+        placeholder={props.app.primaryPlaceholder}
+        required
+        value={props.form.primary}
+        onChange={(event) => props.onFormChange({ ...props.form, primary: event.target.value })}
+      />
+    </label>
+  );
+}
+
 function NoteInput(props: Readonly<{
-  form: KoreanIdolContactSheetForm;
-  onFormChange: (form: KoreanIdolContactSheetForm) => void;
+  form: PromptImageGenerateForm;
+  notePlaceholder: string;
+  onFormChange: (form: PromptImageGenerateForm) => void;
 }>) {
   return (
     <label className={styles.fieldGroup}>
@@ -103,7 +111,7 @@ function NoteInput(props: Readonly<{
       <textarea
         className={styles.textarea}
         name="note"
-        placeholder="可补充想要的情绪、姿态、光线或服装细节。"
+        placeholder={props.notePlaceholder}
         rows={NOTE_ROWS}
         value={props.form.note}
         onChange={(event) => props.onFormChange({ ...props.form, note: event.target.value })}
@@ -113,10 +121,10 @@ function NoteInput(props: Readonly<{
 }
 
 function ModelSelect(props: Readonly<{
-  form: KoreanIdolContactSheetForm;
+  form: PromptImageGenerateForm;
   models: readonly PublicModelSummary[];
   modelsState: ResourceState<readonly PublicModelSummary[]>;
-  onFormChange: (form: KoreanIdolContactSheetForm) => void;
+  onFormChange: (form: PromptImageGenerateForm) => void;
   resolvedModelCode: string;
 }>) {
   const statusText = getModelsStatusText(props.modelsState, props.models.length);

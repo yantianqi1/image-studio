@@ -105,10 +105,12 @@ function useKoreanIdolContactSheetController(): KoreanIdolContactSheetController
     })) {
       return;
     }
-    if (!sourceImage) {
-      return;
-    }
-    await runKoreanIdolContactSheetJob({ form, resolvedModelCode: modelResult.resolvedModelCode, sourceAssetId: sourceImage.assetId, setState });
+    await runKoreanIdolContactSheetJob({
+      form,
+      resolvedModelCode: modelResult.resolvedModelCode,
+      sourceAssetId: sourceImage?.assetId ?? null,
+      setState,
+    });
   }
 
   return {
@@ -131,7 +133,7 @@ async function runKoreanIdolContactSheetJob(input: Readonly<{
   form: KoreanIdolContactSheetForm;
   resolvedModelCode: string;
   setState: (state: KoreanIdolContactSheetState) => void;
-  sourceAssetId: number;
+  sourceAssetId: number | null;
 }>) {
   input.setState({ status: "submitting" });
   try {

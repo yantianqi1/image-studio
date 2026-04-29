@@ -1,3 +1,5 @@
+export type { CityPosterPromptInput } from "./city-poster-prompt";
+export { buildCityPosterPrompt } from "./city-poster-prompt";
 export type { KoreanIdolContactSheetPromptInput } from "./korean-idol-contact-sheet-prompt";
 export { buildKoreanIdolContactSheetPrompt } from "./korean-idol-contact-sheet-prompt";
 
@@ -85,8 +87,22 @@ export const PROMPT_APPS: readonly PromptApp[] = [
       label: "韩系偶像九宫格",
     },
     title: "韩系偶像九宫格",
-    description: "上传参考图，生成身份一致的韩系偶像九宫格写真拼图。",
+    description: "可上传参考图，生成韩系偶像九宫格写真拼图。",
     href: "/apps/korean-idol-contact-sheet",
+    statusLabel: "内置提示词",
+  },
+  {
+    access: "public-image-job-api",
+    id: "city-poster",
+    cover: {
+      aspectRatio: "9:16",
+      badge: "城市",
+      imageSrc: "/app-covers/city-poster.svg",
+      label: "城市宣传海报",
+    },
+    title: "城市宣传海报",
+    description: "输入城市和备注，生成新春国潮城市宣传海报。",
+    href: "/apps/city-poster",
     statusLabel: "内置提示词",
   },
 ];

@@ -22,7 +22,8 @@ function loadKoreanIdolContactSheetAppState() {
     require: (path) => {
       if (path === "./prompt-apps") {
         return {
-          buildKoreanIdolContactSheetPrompt: ({ note }) => `备注=${note.trim()}`,
+          buildKoreanIdolContactSheetPrompt: ({ note, hasReferenceImage }) =>
+            `参考=${hasReferenceImage ? "yes" : "no"};备注=${note.trim()}`,
         };
       }
       throw new Error(`Unexpected require: ${path}`);
@@ -33,15 +34,30 @@ function loadKoreanIdolContactSheetAppState() {
   return sandbox.module.exports;
 }
 
-test("canSubmitKoreanIdolContactSheet requires source image and model after trim", () => {
+test("canSubmitKoreanIdolContactSheet requires only model after trim", () => {
   const { canSubmitKoreanIdolContactSheet } = loadKoreanIdolContactSheetAppState();
 
-  assert.equal(canSubmitKoreanIdolContactSheet({ sourceAssetId: null, modelCode: "gpt-image-2" }), false);
+  assert.equal(canSubmitKoreanIdolContactSheet({ sourceAssetId: null, modelCode: "gpt-image-2" }), true);
   assert.equal(canSubmitKoreanIdolContactSheet({ sourceAssetId: 12, modelCode: "   " }), false);
   assert.equal(canSubmitKoreanIdolContactSheet({ sourceAssetId: 12, modelCode: "gpt-image-2" }), true);
 });
 
-test("buildKoreanIdolContactSheetImageRequest fixes count and edit source", () => {
+test("buildKoreanIdolContactSheetImageRequest uses generate without source image", () => {
+  const { buildKoreanIdolContactSheetImageRequest } = loadKoreanIdolContactSheetAppState();
+  const request = buildKoreanIdolContactSheetImageRequest(
+    { note: " 偏清晨、干净室内 " },
+    "gpt-image-2",
+    null,
+  );
+
+  assert.equal(request.model_code, "gpt-image-2");
+  assert.equal(request.requested_count, 1);
+  assert.equal(request.mode, "generate");
+  assert.equal("source_asset_id" in request, false);
+  assert.equal(request.prompt, "参考=no;备注=偏清晨、干净室内");
+});
+
+test("buildKoreanIdolContactSheetImageRequest uses edit source when uploaded", () => {
   const { buildKoreanIdolContactSheetImageRequest } = loadKoreanIdolContactSheetAppState();
   const request = buildKoreanIdolContactSheetImageRequest(
     { note: " 偏清晨、干净室内 " },
@@ -53,7 +69,7 @@ test("buildKoreanIdolContactSheetImageRequest fixes count and edit source", () =
   assert.equal(request.requested_count, 1);
   assert.equal(request.mode, "edit");
   assert.equal(request.source_asset_id, 12);
-  assert.equal(request.prompt, "备注=偏清晨、干净室内");
+  assert.equal(request.prompt, "参考=yes;备注=偏清晨、干净室内");
 });
 
 test("getKoreanIdolContactSheetErrorMessage extracts Error message", () => {

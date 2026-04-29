@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
@@ -18,6 +18,9 @@ function loadPromptApps() {
     require: (path) => {
       if (path === "./korean-idol-contact-sheet-prompt") {
         return loadKoreanIdolContactSheetPrompt();
+      }
+      if (path === "./city-poster-prompt") {
+        return loadCityPosterPrompt();
       }
       throw new Error(`Unexpected require: ${path}`);
     },
@@ -44,6 +47,23 @@ function loadKoreanIdolContactSheetPrompt() {
   return sandbox.module.exports;
 }
 
+function loadCityPosterPrompt() {
+  const source = readFileSync(
+    new URL("../src/features/prompt-apps/city-poster-prompt.ts", import.meta.url),
+    "utf8",
+  );
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
+  }).outputText;
+  const sandbox = { exports: {}, module: { exports: {} } };
+  sandbox.exports = sandbox.module.exports;
+  vm.runInNewContext(compiled, sandbox);
+  return sandbox.module.exports;
+}
+
 test("prompt app catalog exposes character poster app", () => {
   const { PROMPT_APPS } = loadPromptApps();
 
@@ -52,6 +72,7 @@ test("prompt app catalog exposes character poster app", () => {
     "encyclopedia-card",
     "silhouette-universe-poster",
     "korean-idol-contact-sheet",
+    "city-poster",
   ]);
   assert.equal(PROMPT_APPS[0].title, "角色海报");
   assert.equal(PROMPT_APPS[0].href, "/apps/character-poster");
@@ -112,6 +133,24 @@ test("korean idol contact sheet app cover asset uses the provided preview PNG", 
   const sourceDimensions = readPngDimensions("app_image/九宫格.png");
 
   assert.deepEqual(coverDimensions, sourceDimensions);
+});
+
+test("prompt app catalog exposes city poster app", () => {
+  const { PROMPT_APPS } = loadPromptApps();
+  const app = PROMPT_APPS.find((item) => item.id === "city-poster");
+
+  assert.equal(app.title, "城市宣传海报");
+  assert.equal(app.href, "/apps/city-poster");
+  assert.equal(app.cover.label, "城市宣传海报");
+  assert.equal(app.cover.imageSrc, "/app-covers/city-poster.svg");
+  assert.equal(app.cover.aspectRatio, "9:16");
+  assert.equal(app.statusLabel, "内置提示词");
+});
+
+test("city poster app cover asset declares a stable 9:16 SVG viewport", () => {
+  const viewport = readSvgViewport("apps/public-web/public/app-covers/city-poster.svg");
+
+  assert.equal(viewport.width * 16, viewport.height * 9);
 });
 
 test("character poster app is public and relies on image job API access rules", () => {
@@ -175,9 +214,12 @@ test("buildSilhouetteUniversePosterPrompt trims input and omits empty note wrapp
   assert.doesNotMatch(prompt.split("\n")[0], /（）/);
 });
 
-test("buildKoreanIdolContactSheetPrompt inserts optional note", () => {
+test("buildKoreanIdolContactSheetPrompt inserts reference line when uploaded", () => {
   const { buildKoreanIdolContactSheetPrompt } = loadPromptApps();
-  const prompt = buildKoreanIdolContactSheetPrompt({ note: "偏清晨、干净室内" });
+  const prompt = buildKoreanIdolContactSheetPrompt({
+    hasReferenceImage: true,
+    note: "偏清晨、干净室内",
+  });
 
   assert.match(prompt, /【参考图】= 使用上传图片中的同一位成年女性人物作为九张照片唯一身份参考。/);
   assert.match(prompt, /【备注】= \{偏清晨、干净室内\}/);
@@ -186,12 +228,34 @@ test("buildKoreanIdolContactSheetPrompt inserts optional note", () => {
   assert.match(prompt, /professional photoshoot contact sheet/);
 });
 
-test("buildKoreanIdolContactSheetPrompt trims note and omits empty note line", () => {
+test("buildKoreanIdolContactSheetPrompt uses original identity without upload", () => {
   const { buildKoreanIdolContactSheetPrompt } = loadPromptApps();
-  const prompt = buildKoreanIdolContactSheetPrompt({ note: "   " });
+  const prompt = buildKoreanIdolContactSheetPrompt({ hasReferenceImage: false, note: "   " });
 
+  assert.match(prompt, /原创成年韩系女性偶像人物/);
+  assert.doesNotMatch(prompt, /上传图片/);
   assert.doesNotMatch(prompt, /【备注】=/);
   assert.match(prompt, /adult Korean female idol portrait photoshoot series/);
+});
+
+test("buildCityPosterPrompt inserts city and note", () => {
+  const { buildCityPosterPrompt } = loadPromptApps();
+  const prompt = buildCityPosterPrompt({ city: "杭州", note: "突出西湖、钱塘江、良渚文化" });
+
+  assert.match(prompt, /【城市】= \{杭州\}（突出西湖、钱塘江、良渚文化）/);
+  assert.match(prompt, /2026 城市宣传海报/);
+  assert.match(prompt, /长长的红色丝绸舞带/);
+  assert.match(prompt, /根据【城市】自动选取代表性地标/);
+  assert.doesNotMatch(prompt, /上海城市手绘图/);
+  assert.doesNotMatch(prompt, /东方明珠广播电视塔/);
+});
+
+test("buildCityPosterPrompt trims input and omits empty note wrapper", () => {
+  const { buildCityPosterPrompt } = loadPromptApps();
+  const prompt = buildCityPosterPrompt({ city: "  成都  ", note: "   " });
+
+  assert.match(prompt, /【城市】= \{成都\}/);
+  assert.doesNotMatch(prompt.split("\n")[0], /（）/);
 });
 
 function readPngDimensions(path) {
@@ -200,5 +264,16 @@ function readPngDimensions(path) {
   return {
     width: header.readUInt32BE(16),
     height: header.readUInt32BE(20),
+  };
+}
+
+function readSvgViewport(path) {
+  assert.equal(existsSync(path), true);
+  const source = readFileSync(path, "utf8");
+  const match = source.match(/viewBox="0 0 (?<width>\d+) (?<height>\d+)"/);
+  assert.ok(match?.groups);
+  return {
+    width: Number(match.groups.width),
+    height: Number(match.groups.height),
   };
 }
