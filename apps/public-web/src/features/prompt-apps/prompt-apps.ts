@@ -4,6 +4,8 @@ export type { KoreanIdolContactSheetPromptInput } from "./korean-idol-contact-sh
 export { buildKoreanIdolContactSheetPrompt } from "./korean-idol-contact-sheet-prompt";
 export type { SongPoemScenePromptInput } from "./song-poem-scene-prompt";
 export { buildSongPoemScenePrompt } from "./song-poem-scene-prompt";
+export type { XiaohongshuAvatarPosterPromptInput } from "./xiaohongshu-avatar-poster-prompt";
+export { buildXiaohongshuAvatarPosterPrompt } from "./xiaohongshu-avatar-poster-prompt";
 
 export type PromptApp = Readonly<{
   access: "public-image-job-api";
@@ -91,6 +93,20 @@ export const PROMPT_APPS: readonly PromptApp[] = [
     title: "韩系偶像九宫格",
     description: "可上传参考图，生成韩系偶像九宫格写真拼图。",
     href: "/apps/korean-idol-contact-sheet",
+    statusLabel: "内置提示词",
+  },
+  {
+    access: "public-image-job-api",
+    id: "xiaohongshu-avatar-poster",
+    cover: {
+      aspectRatio: "3:4",
+      badge: "小红书",
+      imageSrc: "/app-covers/xiaohongshu-avatar-poster.png",
+      label: "头像出逃海报",
+    },
+    title: "小红书头像出逃海报",
+    description: "上传主页截图，生成头像拟人化潮流视觉海报。",
+    href: "/apps/xiaohongshu-avatar-poster",
     statusLabel: "内置提示词",
   },
   {

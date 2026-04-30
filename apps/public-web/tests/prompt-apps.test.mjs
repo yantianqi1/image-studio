@@ -8,6 +8,7 @@ const promptModuleMap = new Map([
   ["./city-poster-prompt", "../src/features/prompt-apps/city-poster-prompt.ts"],
   ["./korean-idol-contact-sheet-prompt", "../src/features/prompt-apps/korean-idol-contact-sheet-prompt.ts"],
   ["./song-poem-scene-prompt", "../src/features/prompt-apps/song-poem-scene-prompt.ts"],
+  ["./xiaohongshu-avatar-poster-prompt", "../src/features/prompt-apps/xiaohongshu-avatar-poster-prompt.ts"],
 ]);
 
 function loadPromptApps() {
@@ -46,6 +47,7 @@ test("prompt app catalog exposes character poster app", () => {
     "encyclopedia-card",
     "silhouette-universe-poster",
     "korean-idol-contact-sheet",
+    "xiaohongshu-avatar-poster",
     "city-poster",
     "song-poem-scene",
   ]);
