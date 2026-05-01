@@ -1,111 +1,161 @@
 "use client";
 
-import type { GenerationHistoryItem } from "@/features/home/generation-history.types";
+import { memo } from "react";
+
+import type { GenerationHistoryItem as GenerationHistoryRecord } from "@/features/home/generation-history.types";
 import styles from "./generation-history.module.css";
 
 type HistoryItemProps = Readonly<{
-  item: GenerationHistoryItem;
+  item: GenerationHistoryRecord;
   active: boolean;
   editing: boolean;
   draftTitle: string;
-  onSelect: () => void;
-  onStartRename: () => void;
+  onSelectHistory: (historyId: string) => void;
+  onStartRename: (historyId: string, title: string) => void;
   onChangeDraftTitle: (value: string) => void;
-  onSaveRename: () => void;
+  onSaveRename: (historyId: string, title: string) => void;
   onCancelRename: () => void;
-  onDelete: () => void;
+  onDeleteHistory: (historyId: string, title: string) => void;
 }>;
 
-export function GenerationHistoryItem({
-  item,
-  active,
-  editing,
-  draftTitle,
-  onSelect,
-  onStartRename,
-  onChangeDraftTitle,
-  onSaveRename,
-  onCancelRename,
-  onDelete,
-}: HistoryItemProps) {
+const TITLE_PREVIEW_LENGTH = 13;
+const PROMPT_PREVIEW_LENGTH = 24;
+
+export const GenerationHistoryItem = memo(GenerationHistoryItemView, areHistoryItemPropsEqual);
+
+function GenerationHistoryItemView(props: HistoryItemProps) {
   return (
-    <article className={active ? `${styles.historyItem} ${styles.historyItemActive}` : styles.historyItem}>
+    <article className={props.active ? `${styles.historyItem} ${styles.historyItemActive}` : styles.historyItem}>
       <div className={styles.historyItemBody}>
-        {editing ? (
-          <div className="grid gap-2">
-            <input
-              autoFocus
-              className={styles.titleInput}
-              maxLength={40}
-              placeholder="请输入标题"
-              value={draftTitle}
-              onChange={(event) => onChangeDraftTitle(event.target.value)}
-            />
-            <div className="flex items-center justify-end gap-2">
-              <button className={styles.actionButton} type="button" onClick={onCancelRename} aria-label="取消重命名">
-                ×
-              </button>
-              <button
-                className={styles.actionButton}
-                type="button"
-                disabled={!draftTitle.trim()}
-                onClick={onSaveRename}
-                aria-label="保存标题"
-              >
-                ✓
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="grid gap-2">
-            <div className={styles.historyTitleRow}>
-              <button type="button" className={styles.historyTitleButton} onClick={onSelect}>
-                <div className={styles.historyTitle} title={item.title}>{formatCompactText(item.title, TITLE_PREVIEW_LENGTH)}</div>
-              </button>
-              <div className={styles.historyActions}>
-                <button className={styles.actionButton} type="button" onClick={onStartRename} aria-label="重命名历史记录">
-                  ✎
-                </button>
-                <button className={styles.actionButton} type="button" onClick={onDelete} aria-label="删除历史记录">
-                  🗑
-                </button>
-              </div>
-            </div>
-            <button type="button" className={styles.historyPreviewButton} onClick={onSelect}>
-              <div className={styles.previewText} title={item.prompt}>{formatCompactText(item.prompt, PROMPT_PREVIEW_LENGTH)}</div>
-              <div className={styles.historyMeta}>
-                <span>{item.modelName}</span>
-                <span>·</span>
-                <span>{item.count} 张</span>
-                <span>·</span>
-                <span>{item.aspectRatio}</span>
-                <span className={getBadgeClass(item.status)}>{getStatusLabel(item.status)}</span>
-              </div>
-              <div className={styles.historyTime}>{formatHistoryTime(item.updatedAt)}</div>
-            </button>
-          </div>
-        )}
+        {props.editing ? <EditingHistoryItem {...props} /> : <ReadonlyHistoryItem {...props} />}
       </div>
     </article>
   );
 }
 
-const TITLE_PREVIEW_LENGTH = 13;
-const PROMPT_PREVIEW_LENGTH = 24;
-
-function formatCompactText(value: string, maxLength: number) {
-  const collapsed = value.trim().replace(/\s+/g, " ");
-
-  if (!collapsed) {
-    return "暂无提示词";
-  }
-
-  return collapsed.length > maxLength
-    ? `${collapsed.slice(0, maxLength)}…`
-    : collapsed;
+function EditingHistoryItem({
+  draftTitle,
+  item,
+  onCancelRename,
+  onChangeDraftTitle,
+  onSaveRename,
+}: HistoryItemProps) {
+  return (
+    <div className="grid gap-2">
+      <input
+        autoFocus
+        className={styles.titleInput}
+        maxLength={40}
+        placeholder="请输入标题"
+        value={draftTitle}
+        onChange={(event) => onChangeDraftTitle(event.target.value)}
+      />
+      <div className="flex items-center justify-end gap-2">
+        <button className={styles.actionButton} type="button" onClick={onCancelRename} aria-label="取消重命名">
+          ×
+        </button>
+        <button
+          className={styles.actionButton}
+          type="button"
+          disabled={!draftTitle.trim()}
+          onClick={() => onSaveRename(item.id, draftTitle)}
+          aria-label="保存标题"
+        >
+          ✓
+        </button>
+      </div>
+    </div>
+  );
 }
 
-function getBadgeClass(status: GenerationHistoryItem["status"]) {
+function ReadonlyHistoryItem({
+  item,
+  onDeleteHistory,
+  onSelectHistory,
+  onStartRename,
+}: HistoryItemProps) {
+  const compactTitle = formatCompactText(item.title, TITLE_PREVIEW_LENGTH);
+  const compactPrompt = formatCompactText(item.prompt, PROMPT_PREVIEW_LENGTH);
+  return (
+    <div className="grid gap-2">
+      <div className={styles.historyTitleRow}>
+        <button type="button" className={styles.historyTitleButton} onClick={() => onSelectHistory(item.id)}>
+          <div className={styles.historyTitle} title={compactTitle}>{compactTitle}</div>
+        </button>
+        <div className={styles.historyActions}>
+          <button className={styles.actionButton} type="button" onClick={() => onStartRename(item.id, item.title)} aria-label="重命名历史记录">
+            ✎
+          </button>
+          <button className={styles.actionButton} type="button" onClick={() => onDeleteHistory(item.id, item.title)} aria-label="删除历史记录">
+            🗑
+          </button>
+        </div>
+      </div>
+      <button type="button" className={styles.historyPreviewButton} onClick={() => onSelectHistory(item.id)}>
+        <div className={styles.previewText} title={compactPrompt}>{compactPrompt}</div>
+        <HistoryMeta item={item} />
+        <div className={styles.historyTime}>{formatHistoryTime(item.updatedAt)}</div>
+      </button>
+    </div>
+  );
+}
+
+function HistoryMeta({ item }: Readonly<{ item: GenerationHistoryRecord }>) {
+  return (
+    <div className={styles.historyMeta}>
+      <span>{item.modelName}</span>
+      <span>·</span>
+      <span>{item.count} 张</span>
+      <span>·</span>
+      <span>{item.aspectRatio}</span>
+      <span className={getBadgeClass(item.status)}>{getStatusLabel(item.status)}</span>
+    </div>
+  );
+}
+
+function areHistoryItemPropsEqual(current: HistoryItemProps, next: HistoryItemProps) {
+  return current.item === next.item &&
+    current.active === next.active &&
+    current.editing === next.editing &&
+    current.draftTitle === next.draftTitle &&
+    current.onSelectHistory === next.onSelectHistory &&
+    current.onStartRename === next.onStartRename &&
+    current.onChangeDraftTitle === next.onChangeDraftTitle &&
+    current.onSaveRename === next.onSaveRename &&
+    current.onCancelRename === next.onCancelRename &&
+    current.onDeleteHistory === next.onDeleteHistory;
+}
+
+function formatCompactText(value: string, maxLength: number) {
+  const compact = collectCompactText(value, maxLength);
+  if (!compact.text) {
+    return "暂无提示词";
+  }
+  return compact.truncated ? `${compact.text}…` : compact.text;
+}
+
+function collectCompactText(value: string, maxLength: number) {
+  let text = "";
+  let pendingSpace = false;
+  for (const character of value) {
+    if (character.trim() === "") {
+      pendingSpace = text.length > 0;
+      continue;
+    }
+    if (text.length >= maxLength) {
+      return { text, truncated: true } as const;
+    }
+    const nextText = pendingSpace ? `${text} ${character}` : `${text}${character}`;
+    if (nextText.length > maxLength) {
+      return { text, truncated: true } as const;
+    }
+    text = nextText;
+    pendingSpace = false;
+  }
+  return { text, truncated: false } as const;
+}
+
+function getBadgeClass(status: GenerationHistoryRecord["status"]) {
   switch (status) {
     case "pending":
       return `${styles.historyBadge} ${styles.historyBadgePending}`;
@@ -120,7 +170,7 @@ function getBadgeClass(status: GenerationHistoryItem["status"]) {
   }
 }
 
-function getStatusLabel(status: GenerationHistoryItem["status"]) {
+function getStatusLabel(status: GenerationHistoryRecord["status"]) {
   switch (status) {
     case "pending":
       return "等待中";

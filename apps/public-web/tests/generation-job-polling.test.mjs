@@ -12,7 +12,7 @@ function loadPolling() {
       target: ts.ScriptTarget.ES2022,
     },
   }).outputText;
-  const sandbox = { Error, exports: {}, module: { exports: {} } };
+  const sandbox = { DOMException, Error, exports: {}, module: { exports: {} } };
   sandbox.exports = sandbox.module.exports;
   vm.runInNewContext(compiled, sandbox);
   return sandbox.module.exports;
@@ -79,6 +79,51 @@ test("waitForImageJobResults exposes succeeded job without result rows", async (
     () => waitForImageJobResults(api, 13, { sleep: async () => undefined }),
     /生成任务已完成，但没有返回图片结果/,
   );
+});
+
+test("waitForImageJobResults stops polling when aborted during sleep", async () => {
+  const { waitForImageJobResults } = loadPolling();
+  const controller = new AbortController();
+  let requestCount = 0;
+  const api = {
+    async getImageJob(jobId) {
+      requestCount += 1;
+      return { id: jobId, status: "running", error_message: null };
+    },
+    async getImageJobResults() {
+      throw new Error("should not fetch results for running job");
+    },
+  };
+
+  await assert.rejects(
+    () => waitForImageJobResults(api, 99, {
+      signal: controller.signal,
+      sleep: async () => controller.abort(),
+    }),
+    /aborted/i,
+  );
+  assert.equal(requestCount, 1);
+});
+
+test("imageJobResultsToHistoryImages keeps thumbnail urls for grid previews", () => {
+  const { imageJobResultsToHistoryImages } = loadPolling();
+  const images = imageJobResultsToHistoryImages([{
+    id: 9,
+    asset_id: 19,
+    asset_url: "/api/public/image/assets/19",
+    thumbnail_url: "/api/public/image/assets/19/thumbnail",
+    visibility: "private",
+    published_at: null,
+  }]);
+
+  assert.deepEqual(JSON.parse(JSON.stringify(images)), [{
+    id: "9",
+    assetId: 19,
+    url: "/api/public/image/assets/19",
+    thumbnailUrl: "/api/public/image/assets/19/thumbnail",
+    visibility: "private",
+    publishedAt: null,
+  }]);
 });
 
 test("shouldResumeImageJobHistory ignores terminal failed history with a task id", () => {

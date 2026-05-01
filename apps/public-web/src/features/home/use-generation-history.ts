@@ -111,13 +111,13 @@ export function useGenerationHistory() {
     (historyId: string) => {
       setHistories((current) => {
         const nextHistories = deleteGenerationHistory(current, historyId);
-        if (activeHistoryId === historyId) {
-          setActiveHistoryId(nextHistories[0]?.id ?? null);
-        }
+        setActiveHistoryId((currentActiveHistoryId) =>
+          currentActiveHistoryId === historyId ? nextHistories[0]?.id ?? null : currentActiveHistoryId,
+        );
         return nextHistories;
       });
     },
-    [activeHistoryId],
+    [],
   );
 
   return {

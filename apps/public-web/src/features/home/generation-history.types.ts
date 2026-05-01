@@ -14,6 +14,7 @@ export type GenerationHistoryStatus =
 export type GenerationHistoryImage = Readonly<{
   id: string;
   url: string;
+  thumbnailUrl?: string;
   assetId?: number;
   visibility?: ImageAssetVisibility;
   publishedAt?: string | null;

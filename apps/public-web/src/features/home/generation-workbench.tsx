@@ -1,5 +1,4 @@
 "use client";
-
 import { useCallback, useEffect, useState } from "react";
 
 import { buildAspectRatioPrompt } from "@/features/home/generation-aspect-ratio";
@@ -26,10 +25,7 @@ import {
 } from "@/features/home/generation-workbench.types";
 import { useGenerationHistory } from "@/features/home/use-generation-history";
 import { AppShell } from "@/features/shell/app-shell";
-import {
-  publicApi,
-  type ImageAssetVisibility,
-} from "@/lib/public-api";
+import { publicApi, type ImageAssetVisibility } from "@/lib/public-api";
 import { useApiResource } from "@/lib/use-api-resource";
 import {
   getFormFromHistory,
@@ -56,6 +52,9 @@ export function GenerationWorkbench() {
   const activeHistory = history.activeHistory;
   const completeHistory = history.completeHistory;
   const failHistory = history.failHistory;
+  const activeHistoryId = activeHistory?.id ?? null;
+  const activeTaskId = activeHistory?.taskId ?? null;
+  const shouldPollActiveHistory = shouldResumeImageJobHistory(activeHistory);
   const modelsState = useApiResource(() => publicApi.getModels());
   const imageModelsState = getImageModelsState(modelsState);
   const walletState = useApiResource(() => publicApi.getWalletSummary());
@@ -95,18 +94,19 @@ export function GenerationWorkbench() {
   }, [historySidebarCollapsed]);
 
   useEffect(() => {
-    const taskId = activeHistory?.taskId;
-    if (!taskId || !shouldResumeImageJobHistory(activeHistory)) {
+    if (!activeHistoryId || !activeTaskId || !shouldPollActiveHistory) {
       return;
     }
 
     let active = true;
-    waitForImageJobResults(publicApi, taskId, {
+    const abortController = new AbortController();
+    waitForImageJobResults(publicApi, activeTaskId, {
+      signal: abortController.signal,
       onJobUpdate: (job) => {
         if (!active || job.status === "succeeded") {
           return;
         }
-        completeHistory(activeHistory.id, {
+        completeHistory(activeHistoryId, {
           status: "generating",
           taskId: job.id,
           taskStatus: job.status,
@@ -117,7 +117,7 @@ export function GenerationWorkbench() {
         if (!active) {
           return;
         }
-        completeHistory(activeHistory.id, {
+        completeHistory(activeHistoryId, {
           status: "success",
           taskId: completed.job.id,
           taskStatus: completed.job.status,
@@ -131,14 +131,15 @@ export function GenerationWorkbench() {
           return;
         }
         const message = error instanceof Error ? error.message : "生成任务失败";
-        failHistory(activeHistory.id, message);
+        failHistory(activeHistoryId, message);
         setState({ status: "error", message });
       });
 
     return () => {
       active = false;
+      abortController.abort();
     };
-  }, [activeHistory, completeHistory, failHistory]);
+  }, [activeHistoryId, activeTaskId, shouldPollActiveHistory, completeHistory, failHistory]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();

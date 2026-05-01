@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { GenerationHistoryItem } from "@/features/home/generation-history-item";
 import type { GenerationHistoryItem as GenerationHistoryRecord } from "@/features/home/generation-history.types";
@@ -36,6 +36,36 @@ export function GenerationHistorySidebar({
 }: GenerationHistorySidebarProps) {
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
+  const handleSelectHistory = useCallback((historyId: string) => {
+    onSelectHistory(historyId);
+  }, [onSelectHistory]);
+  const handleStartRename = useCallback((historyId: string, title: string) => {
+    setEditingHistoryId(historyId);
+    setDraftTitle(title);
+  }, []);
+  const handleCancelRename = useCallback(() => {
+    setEditingHistoryId(null);
+    setDraftTitle("");
+  }, []);
+  const handleSaveRename = useCallback((historyId: string, title: string) => {
+    const nextTitle = title.trim();
+    if (!nextTitle) {
+      return;
+    }
+    onRenameHistory(historyId, nextTitle);
+    setEditingHistoryId(null);
+    setDraftTitle("");
+  }, [onRenameHistory]);
+  const handleDeleteHistory = useCallback((historyId: string, title: string) => {
+    if (!window.confirm(`确定删除「${title}」吗？`)) {
+      return;
+    }
+    onDeleteHistory(historyId);
+    if (editingHistoryId === historyId) {
+      setEditingHistoryId(null);
+      setDraftTitle("");
+    }
+  }, [editingHistoryId, onDeleteHistory]);
 
   const filteredHistories = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -67,34 +97,12 @@ export function GenerationHistorySidebar({
         active={item.id === activeHistoryId}
         editing={editingHistoryId === item.id}
         draftTitle={editingHistoryId === item.id ? draftTitle : item.title}
-        onSelect={() => onSelectHistory(item.id)}
-        onStartRename={() => {
-          setEditingHistoryId(item.id);
-          setDraftTitle(item.title);
-        }}
         onChangeDraftTitle={setDraftTitle}
-        onSaveRename={() => {
-          const nextTitle = draftTitle.trim();
-          if (!nextTitle) {
-            return;
-          }
-          onRenameHistory(item.id, nextTitle);
-          setEditingHistoryId(null);
-          setDraftTitle("");
-        }}
-        onCancelRename={() => {
-          setEditingHistoryId(null);
-          setDraftTitle("");
-        }}
-        onDelete={() => {
-          if (window.confirm(`确定删除「${item.title}」吗？`)) {
-            onDeleteHistory(item.id);
-            if (editingHistoryId === item.id) {
-              setEditingHistoryId(null);
-              setDraftTitle("");
-            }
-          }
-        }}
+        onCancelRename={handleCancelRename}
+        onDeleteHistory={handleDeleteHistory}
+        onSaveRename={handleSaveRename}
+        onSelectHistory={handleSelectHistory}
+        onStartRename={handleStartRename}
       />
     ))
   ) : searchQuery.trim() ? (

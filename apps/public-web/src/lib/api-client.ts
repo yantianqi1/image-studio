@@ -6,6 +6,7 @@ export type ApiRequestOptions = Readonly<{
   method?: ApiMethod;
   body?: unknown;
   token?: string;
+  signal?: AbortSignal;
 }>;
 
 export class ApiError extends Error {
@@ -123,6 +124,7 @@ export async function apiFetch<T>(
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
     cache: "no-store",
     credentials: "same-origin",
+    signal: options.signal,
   });
 
   const payload = await readResponsePayload(response);
@@ -139,7 +141,7 @@ export async function apiFetch<T>(
 
 export async function apiDownload(
   path: string,
-  options: Pick<ApiRequestOptions, "token"> = {},
+  options: Pick<ApiRequestOptions, "signal" | "token"> = {},
 ): Promise<Blob> {
   const endpoint = buildPublicUrl(path);
   const headers = new Headers({ Accept: "application/zip" });
@@ -154,6 +156,7 @@ export async function apiDownload(
     headers,
     cache: "no-store",
     credentials: "same-origin",
+    signal: options.signal,
   });
 
   if (!response.ok) {
@@ -170,7 +173,7 @@ export async function apiDownload(
 export async function apiUpload<T>(
   path: string,
   formData: FormData,
-  options: Pick<ApiRequestOptions, "token"> = {},
+  options: Pick<ApiRequestOptions, "signal" | "token"> = {},
 ): Promise<T> {
   const endpoint = buildPublicUrl(path);
   const headers = new Headers({ Accept: "application/json" });
@@ -186,6 +189,7 @@ export async function apiUpload<T>(
     body: formData,
     cache: "no-store",
     credentials: "same-origin",
+    signal: options.signal,
   });
   const payload = await readResponsePayload(response);
 

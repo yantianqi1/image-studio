@@ -19,6 +19,14 @@ test("generation result cards can publish or privatize rendered assets", () => {
   assert.match(actionsSource, /取消公开/);
 });
 
+test("generation result grid uses thumbnails without changing preview original url", () => {
+  assert.match(source, /getPreviewImageUrl/);
+  assert.match(source, /thumbnailUrl/);
+  assert.match(source, /loading="lazy"/);
+  assert.match(source, /decoding="async"/);
+  assert.match(source, /onClick=\{\(\) => onPreview\(\{ src: image\.url, alt: title \}\)\}/);
+});
+
 test("generation progress uses observable image job states", () => {
   assert.match(source, /提交成功/);
   assert.match(source, /队列等待/);

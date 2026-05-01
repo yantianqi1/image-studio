@@ -212,7 +212,13 @@ function ImageCard({
         type="button"
         onClick={() => onPreview({ src: image.url, alt: title })}
       >
-        <img src={image.url} alt={title} />
+        <img
+          src={getPreviewImageUrl(image)}
+          alt={title}
+          loading="lazy"
+          decoding="async"
+          sizes="(min-width: 1280px) 34vw, (min-width: 1024px) 50vw, 100vw"
+        />
       </button>
       <ResultActionBar
         hasImages
@@ -223,6 +229,16 @@ function ImageCard({
       />
     </article>
   );
+}
+
+function getPreviewImageUrl(image: GenerationHistoryImage) {
+  if (image.thumbnailUrl) {
+    return image.thumbnailUrl;
+  }
+  if (image.assetId !== undefined) {
+    return `/api/public/image/assets/${image.assetId}/thumbnail`;
+  }
+  return image.url;
 }
 
 function ErrorState({ historyItem, message, view }: Readonly<{ historyItem: GenerationHistoryItem | null; message: string; view: ResultView }>) {

@@ -1,4 +1,4 @@
-import { apiDownload, apiFetch, apiUpload } from "@/lib/api-client";
+import { apiDownload, apiFetch, apiUpload, type ApiRequestOptions } from "@/lib/api-client";
 import type {
   AnonymousSessionResponse,
   ComicCharacterReference,
@@ -89,11 +89,11 @@ export const publicApi = {
       return job;
     });
   },
-  getImageJob(jobId: number) {
-    return apiFetch<ImageGenerationResponse>(`/image/jobs/${jobId}`);
+  getImageJob(jobId: number, options: Pick<ApiRequestOptions, "signal"> = {}) {
+    return apiFetch<ImageGenerationResponse>(`/image/jobs/${jobId}`, options);
   },
-  getImageJobResults(jobId: number) {
-    return apiFetch<readonly ImageJobResult[]>(`/image/jobs/${jobId}/results`);
+  getImageJobResults(jobId: number, options: Pick<ApiRequestOptions, "signal"> = {}) {
+    return apiFetch<readonly ImageJobResult[]>(`/image/jobs/${jobId}/results`, options);
   },
   getImageGallery(scope: ImageGalleryScope) {
     return apiFetch<readonly ImageGalleryItem[]>(`/image/gallery?scope=${scope}`);
