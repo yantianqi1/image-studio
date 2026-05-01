@@ -1,3 +1,5 @@
+import type { ImageAssetVisibility } from "@/lib/public-api";
+
 export const MIN_REQUESTED_COUNT = 1;
 export const MAX_REQUESTED_COUNT = 4;
 export const DEFAULT_ASPECT_RATIO = "1:1";
@@ -7,6 +9,7 @@ export type ImageFormState = Readonly<{
   prompt: string;
   requested_count: number;
   aspect_ratio: string;
+  visibility: ImageAssetVisibility;
 }>;
 
 export type GenerationSourceImage = Readonly<{

@@ -13,6 +13,7 @@ import {
 import { ASPECT_RATIO_OPTIONS } from "@/features/home/generation-aspect-ratio";
 import { RequestStatus } from "@/features/home/generation-control-extras";
 import { GenerationPromptImageUpload } from "@/features/home/generation-prompt-image-upload";
+import { GenerationVisibilityField } from "@/features/home/generation-visibility-field";
 import type { PublicModelSummary } from "@/lib/public-api";
 import type { ResourceState } from "@/lib/use-api-resource";
 import styles from "./generation-workbench.module.css";
@@ -30,7 +31,6 @@ type ControlPanelProps = Readonly<{
   onRemoveReferenceImage: (index: number) => void;
   onReferenceUpload: (files: readonly File[]) => Promise<void> | void;
 }>;
-
 
 function clampRequestedCount(value: number) {
   return Math.min(MAX_REQUESTED_COUNT, Math.max(MIN_REQUESTED_COUNT, value));
@@ -81,6 +81,7 @@ export function GenerationControlPanel({
         />
         <AspectRatioPicker form={form} onFormChange={onFormChange} />
         <QuantityControl form={form} onFormChange={onFormChange} />
+        <GenerationVisibilityField form={form} onFormChange={onFormChange} />
         <RequestStatus modelsState={modelsState} state={state} />
       </form>
     </aside>

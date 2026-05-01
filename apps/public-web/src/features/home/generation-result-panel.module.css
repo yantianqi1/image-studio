@@ -172,6 +172,12 @@
   color: #9ca3af;
   font-size: 0.78rem;
 }
+.actionError {
+  flex-basis: 100%;
+  color: #b91c1c;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
 .primaryAction,
 .softAction {
   display: inline-flex;

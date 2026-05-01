@@ -1,4 +1,5 @@
 import type { GenerationSourceImage } from "@/features/home/generation-workbench.types";
+import type { ImageAssetVisibility } from "@/lib/public-api";
 
 export const GENERATION_HISTORY_STORAGE_KEY = "commercial_studio_generation_history";
 export const MAX_GENERATION_HISTORY_ITEMS = 50;
@@ -14,6 +15,8 @@ export type GenerationHistoryImage = Readonly<{
   id: string;
   url: string;
   assetId?: number;
+  visibility?: ImageAssetVisibility;
+  publishedAt?: string | null;
   width?: number;
   height?: number;
 }>;
@@ -26,6 +29,7 @@ export type GenerationHistoryItem = Readonly<{
   modelName: string;
   count: number;
   aspectRatio: string;
+  visibility?: ImageAssetVisibility;
   status: GenerationHistoryStatus;
   images: readonly GenerationHistoryImage[];
   sourceImage?: GenerationSourceImage | null;
@@ -45,6 +49,7 @@ export type GenerationHistoryDraft = Readonly<{
   modelName: string;
   count: number;
   aspectRatio: string;
+  visibility?: ImageAssetVisibility;
   status?: GenerationHistoryStatus;
   images?: readonly GenerationHistoryImage[];
   sourceImage?: GenerationSourceImage | null;
@@ -61,6 +66,7 @@ export type GenerationHistoryUpdate = Readonly<{
   modelName?: string;
   count?: number;
   aspectRatio?: string;
+  visibility?: ImageAssetVisibility;
   status?: GenerationHistoryStatus;
   images?: readonly GenerationHistoryImage[];
   sourceImage?: GenerationSourceImage | null;

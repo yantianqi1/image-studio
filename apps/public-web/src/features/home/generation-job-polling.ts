@@ -39,6 +39,8 @@ export function imageJobResultsToHistoryImages(results: readonly ImageJobResult[
     id: String(item.id),
     assetId: item.asset_id,
     url: item.asset_url,
+    visibility: item.visibility ?? "private",
+    publishedAt: item.published_at ?? null,
   }));
 }
 

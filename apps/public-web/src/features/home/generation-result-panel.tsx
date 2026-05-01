@@ -4,6 +4,7 @@
 import { useState } from "react";
 
 import type { GenerationHistoryImage, GenerationHistoryItem } from "@/features/home/generation-history.types";
+import { ResultActionBar, type ImageVisibilityChangeHandler } from "@/features/home/generation-result-actions";
 import { deriveResultView, type ResultStep, type ResultView } from "@/features/home/generation-result-state";
 import type { GenerationSourceImage, GenerationState } from "@/features/home/generation-workbench.types";
 import { ImagePreviewDialog, type ImagePreviewDialogImage } from "@/features/ui/image-preview-dialog";
@@ -23,17 +24,29 @@ const STEP_ORDER: readonly ResultStep[] = ["submit", "queue", "generate", "write
 type ResultPanelProps = Readonly<{
   historyItem: GenerationHistoryItem | null;
   state: GenerationState;
+  onImageVisibilityChange?: ImageVisibilityChangeHandler;
   onUseAsSourceImage?: (image: GenerationSourceImage) => void;
 }>;
 
-export function GenerationResultPanel({ historyItem, state, onUseAsSourceImage }: ResultPanelProps) {
+export function GenerationResultPanel({
+  historyItem,
+  state,
+  onImageVisibilityChange,
+  onUseAsSourceImage,
+}: ResultPanelProps) {
   const view = deriveResultView(historyItem, state);
 
   return (
     <section className={`${styles.workbenchCard} ${styles.resultPanel}`}>
       <ResultHeader view={view} />
       <div className={resultStyles.resultContent}>
-        <PreviewCanvas historyItem={historyItem} state={state} view={view} onUseAsSourceImage={onUseAsSourceImage} />
+        <PreviewCanvas
+          historyItem={historyItem}
+          state={state}
+          view={view}
+          onImageVisibilityChange={onImageVisibilityChange}
+          onUseAsSourceImage={onUseAsSourceImage}
+        />
       </div>
     </section>
   );
@@ -63,9 +76,27 @@ function StatusBadge({ view }: Readonly<{ view: ResultView }>) {
   return <span className={`${resultStyles.badge} ${toneClass}`}><span className={resultStyles.badgeDot} />{view.badgeLabel}</span>;
 }
 
-function PreviewCanvas({ historyItem, state, view, onUseAsSourceImage }: Readonly<{ historyItem: GenerationHistoryItem | null; state: GenerationState; view: ResultView; onUseAsSourceImage?: (image: GenerationSourceImage) => void }>) {
+function PreviewCanvas({
+  historyItem,
+  state,
+  view,
+  onImageVisibilityChange,
+  onUseAsSourceImage,
+}: Readonly<{
+  historyItem: GenerationHistoryItem | null;
+  state: GenerationState;
+  view: ResultView;
+  onImageVisibilityChange?: ImageVisibilityChangeHandler;
+  onUseAsSourceImage?: (image: GenerationSourceImage) => void;
+}>) {
   if (view.kind === "success_with_images" && historyItem) {
-    return <ImageGrid historyItem={historyItem} onUseAsSourceImage={onUseAsSourceImage} />;
+    return (
+      <ImageGrid
+        historyItem={historyItem}
+        onImageVisibilityChange={onImageVisibilityChange}
+        onUseAsSourceImage={onUseAsSourceImage}
+      />
+    );
   }
   if (view.kind === "failed") {
     return <ErrorState historyItem={historyItem} message={state.status === "error" ? state.message : historyItem?.errorMessage ?? view.description} view={view} />;
@@ -132,7 +163,15 @@ function SkeletonPreview() {
   return <div className={resultStyles.skeletonGrid}>{[0, 1, 2, 3].map((item) => <div key={item} className={resultStyles.skeletonTile} />)}</div>;
 }
 
-function ImageGrid({ historyItem, onUseAsSourceImage }: Readonly<{ historyItem: GenerationHistoryItem; onUseAsSourceImage?: (image: GenerationSourceImage) => void }>) {
+function ImageGrid({
+  historyItem,
+  onImageVisibilityChange,
+  onUseAsSourceImage,
+}: Readonly<{
+  historyItem: GenerationHistoryItem;
+  onImageVisibilityChange?: ImageVisibilityChangeHandler;
+  onUseAsSourceImage?: (image: GenerationSourceImage) => void;
+}>) {
   const [previewImage, setPreviewImage] = useState<ImagePreviewDialogImage | null>(null);
   const gridClass = historyItem.images.length > 1 ? `${resultStyles.imageGrid} ${resultStyles.imageGridMany}` : resultStyles.imageGrid;
   return (
@@ -144,6 +183,7 @@ function ImageGrid({ historyItem, onUseAsSourceImage }: Readonly<{ historyItem: 
             image={image}
             title={historyItem.title}
             onPreview={setPreviewImage}
+            onImageVisibilityChange={onImageVisibilityChange}
             onUseAsSourceImage={onUseAsSourceImage}
           />
         ))}
@@ -157,8 +197,15 @@ function ImageCard({
   image,
   title,
   onPreview,
+  onImageVisibilityChange,
   onUseAsSourceImage,
-}: Readonly<{ image: GenerationHistoryImage; title: string; onPreview: (image: ImagePreviewDialogImage) => void; onUseAsSourceImage?: (image: GenerationSourceImage) => void }>) {
+}: Readonly<{
+  image: GenerationHistoryImage;
+  title: string;
+  onPreview: (image: ImagePreviewDialogImage) => void;
+  onImageVisibilityChange?: ImageVisibilityChangeHandler;
+  onUseAsSourceImage?: (image: GenerationSourceImage) => void;
+}>) {
   return (
     <article className={resultStyles.imageCard}>
       <button
@@ -168,7 +215,13 @@ function ImageCard({
       >
         <img src={image.url} alt={title} />
       </button>
-      <ResultActionBar hasImages imageUrl={image.url} image={image} onUseAsSourceImage={onUseAsSourceImage} />
+      <ResultActionBar
+        hasImages
+        imageUrl={image.url}
+        image={image}
+        onImageVisibilityChange={onImageVisibilityChange}
+        onUseAsSourceImage={onUseAsSourceImage}
+      />
     </article>
   );
 }
@@ -186,17 +239,6 @@ function ErrorState({ historyItem, message, view }: Readonly<{ historyItem: Gene
         </div>
         <ResultActionBar hasImages={false} failed />
       </div>
-    </div>
-  );
-}
-
-function ResultActionBar({ hasImages, imageUrl, image, failed = false, onUseAsSourceImage }: Readonly<{ hasImages: boolean; imageUrl?: string; image?: GenerationHistoryImage; failed?: boolean; onUseAsSourceImage?: (image: GenerationSourceImage) => void }>) {
-  return (
-    <div className={resultStyles.actionBar}>
-      {hasImages && imageUrl ? <a className={resultStyles.primaryAction} href={imageUrl} download>下载图片</a> : <button className={resultStyles.primaryAction} type="button" disabled>结果生成后可下载</button>}
-      <button className={resultStyles.softAction} type="button" disabled>{failed ? "重新生成" : "继续等待"}</button>
-      {image?.assetId ? <button className={resultStyles.softAction} type="button" onClick={() => onUseAsSourceImage?.({ assetId: image.assetId ?? 0, assetUrl: image.url })}>用作编辑源图</button> : null}
-      {!hasImages ? <span className={resultStyles.actionHint}>系统会自动刷新，无需重复提交。</span> : null}
     </div>
   );
 }

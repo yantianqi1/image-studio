@@ -23,6 +23,7 @@ import { useGenerationHistory } from "@/features/home/use-generation-history";
 import { AppShell } from "@/features/shell/app-shell";
 import {
   publicApi,
+  type ImageAssetVisibility,
   type PublicModelSummary,
 } from "@/lib/public-api";
 import { useApiResource } from "@/lib/use-api-resource";
@@ -131,6 +132,7 @@ export function GenerationWorkbench() {
       modelName: submissionModel.model.display_name,
       count: form.requested_count,
       aspectRatio: form.aspect_ratio,
+      visibility: form.visibility,
       status: "pending",
       images: [],
       sourceImage: referenceImages[0] ?? null,
@@ -146,6 +148,7 @@ export function GenerationWorkbench() {
         requested_count: form.requested_count,
         mode: "generate",
         reference_asset_ids: referenceAssetIds,
+        visibility: form.visibility,
       });
       history.completeHistory(historyId, {
         status: "generating",
@@ -197,6 +200,22 @@ export function GenerationWorkbench() {
     setUploadState({ status: "idle" });
   }
 
+  function handleImageVisibilityChange(
+    assetId: number,
+    visibility: ImageAssetVisibility,
+    publishedAt: string | null,
+  ) {
+    if (!activeHistory) {
+      return;
+    }
+
+    completeHistory(activeHistory.id, {
+      images: activeHistory.images.map((image) =>
+        image.assetId === assetId ? { ...image, visibility, publishedAt } : image,
+      ),
+    });
+  }
+
   return (
     <AppShell
       activeHref="/"
@@ -237,6 +256,7 @@ export function GenerationWorkbench() {
           <GenerationResultPanel
             historyItem={history.activeHistory}
             state={state}
+            onImageVisibilityChange={handleImageVisibilityChange}
             onUseAsSourceImage={handleUseResultAsSource}
           />
         </div>
