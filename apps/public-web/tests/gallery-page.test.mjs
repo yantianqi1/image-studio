@@ -51,7 +51,11 @@ test("gallery page loads mine and public image scopes", () => {
 });
 
 test("gallery page uses a responsive masonry layout", () => {
-  assert.match(masonrySource, /useOrderedGalleryColumns/);
+  assert.match(masonrySource, /useMeasuredGalleryColumns/);
+  assert.match(masonrySource, /GALLERY_MASONRY_BREAKPOINTS/);
+  assert.match(masonrySource, /matchMedia/);
+  assert.match(masonrySource, /naturalWidth/);
+  assert.match(masonrySource, /columnHeights/);
   assert.match(stylesSource, /galleryGrid/);
   assert.match(stylesSource, /column/);
 });

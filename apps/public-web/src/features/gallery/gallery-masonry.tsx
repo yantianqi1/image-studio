@@ -1,14 +1,23 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { ImagePreviewDialogImage } from "@/features/ui/image-preview-dialog";
 import { formatDateTime } from "@/lib/formatters";
 import type { ImageGalleryItem } from "@/lib/public-api";
 import styles from "./gallery-page.module.css";
 
-const GALLERY_COLUMN_COUNT = 4;
+const DEFAULT_IMAGE_ASPECT_RATIO = 1.2;
+const MIN_GALLERY_COLUMN_COUNT = 1;
+
+const GALLERY_MASONRY_BREAKPOINTS = [
+  { minWidth: 1180, columns: 4 },
+  { minWidth: 820, columns: 3 },
+  { minWidth: 540, columns: 2 },
+] as const;
+
+type ImageAspectRatios = Readonly<Record<number, number>>;
 
 export function GalleryMasonry({
   items,
@@ -17,14 +26,29 @@ export function GalleryMasonry({
   items: readonly ImageGalleryItem[];
   onPreview: (image: ImagePreviewDialogImage) => void;
 }>) {
-  const columns = useOrderedGalleryColumns(items);
+  const [imageAspectRatios, setImageAspectRatios] = useState<ImageAspectRatios>({});
+  const columns = useMeasuredGalleryColumns(items, imageAspectRatios);
+  const updateImageAspectRatio = useCallback((assetId: number, width: number, height: number) => {
+    const aspectRatio = getSafeAspectRatio(width, height);
+    setImageAspectRatios((current) => {
+      if (current[assetId] === aspectRatio) {
+        return current;
+      }
+      return { ...current, [assetId]: aspectRatio };
+    });
+  }, []);
 
   return (
-    <div className={styles.galleryGrid}>
+    <div className={styles.galleryGrid} style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))` }}>
       {columns.map((column, columnIndex) => (
         <div key={columnIndex} className={styles.column}>
           {column.map((item) => (
-            <GalleryTile key={`${item.job_id}-${item.result_index}-${item.asset_id}`} item={item} onPreview={onPreview} />
+            <GalleryTile
+              key={`${item.job_id}-${item.result_index}-${item.asset_id}`}
+              item={item}
+              onImageMeasure={updateImageAspectRatio}
+              onPreview={onPreview}
+            />
           ))}
         </div>
       ))}
@@ -32,26 +56,82 @@ export function GalleryMasonry({
   );
 }
 
-export function useOrderedGalleryColumns(items: readonly ImageGalleryItem[]) {
+export function useMeasuredGalleryColumns(
+  items: readonly ImageGalleryItem[],
+  imageAspectRatios: ImageAspectRatios,
+) {
+  const columnCount = useGalleryColumnCount();
   return useMemo(
-    () => buildOrderedGalleryColumns(items, GALLERY_COLUMN_COUNT),
-    [items],
+    () => buildMeasuredGalleryColumns(items, columnCount, imageAspectRatios),
+    [columnCount, imageAspectRatios, items],
   );
 }
 
-function buildOrderedGalleryColumns(items: readonly ImageGalleryItem[], columnCount: number) {
+function useGalleryColumnCount() {
+  const [columnCount, setColumnCount] = useState(getGalleryColumnCount);
+
+  useEffect(() => {
+    const updateColumnCount = () => setColumnCount(getGalleryColumnCount());
+    const mediaQueries = GALLERY_MASONRY_BREAKPOINTS.map(({ minWidth }) =>
+      window.matchMedia(`(min-width: ${minWidth}px)`),
+    );
+
+    updateColumnCount();
+    mediaQueries.forEach((query) => query.addEventListener("change", updateColumnCount));
+    return () => mediaQueries.forEach((query) => query.removeEventListener("change", updateColumnCount));
+  }, []);
+
+  return columnCount;
+}
+
+function getGalleryColumnCount() {
+  if (typeof window === "undefined") {
+    return MIN_GALLERY_COLUMN_COUNT;
+  }
+  return GALLERY_MASONRY_BREAKPOINTS.find(({ minWidth }) =>
+    window.matchMedia(`(min-width: ${minWidth}px)`).matches,
+  )?.columns ?? MIN_GALLERY_COLUMN_COUNT;
+}
+
+function buildMeasuredGalleryColumns(
+  items: readonly ImageGalleryItem[],
+  columnCount: number,
+  imageAspectRatios: ImageAspectRatios,
+) {
   const columns: ImageGalleryItem[][] = Array.from({ length: columnCount }, () => []);
-  items.forEach((item, index) => {
-    columns[index % columnCount].push(item);
+  const columnHeights = Array.from({ length: columnCount }, () => 0);
+
+  items.forEach((item) => {
+    const columnIndex = getShortestColumnIndex(columnHeights);
+    columns[columnIndex].push(item);
+    columnHeights[columnIndex] += getEstimatedImageHeight(item, imageAspectRatios);
   });
   return columns;
 }
 
+function getShortestColumnIndex(columnHeights: readonly number[]) {
+  return columnHeights.reduce((targetIndex, height, index) =>
+    height < columnHeights[targetIndex] ? index : targetIndex, 0);
+}
+
+function getEstimatedImageHeight(item: ImageGalleryItem, imageAspectRatios: ImageAspectRatios) {
+  return imageAspectRatios[item.asset_id] ?? DEFAULT_IMAGE_ASPECT_RATIO;
+}
+
+function getSafeAspectRatio(width: number, height: number) {
+  if (width <= 0 || height <= 0) {
+    return DEFAULT_IMAGE_ASPECT_RATIO;
+  }
+  return height / width;
+}
+
 function GalleryTile({
   item,
+  onImageMeasure,
   onPreview,
 }: Readonly<{
   item: ImageGalleryItem;
+  onImageMeasure: (assetId: number, width: number, height: number) => void;
   onPreview: (image: ImagePreviewDialogImage) => void;
 }>) {
   const title = getImageTitle(item);
@@ -69,6 +149,13 @@ function GalleryTile({
           loading="lazy"
           decoding="async"
           sizes="(min-width: 1180px) 25vw, (min-width: 820px) 33vw, (min-width: 540px) 50vw, 100vw"
+          onLoad={(event) => {
+            onImageMeasure(
+              item.asset_id,
+              event.currentTarget.naturalWidth,
+              event.currentTarget.naturalHeight,
+            );
+          }}
         />
       </button>
       <div className={styles.tileOverlay}>
