@@ -42,6 +42,7 @@ export type ImageGenerationResponse = Readonly<{
 export type UploadedImageAsset = Readonly<{
   id: number;
   asset_url: string;
+  thumbnail_url?: string;
   mime_type: string;
   created_at: string;
 }>;

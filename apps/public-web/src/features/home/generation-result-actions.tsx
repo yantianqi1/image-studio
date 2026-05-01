@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import type { GenerationHistoryImage } from "@/features/home/generation-history.types";
+import { historyImageToSourceImage } from "@/features/home/generation-source-images";
 import type { GenerationSourceImage } from "@/features/home/generation-workbench.types";
 import { publicApi, type ImageAssetVisibility } from "@/lib/public-api";
 import resultStyles from "./generation-result-panel.module.css";
@@ -136,7 +137,7 @@ function VisibilityAction({
   visibility: ImageAssetVisibility;
   onToggle: () => void;
 }>) {
-  if (!image?.assetId) {
+  if (image?.assetId === undefined) {
     return null;
   }
 
@@ -154,7 +155,12 @@ function SourceImageAction({
   image?: GenerationHistoryImage;
   onUseAsSourceImage?: (image: GenerationSourceImage) => void;
 }>) {
-  if (!image?.assetId || !onUseAsSourceImage) {
+  if (!image || image.assetId === undefined || !onUseAsSourceImage) {
+    return null;
+  }
+
+  const sourceImage = historyImageToSourceImage(image);
+  if (!sourceImage) {
     return null;
   }
 
@@ -162,7 +168,7 @@ function SourceImageAction({
     <button
       className={resultStyles.softAction}
       type="button"
-      onClick={() => onUseAsSourceImage?.({ assetId: image.assetId ?? 0, assetUrl: image.url })}
+      onClick={() => onUseAsSourceImage(sourceImage)}
     >
       用作编辑源图
     </button>

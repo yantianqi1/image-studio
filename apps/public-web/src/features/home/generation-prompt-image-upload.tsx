@@ -2,6 +2,7 @@
 "use client";
 
 import type { GenerationSourceImage, SourceUploadState } from "@/features/home/generation-workbench.types";
+import { getGenerationSourceImagePreviewUrl } from "@/features/home/generation-source-images";
 import styles from "./generation-prompt-image-upload.module.css";
 
 type PromptImageUploadProps = Readonly<{
@@ -65,7 +66,12 @@ function ReferenceThumb({
 }: Readonly<{ image: GenerationSourceImage; index: number; onRemove: (index: number) => void }>) {
   return (
     <div className={styles.sourceThumb}>
-      <img src={image.assetUrl} alt="图片编辑参考图" />
+      <img
+        src={getGenerationSourceImagePreviewUrl(image)}
+        alt="图片编辑参考图"
+        loading="lazy"
+        decoding="async"
+      />
       <button type="button" onClick={() => onRemove(index)} aria-label="移除参考图">×</button>
     </div>
   );

@@ -12,6 +12,7 @@ export type ImageFormState = Readonly<{
 export type GenerationSourceImage = Readonly<{
   assetId: number;
   assetUrl: string;
+  thumbnailUrl?: string;
   mimeType?: string;
 }>;
 
