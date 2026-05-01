@@ -137,7 +137,7 @@ export function GenerationWorkbench() {
       modelName: submissionModel.model.display_name,
       count: form.requested_count,
       aspectRatio: form.aspect_ratio,
-      visibility: form.visibility,
+      visibility: "private",
       status: "pending",
       images: [],
       sourceImage: referenceImages[0] ?? null,
@@ -153,7 +153,7 @@ export function GenerationWorkbench() {
         requested_count: form.requested_count,
         mode: "generate",
         reference_asset_ids: referenceAssetIds,
-        visibility: form.visibility,
+        visibility: "private",
       });
       history.completeHistory(historyId, {
         status: "generating",

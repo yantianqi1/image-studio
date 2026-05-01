@@ -20,7 +20,6 @@ export const INITIAL_FORM: ImageFormState = {
   prompt: "",
   requested_count: MIN_REQUESTED_COUNT,
   aspect_ratio: DEFAULT_ASPECT_RATIO,
-  visibility: "private",
 };
 
 export type SubmissionModelResult =
@@ -123,7 +122,6 @@ export function getFormFromHistory(history: GenerationHistoryItem | null): Image
     prompt: history.prompt,
     requested_count: history.count,
     aspect_ratio: history.aspectRatio,
-    visibility: history.visibility ?? "private",
   };
 }
 

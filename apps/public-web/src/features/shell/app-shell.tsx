@@ -28,7 +28,7 @@ export function AppShell({
   eyebrow,
   title,
   description,
-  brandLabel = "image2.mom",
+  brandLabel = "Image Studio",
   navAside,
   leadingAction,
   workspaceMode = false,
@@ -68,7 +68,6 @@ function AppHeader(props: AppHeaderProps) {
         </div>
         <MainNav activeHref={props.activeHref} />
         <div className={styles.actions}>
-          <CreateAction />
           <div className={styles.quotaBadge}>
             <PublicQuotaStatusBadge />
           </div>
@@ -85,7 +84,7 @@ function AppHeader(props: AppHeaderProps) {
 function BrandLink(props: Readonly<{ brandLabel: string; headerTitle?: string }>) {
   return (
     <>
-      <Link href="/" className={styles.brand} aria-label="image2.mom 首页">
+      <Link href="/" className={styles.brand} aria-label={`${props.brandLabel} 首页`}>
         <span className={styles.brandIcon}>
           <BrandMark />
         </span>
@@ -134,14 +133,6 @@ function MobileNavLink(props: Readonly<{ active: boolean; item: (typeof APP_MOBI
       aria-current={props.active ? "page" : undefined}
     >
       {props.item.label}
-    </Link>
-  );
-}
-
-function CreateAction() {
-  return (
-    <Link href="/generate" className={styles.createButton}>
-      + 生成
     </Link>
   );
 }

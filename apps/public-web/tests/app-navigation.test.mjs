@@ -43,7 +43,8 @@ test("app navigation features 图库 before 生图", () => {
     /任务|钱包|登录/,
   );
   assert.match(appShellSource, /ProviderSettingsPopover/);
-  assert.match(appShellSource, /CreateAction/);
+  assert.doesNotMatch(appShellSource, /CreateAction/);
+  assert.doesNotMatch(appShellSource, /\+ 生成/);
   assert.doesNotMatch(appShellSource, /OpenAI 兼容 URL/);
   assert.doesNotMatch(appShellSource, /API Key/);
 });
@@ -53,7 +54,7 @@ test("app shell renders a mobile module switch below the header row", () => {
   assert.match(appShellSource, /function MobileNav/);
 });
 
-test("product header keeps image2.mom as the public brand", () => {
-  assert.match(appShellSource, /brandLabel = "image2\.mom"/);
+test("product header uses Image Studio as the public brand", () => {
+  assert.match(appShellSource, /brandLabel = "Image Studio"/);
   assert.doesNotMatch(generationWorkbenchSource, /brandLabel=\{getSiteTitle/);
 });

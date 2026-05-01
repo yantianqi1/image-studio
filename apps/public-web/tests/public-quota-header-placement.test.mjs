@@ -13,7 +13,7 @@ const quotaSource = readFileSync(
 );
 
 test("public quota display is mounted in the right action cluster", () => {
-  assert.match(appShellSource, /<CreateAction \/>[\s\S]*<PublicQuotaStatusBadge \/>/);
+  assert.match(appShellSource, /<div className=\{styles\.actions\}>[\s\S]*<PublicQuotaStatusBadge \/>/);
   assert.doesNotMatch(appShellSource, /<PublicQuotaStatusBar/);
 });
 

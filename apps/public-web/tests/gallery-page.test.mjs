@@ -58,7 +58,7 @@ test("gallery page uses a responsive masonry layout", () => {
 
 test("gallery homepage has public stream product treatment", () => {
   assert.match(gallerySource, /公开图片流/);
-  assert.match(gallerySource, /来自 image2\.mom/);
+  assert.match(gallerySource, /来自 Image Studio/);
   assert.match(stylesSource, /heroPanel/);
   assert.match(stylesSource, /filterBar/);
 });

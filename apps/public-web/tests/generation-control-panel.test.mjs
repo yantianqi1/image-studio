@@ -12,11 +12,6 @@ const uploadSource = readFileSync(
   "utf8",
 );
 
-const visibilitySource = readFileSync(
-  new URL("../src/features/home/generation-visibility-field.tsx", import.meta.url),
-  "utf8",
-);
-
 const workbenchSource = readFileSync(
   new URL("../src/features/home/generation-workbench.tsx", import.meta.url),
   "utf8",
@@ -34,9 +29,10 @@ test("generation reference upload supports multiple images in one job", () => {
   assert.match(workbenchSource, /reference_asset_ids/);
 });
 
-test("generation form lets users choose private or public visibility", () => {
-  assert.match(source, /GenerationVisibilityField/);
-  assert.match(visibilitySource, /私有保存/);
-  assert.match(visibilitySource, /公开展示/);
-  assert.match(workbenchSource, /visibility: form\.visibility/);
+test("generation form saves privately and exposes visibility after results", () => {
+  assert.doesNotMatch(source, /GenerationVisibilityField/);
+  assert.doesNotMatch(source, /私有保存/);
+  assert.doesNotMatch(source, /公开展示/);
+  assert.doesNotMatch(workbenchSource, /visibility: form\.visibility/);
+  assert.match(workbenchSource, /visibility: "private"/);
 });

@@ -151,7 +151,7 @@ function getGalleryTitle(scope: ImageGalleryScope) {
 
 function getGallerySubtitle(scope: ImageGalleryScope) {
   return scope === "public"
-    ? "来自 image2.mom 用户生成的精选图像"
+    ? "来自 Image Studio 用户生成的精选图像"
     : "你的私有与公开作品会集中保存在这里";
 }
 
