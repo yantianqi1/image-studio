@@ -9,7 +9,7 @@ from apps.api.app.core.response import api_ok
 from apps.api.app.domains.auth.ownership import ensure_anonymous_owner, resolve_request_owner
 from apps.api.app.domains.auth.service import require_admin
 from apps.api.app.domains.image.admin_service import list_admin_jobs_with_results
-from apps.api.app.domains.image.assets import persist_uploaded_asset
+from apps.api.app.domains.image.assets import persist_uploaded_asset, resolve_thumbnail_file
 from apps.api.app.domains.image.gallery import (
     get_asset_for_read,
     list_gallery_items,
@@ -118,6 +118,13 @@ def delete_image_job(job_id: int, request: Request, session: Session = Depends(g
 def get_image_asset(asset_id: int, request: Request, session: Session = Depends(get_db_session)):
     asset = get_asset_for_read(session, asset_id, resolve_request_owner(request, session))
     return FileResponse(Path(asset.storage_path), media_type=asset.mime_type)
+
+
+@public_router.get("/assets/{asset_id}/thumbnail")
+def get_image_asset_thumbnail(asset_id: int, request: Request, session: Session = Depends(get_db_session)):
+    asset = get_asset_for_read(session, asset_id, resolve_request_owner(request, session))
+    thumbnail_path, media_type = resolve_thumbnail_file(asset)
+    return FileResponse(thumbnail_path, media_type=media_type)
 
 
 @public_router.patch("/assets/{asset_id}/visibility")
@@ -258,6 +265,7 @@ def asset_payload(asset) -> dict[str, object]:
     return {
         "asset_id": asset.id,
         "asset_url": f"/api/public/image/assets/{asset.id}",
+        "thumbnail_url": f"/api/public/image/assets/{asset.id}/thumbnail",
         "visibility": asset.visibility,
         "published_at": asset.published_at.isoformat() if asset.published_at else None,
         "created_at": asset.created_at.isoformat(),

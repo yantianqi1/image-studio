@@ -22,6 +22,11 @@ const gallerySource = readFileSync(
   "utf8",
 );
 
+const publicApiTypesSource = readFileSync(
+  new URL("../src/lib/public-api.types.ts", import.meta.url),
+  "utf8",
+);
+
 const masonrySource = readFileSync(
   new URL("../src/features/gallery/gallery-masonry.tsx", import.meta.url),
   "utf8",
@@ -97,4 +102,11 @@ test("gallery cards expose hover actions for prompt reuse and download", () => {
   assert.match(masonrySource, /download=/);
   assert.match(galleryActionsStylesSource, /actionBar/);
   assert.match(galleryActionsStylesSource, /actionTile:hover/);
+});
+
+test("gallery stream loads thumbnails and keeps original assets for preview and download", () => {
+  assert.match(publicApiTypesSource, /thumbnail_url: string/);
+  assert.match(masonrySource, /src={item\.thumbnail_url}/);
+  assert.match(masonrySource, /onPreview\(\{ src: item\.asset_url/);
+  assert.match(masonrySource, /href={item\.asset_url}/);
 });

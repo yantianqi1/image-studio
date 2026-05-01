@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 
+import { ResultActionBar } from "@/features/home/generation-result-actions";
 import { ImagePreviewDialog, type ImagePreviewDialogImage } from "@/features/ui/image-preview-dialog";
 import type { CharacterPosterImage, CharacterPosterState } from "./character-poster-app-state";
 import styles from "./prompt-apps.module.css";
@@ -43,6 +44,7 @@ function PosterImageGrid(props: Readonly<{ images: readonly CharacterPosterImage
           >
             <img alt={`角色海报生成结果 ${props.jobId}-${image.id}`} src={image.url} />
           </button>
+          <ResultActionBar hasImages image={image} imageUrl={image.url} layout="card" />
         </figure>
       ))}
     </div>

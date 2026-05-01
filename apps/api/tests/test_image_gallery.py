@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from io import BytesIO
+
 from fastapi.testclient import TestClient
+from PIL import Image
 
 from apps.api.app.domains.image import service as image_service
 from apps.api.app.domains.llm.service import RenderedImage
@@ -30,6 +33,17 @@ def fake_renderer(_session=None, **kwargs) -> RenderedImage:
         mime_type="image/svg+xml",
         revised_prompt=f"revised:{kwargs['prompt']}",
         provider_request_id="gallery-test",
+    )
+
+
+def png_renderer(_session=None, **kwargs) -> RenderedImage:
+    buffer = BytesIO()
+    Image.new("RGB", (1200, 600), color=(16, 24, 39)).save(buffer, format="PNG")
+    return RenderedImage(
+        content=buffer.getvalue(),
+        mime_type="image/png",
+        revised_prompt=f"revised:{kwargs['prompt']}",
+        provider_request_id="gallery-png-test",
     )
 
 
@@ -84,6 +98,32 @@ def test_public_image_job_publishes_rendered_asset(monkeypatch):
     assert bob.get(result["asset_url"]).status_code == 200
 
 
+def test_gallery_items_include_thumbnail_url(monkeypatch):
+    monkeypatch.setattr(image_service, "render_image", fake_renderer, raising=False)
+    client = build_client()
+    register_user(client, "thumbnail-url@example.com")
+    result = complete_image_job(client, prompt="Thumbnail url")
+
+    item = gallery_items(client, "mine")[0]
+
+    assert item["asset_url"] == result["asset_url"]
+    assert item["thumbnail_url"] == f"/api/public/image/assets/{result['asset_id']}/thumbnail"
+
+
+def test_thumbnail_endpoint_preserves_aspect_ratio(monkeypatch):
+    monkeypatch.setattr(image_service, "render_image", png_renderer, raising=False)
+    client = build_client()
+    register_user(client, "thumbnail-ratio@example.com")
+    result = complete_image_job(client, prompt="Wide image")
+
+    response = client.get(result["thumbnail_url"])
+    image = Image.open(BytesIO(response.content))
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/jpeg"
+    assert image.size == (640, 320)
+
+
 def test_gallery_mine_lists_only_owner_assets(monkeypatch):
     monkeypatch.setattr(image_service, "render_image", fake_renderer, raising=False)
     alice = build_client()
@@ -127,3 +167,15 @@ def test_private_asset_file_stays_owner_scoped(monkeypatch):
 
     assert alice.get(result["asset_url"]).status_code == 200
     assert bob.get(result["asset_url"]).status_code == 404
+
+
+def test_private_thumbnail_file_stays_owner_scoped(monkeypatch):
+    monkeypatch.setattr(image_service, "render_image", fake_renderer, raising=False)
+    alice = build_client()
+    register_user(alice, "private-thumbnail-owner@example.com")
+    result = complete_image_job(alice, prompt="Private thumbnail")
+    bob = new_client()
+    register_user(bob, "private-thumbnail-bob@example.com")
+
+    assert alice.get(result["thumbnail_url"]).status_code == 200
+    assert bob.get(result["thumbnail_url"]).status_code == 404

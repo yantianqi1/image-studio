@@ -13,7 +13,19 @@ export type ImageVisibilityChangeHandler = (
   publishedAt: string | null,
 ) => void;
 
+type ResultActionLayout = "default" | "card";
+type ResultActionBarStateProps = Readonly<{
+  failed: boolean;
+  hasImages: boolean;
+  image?: GenerationHistoryImage;
+  imageUrl?: string;
+  layout: ResultActionLayout;
+  onImageVisibilityChange?: ImageVisibilityChangeHandler;
+  onUseAsSourceImage?: (image: GenerationSourceImage) => void;
+}>;
+
 export function ResultActionBar({
+  layout = "default",
   hasImages,
   imageUrl,
   image,
@@ -21,6 +33,7 @@ export function ResultActionBar({
   onImageVisibilityChange,
   onUseAsSourceImage,
 }: Readonly<{
+  layout?: ResultActionLayout;
   hasImages: boolean;
   imageUrl?: string;
   image?: GenerationHistoryImage;
@@ -35,6 +48,7 @@ export function ResultActionBar({
       hasImages={hasImages}
       image={image}
       imageUrl={imageUrl}
+      layout={layout}
       onImageVisibilityChange={onImageVisibilityChange}
       onUseAsSourceImage={onUseAsSourceImage}
     />
@@ -46,56 +60,57 @@ function ResultActionBarState({
   hasImages,
   image,
   imageUrl,
+  layout,
   onImageVisibilityChange,
   onUseAsSourceImage,
-}: Readonly<{
-  failed: boolean;
-  hasImages: boolean;
-  image?: GenerationHistoryImage;
-  imageUrl?: string;
-  onImageVisibilityChange?: ImageVisibilityChangeHandler;
-  onUseAsSourceImage?: (image: GenerationSourceImage) => void;
-}>) {
-  const [visibility, setVisibility] = useState<ImageAssetVisibility>(
-    image?.visibility ?? "private",
-  );
-  const [visibilityError, setVisibilityError] = useState<string | null>(null);
-  const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
-
-  async function handleVisibilityToggle() {
-    if (!image?.assetId || isUpdatingVisibility) {
-      return;
-    }
-
-    const nextVisibility = getNextVisibility(visibility);
-    setIsUpdatingVisibility(true);
-    setVisibilityError(null);
-    try {
-      const updated = await publicApi.updateImageAssetVisibility(image.assetId, nextVisibility);
-      setVisibility(updated.visibility);
-      onImageVisibilityChange?.(image.assetId, updated.visibility, updated.published_at);
-    } catch (error: unknown) {
-      setVisibilityError(error instanceof Error ? error.message : "图库状态更新失败");
-    } finally {
-      setIsUpdatingVisibility(false);
-    }
-  }
+}: ResultActionBarStateProps) {
+  const visibilityAction = useImageVisibilityAction({ image, onImageVisibilityChange });
 
   return (
-    <div className={resultStyles.actionBar}>
+    <div className={getActionBarClassName(layout)}>
       <DownloadAction hasImages={hasImages} imageUrl={imageUrl} />
       <button className={resultStyles.softAction} type="button" disabled>{failed ? "重新生成" : "继续等待"}</button>
       <VisibilityAction
         image={image}
-        isUpdating={isUpdatingVisibility}
-        visibility={visibility}
-        onToggle={handleVisibilityToggle}
+        isUpdating={visibilityAction.isUpdating}
+        visibility={visibilityAction.visibility}
+        onToggle={visibilityAction.handleToggle}
       />
       <SourceImageAction image={image} onUseAsSourceImage={onUseAsSourceImage} />
       {!hasImages ? <span className={resultStyles.actionHint}>系统会自动刷新，无需重复提交。</span> : null}
-      {visibilityError ? <span className={resultStyles.actionError}>{visibilityError}</span> : null}
+      {visibilityAction.error ? <span className={resultStyles.actionError}>{visibilityAction.error}</span> : null}
     </div>
   );
+}
+
+function useImageVisibilityAction(input: Readonly<{
+  image?: GenerationHistoryImage;
+  onImageVisibilityChange?: ImageVisibilityChangeHandler;
+}>) {
+  const [visibility, setVisibility] = useState<ImageAssetVisibility>(input.image?.visibility ?? "private");
+  const [error, setError] = useState<string | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  async function handleToggle() {
+    if (!input.image?.assetId || isUpdating) {
+      return;
+    }
+
+    const nextVisibility = getNextVisibility(visibility);
+    setIsUpdating(true);
+    setError(null);
+    try {
+      const updated = await publicApi.updateImageAssetVisibility(input.image.assetId, nextVisibility);
+      setVisibility(updated.visibility);
+      input.onImageVisibilityChange?.(input.image.assetId, updated.visibility, updated.published_at);
+    } catch (caughtError: unknown) {
+      setError(caughtError instanceof Error ? caughtError.message : "图库状态更新失败");
+    } finally {
+      setIsUpdating(false);
+    }
+  }
+
+  return { error, handleToggle, isUpdating, visibility };
 }
 
 function getResultActionStateKey(image?: GenerationHistoryImage) {
@@ -139,7 +154,7 @@ function SourceImageAction({
   image?: GenerationHistoryImage;
   onUseAsSourceImage?: (image: GenerationSourceImage) => void;
 }>) {
-  if (!image?.assetId) {
+  if (!image?.assetId || !onUseAsSourceImage) {
     return null;
   }
 
@@ -156,6 +171,13 @@ function SourceImageAction({
 
 function getNextVisibility(visibility: ImageAssetVisibility): ImageAssetVisibility {
   return visibility === "public" ? "private" : "public";
+}
+
+function getActionBarClassName(layout: ResultActionLayout) {
+  if (layout === "card") {
+    return `${resultStyles.actionBar} ${resultStyles.actionBarCard}`;
+  }
+  return resultStyles.actionBar;
 }
 
 function getVisibilityActionLabel(visibility: ImageAssetVisibility) {

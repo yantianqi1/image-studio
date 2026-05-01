@@ -148,7 +148,7 @@ function GalleryTile({
         onClick={() => onPreview({ src: item.asset_url, alt: title })}
       >
         <img
-          src={item.asset_url}
+          src={item.thumbnail_url}
           alt={title}
           loading="lazy"
           decoding="async"

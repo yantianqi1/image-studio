@@ -2,6 +2,7 @@ fastapi==0.125.0
 httpx==0.28.1
 python-multipart==0.0.20
 pydantic-settings==2.11.0
+Pillow==12.1.0
 psycopg2-binary==2.9.11
 pytest==8.4.2
 sqlalchemy==2.0.44

@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 
+import { ResultActionBar } from "@/features/home/generation-result-actions";
 import { ImagePreviewDialog, type ImagePreviewDialogImage } from "@/features/ui/image-preview-dialog";
 
 import type { PromptImageGenerateImage, PromptImageGenerateState } from "./prompt-image-generate-app";
@@ -61,6 +62,7 @@ function PromptAppImageGrid(props: Readonly<{
             >
               <img alt={alt} src={image.url} />
             </button>
+            <ResultActionBar hasImages image={image} imageUrl={image.url} layout="card" />
           </figure>
         );
       })}
