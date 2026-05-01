@@ -17,6 +17,11 @@ const workbenchSource = readFileSync(
   "utf8",
 );
 
+const reusePromptSource = readFileSync(
+  new URL("../src/features/home/generation-reuse-prompt.ts", import.meta.url),
+  "utf8",
+);
+
 test("generation prompt input does not cap prompt length in the browser", () => {
   assert.doesNotMatch(source, /maxLength=/);
   assert.doesNotMatch(source, /PROMPT_MAX_LENGTH/);
@@ -35,4 +40,11 @@ test("generation form saves privately and exposes visibility after results", () 
   assert.doesNotMatch(source, /公开展示/);
   assert.doesNotMatch(workbenchSource, /visibility: form\.visibility/);
   assert.match(workbenchSource, /visibility: "private"/);
+});
+
+test("generation workbench can prefill prompt from gallery reuse URL", () => {
+  assert.match(reusePromptSource, /readReusePromptFromLocation/);
+  assert.match(reusePromptSource, /URLSearchParams/);
+  assert.match(reusePromptSource, /setPendingReusePrompt/);
+  assert.match(reusePromptSource, /prompt: pendingReusePrompt/);
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { buildAspectRatioPrompt } from "@/features/home/generation-aspect-ratio";
 import { GenerationControlPanel } from "@/features/home/generation-control-panel";
@@ -12,6 +12,11 @@ import {
 } from "@/features/home/generation-job-polling";
 import { GenerationResultPanel } from "@/features/home/generation-result-panel";
 import { resolveImageModel } from "@/features/home/generation-models";
+import {
+  buildReusePromptForm,
+  useGenerationReusePrompt,
+} from "@/features/home/generation-reuse-prompt";
+import { uploadReferenceImages } from "@/features/home/generation-upload-reference-images";
 import { TopBarActions } from "@/features/home/generation-workbench-nav";
 import {
   type GenerationSourceImage,
@@ -58,6 +63,19 @@ export function GenerationWorkbench() {
     ? resolveImageModel(imageModelsState.data, form.model_code)
     : { resolvedModelCode: form.model_code, selectedModel: null };
   const walletLabel = getWalletLabel(walletState);
+  const applyReusePrompt = useCallback((pendingReusePrompt: string) => {
+    setForm(buildReusePromptForm(pendingReusePrompt));
+    setReferenceImages([]);
+    setUploadState({ status: "idle" });
+    setState({ status: "idle" });
+  }, []);
+
+  useGenerationReusePrompt({
+    activeHistory,
+    createDraft: history.createDraft,
+    hydrated: history.hydrated,
+    onApplyPrompt: applyReusePrompt,
+  });
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- sync active history into the editable draft
@@ -278,17 +296,4 @@ export function GenerationWorkbench() {
       </div>
     </AppShell>
   );
-}
-
-async function uploadReferenceImages(files: readonly File[]) {
-  const uploadedImages: GenerationSourceImage[] = [];
-  for (const file of files) {
-    const uploaded = await publicApi.uploadImageAsset(file);
-    uploadedImages.push({
-      assetId: uploaded.id,
-      assetUrl: uploaded.asset_url,
-      mimeType: uploaded.mime_type,
-    });
-  }
-  return uploadedImages;
 }

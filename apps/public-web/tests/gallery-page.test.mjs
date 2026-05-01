@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 const pageSource = readFileSync(
@@ -26,6 +26,15 @@ const masonrySource = readFileSync(
   new URL("../src/features/gallery/gallery-masonry.tsx", import.meta.url),
   "utf8",
 );
+
+const galleryActionsStylesUrl = new URL(
+  "../src/features/gallery/gallery-actions.module.css",
+  import.meta.url,
+);
+
+const galleryActionsStylesSource = existsSync(galleryActionsStylesUrl)
+  ? readFileSync(galleryActionsStylesUrl, "utf8")
+  : "";
 
 const stylesSource = readFileSync(
   new URL("../src/features/gallery/gallery-page.module.css", import.meta.url),
@@ -70,4 +79,15 @@ test("gallery homepage has polished image-first product treatment", () => {
   assert.match(stylesSource, /galleryToolbar/);
   assert.doesNotMatch(stylesSource, /heroPanel/);
   assert.match(masonrySource, /tileOverlay/);
+});
+
+test("gallery cards expose hover actions for prompt reuse and download", () => {
+  assert.match(masonrySource, /复制/);
+  assert.match(masonrySource, /复用/);
+  assert.match(masonrySource, /下载/);
+  assert.match(masonrySource, /navigator\.clipboard\.writeText/);
+  assert.match(masonrySource, /\/generate\?prompt=/);
+  assert.match(masonrySource, /download=/);
+  assert.match(galleryActionsStylesSource, /actionBar/);
+  assert.match(galleryActionsStylesSource, /actionTile:hover/);
 });

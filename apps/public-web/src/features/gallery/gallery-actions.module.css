@@ -1,0 +1,73 @@
+.actionTile {
+  isolation: isolate;
+}
+
+.actionBar {
+  position: absolute;
+  top: 0.62rem;
+  right: 0.62rem;
+  left: 0.62rem;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 0.38rem;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-0.35rem);
+  transition: opacity 170ms ease, transform 170ms ease;
+}
+
+.actionTile:hover .actionBar,
+.actionTile:focus-within .actionBar {
+  pointer-events: auto;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.actionButton,
+.actionNotice {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #101116;
+  font-size: 0.72rem;
+  font-weight: 820;
+  line-height: 1;
+  padding: 0 0.68rem;
+  text-decoration: none;
+  box-shadow: 0 8px 24px rgba(7, 12, 20, 0.12);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  transition: background-color 150ms ease, transform 150ms ease;
+}
+
+.actionButton {
+  cursor: pointer;
+}
+
+.actionButton:hover {
+  background: #ffffff;
+  transform: translateY(-1px);
+}
+
+.actionNotice {
+  margin-left: auto;
+  background: rgba(20, 86, 240, 0.92);
+  color: #ffffff;
+}
+
+.actionNoticeError {
+  background: rgba(220, 38, 38, 0.92);
+}
+
+@media (hover: none) {
+  .actionBar {
+    pointer-events: auto;
+    opacity: 1;
+    transform: none;
+  }
+}

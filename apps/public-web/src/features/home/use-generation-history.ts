@@ -127,6 +127,7 @@ export function useGenerationHistory() {
     createDraft,
     createPendingHistory,
     failHistory,
+    hydrated,
     histories,
     queueHistory,
     removeHistory,
