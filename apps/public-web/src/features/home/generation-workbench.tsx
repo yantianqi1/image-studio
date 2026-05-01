@@ -218,7 +218,7 @@ export function GenerationWorkbench() {
 
   return (
     <AppShell
-      activeHref="/"
+      activeHref="/generate"
       brandLabel={getSiteTitle(settingsState)}
       navAside={<TopBarActions walletLabel={walletLabel} />}
       workspaceMode

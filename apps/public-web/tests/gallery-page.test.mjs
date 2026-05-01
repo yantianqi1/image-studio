@@ -7,6 +7,16 @@ const pageSource = readFileSync(
   "utf8",
 );
 
+const homePageSource = readFileSync(
+  new URL("../src/app/page.tsx", import.meta.url),
+  "utf8",
+);
+
+const generatePageSource = readFileSync(
+  new URL("../src/app/generate/page.tsx", import.meta.url),
+  "utf8",
+);
+
 const gallerySource = readFileSync(
   new URL("../src/features/gallery/gallery-page.tsx", import.meta.url),
   "utf8",
@@ -26,8 +36,15 @@ test("gallery route renders the image gallery page", () => {
   assert.match(pageSource, /GalleryPage/);
 });
 
+test("site home opens the public image stream", () => {
+  assert.match(homePageSource, /GalleryPage/);
+  assert.match(homePageSource, /initialScope="public"/);
+  assert.match(homePageSource, /activeHref="\/"/);
+  assert.match(generatePageSource, /GenerationWorkbench/);
+});
+
 test("gallery page loads mine and public image scopes", () => {
-  assert.match(gallerySource, /activeHref="\/gallery"/);
+  assert.match(gallerySource, /initialScope = "mine"/);
   assert.match(gallerySource, /publicApi\.getImageGallery/);
   assert.match(gallerySource, /scope === "mine"/);
   assert.match(gallerySource, /scope === "public"/);

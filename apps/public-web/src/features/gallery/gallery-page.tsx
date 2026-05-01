@@ -21,8 +21,16 @@ const GALLERY_SCOPES: readonly Readonly<{
   { value: "public", label: "公开瀑布流" },
 ];
 
-export function GalleryPage() {
-  const [scope, setScope] = useState<ImageGalleryScope>("mine");
+type GalleryPageProps = Readonly<{
+  activeHref?: string;
+  initialScope?: ImageGalleryScope;
+}>;
+
+export function GalleryPage({
+  activeHref = "/",
+  initialScope = "mine",
+}: GalleryPageProps = {}) {
+  const [scope, setScope] = useState<ImageGalleryScope>(initialScope);
   const [previewImage, setPreviewImage] = useState<ImagePreviewDialogImage | null>(null);
   const galleryState = useApiResource(
     () => publicApi.getImageGallery(scope),
@@ -30,7 +38,7 @@ export function GalleryPage() {
   );
 
   return (
-    <AppShell activeHref="/gallery" headerTitle="图库">
+    <AppShell activeHref={activeHref} headerTitle="图库">
       <div className={styles.page}>
         <GalleryHeader scope={scope} state={galleryState} onScopeChange={setScope} />
         <GalleryContent state={galleryState} scope={scope} onPreview={setPreviewImage} />

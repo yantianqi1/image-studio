@@ -1,5 +1,5 @@
-import { GenerationWorkbench } from "@/features/home/generation-workbench";
+import { GalleryPage } from "@/features/gallery/gallery-page";
 
 export default function Home() {
-  return <GenerationWorkbench />;
+  return <GalleryPage initialScope="public" activeHref="/" />;
 }

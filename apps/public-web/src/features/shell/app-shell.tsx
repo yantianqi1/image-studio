@@ -98,7 +98,7 @@ function BrandLink(props: Readonly<{ brandLabel: string; headerTitle?: string }>
 function MainNav({ activeHref }: Readonly<{ activeHref?: string }>) {
   return (
     <nav className={APP_NAV_CONTAINER_CLASS} aria-label="功能切换">
-      {APP_NAV_ITEMS.map((item) => <NavLink key={item.href} active={activeHref === item.href} href={item.href} label={item.label} />)}
+      {APP_NAV_ITEMS.map((item) => <NavLink key={item.href} active={activeHref === item.href} item={item} />)}
     </nav>
   );
 }
@@ -106,22 +106,28 @@ function MainNav({ activeHref }: Readonly<{ activeHref?: string }>) {
 function MobileNav({ activeHref }: Readonly<{ activeHref?: string }>) {
   return (
     <nav className={APP_MOBILE_NAV_CONTAINER_CLASS} aria-label="移动端功能切换">
-      {APP_NAV_ITEMS.map((item) => <NavLink key={item.href} active={activeHref === item.href} href={item.href} label={item.label} />)}
+      {APP_NAV_ITEMS.map((item) => <NavLink key={item.href} active={activeHref === item.href} item={item} />)}
     </nav>
   );
 }
 
-function NavLink(props: Readonly<{ active: boolean; href: string; label: string }>) {
+function NavLink(props: Readonly<{ active: boolean; item: (typeof APP_NAV_ITEMS)[number] }>) {
   return (
     <Link
-      href={props.href}
-      className="nav-pill whitespace-nowrap"
+      href={props.item.href}
+      className={getNavLinkClass(props.item)}
       aria-current={props.active ? "page" : undefined}
       data-active={props.active ? "true" : "false"}
     >
-      {props.label}
+      {props.item.label}
     </Link>
   );
+}
+
+function getNavLinkClass(item: (typeof APP_NAV_ITEMS)[number]) {
+  return item.tone === "featured"
+    ? "nav-pill nav-pill-featured whitespace-nowrap"
+    : "nav-pill whitespace-nowrap";
 }
 
 function HeroSection(props: Readonly<{ description?: string; eyebrow?: string; title?: string }>) {

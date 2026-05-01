@@ -1,11 +1,12 @@
 export type AppNavItem = Readonly<{
   href: string;
   label: string;
+  tone?: "featured";
 }>;
 
 export const APP_NAV_ITEMS: readonly AppNavItem[] = [
-  { href: "/", label: "生图" },
-  { href: "/gallery", label: "图库" },
+  { href: "/", label: "图库", tone: "featured" },
+  { href: "/generate", label: "生图" },
   { href: "/comic", label: "漫画" },
   { href: "/apps", label: "应用" },
   { href: "/tasks", label: "任务" },
