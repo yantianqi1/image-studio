@@ -56,9 +56,14 @@ test("gallery page uses a responsive masonry layout", () => {
   assert.match(stylesSource, /column/);
 });
 
-test("gallery homepage has public stream product treatment", () => {
-  assert.match(gallerySource, /公开图片流/);
-  assert.match(gallerySource, /来自 Image Studio/);
-  assert.match(stylesSource, /heroPanel/);
-  assert.match(stylesSource, /filterBar/);
+test("gallery homepage has polished image-first product treatment", () => {
+  assert.match(gallerySource, /图片库/);
+  assert.match(gallerySource, /公开图库/);
+  assert.doesNotMatch(gallerySource, />Gallery<\/p>/);
+  assert.doesNotMatch(gallerySource, /公开图片流/);
+  assert.doesNotMatch(gallerySource, /来自 Image Studio/);
+  assert.match(stylesSource, /masthead/);
+  assert.match(stylesSource, /galleryToolbar/);
+  assert.doesNotMatch(stylesSource, /heroPanel/);
+  assert.match(masonrySource, /tileOverlay/);
 });

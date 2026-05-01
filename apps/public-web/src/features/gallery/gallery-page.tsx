@@ -17,8 +17,8 @@ const GALLERY_SCOPES: readonly Readonly<{
   value: ImageGalleryScope;
   label: string;
 }>[] = [
-  { value: "public", label: "公开流" },
-  { value: "mine", label: "我的图库" },
+  { value: "public", label: "公开图库" },
+  { value: "mine", label: "个人图库" },
 ];
 
 type GalleryPageProps = Readonly<{
@@ -59,14 +59,13 @@ function GalleryHeader({
 }>) {
   return (
     <header className={styles.header}>
-      <div className={styles.heroPanel}>
-        <p className={styles.eyebrow}>Gallery</p>
-        <h1 className={styles.title}>{getGalleryTitle(scope)}</h1>
-        <p className={styles.subtitle}>{getGallerySubtitle(scope)}</p>
+      <div className={styles.masthead}>
+        <h1 className={styles.title}>图片库</h1>
+        <p className={styles.summary}>{getGallerySummary(scope, state)}</p>
       </div>
-      <div className={styles.filterBar}>
-        <span className={styles.countBadge}>{getGalleryCountLabel(state)}</span>
+      <div className={styles.galleryToolbar}>
         <ScopeSegmentedControl scope={scope} onScopeChange={onScopeChange} />
+        <span className={styles.countBadge}>{getGalleryCountLabel(state)}</span>
       </div>
     </header>
   );
@@ -90,6 +89,7 @@ function ScopeSegmentedControl({
           type="button"
           onClick={() => onScopeChange(item.value)}
         >
+          <span className={styles.scopeTabMark} aria-hidden="true" />
           {item.label}
         </button>
       ))}
@@ -133,10 +133,20 @@ function GalleryError({
 }
 
 function getGalleryCountLabel(state: ResourceState<readonly ImageGalleryItem[]>) {
-  if (state.status !== "ready") {
-    return "-- 张";
+  if (state.status === "loading") {
+    return "同步中";
+  }
+  if (state.status === "error") {
+    return "读取失败";
   }
   return `${state.data.length} 张`;
+}
+
+function getGallerySummary(
+  scope: ImageGalleryScope,
+  state: ResourceState<readonly ImageGalleryItem[]>,
+) {
+  return `${getScopeLabel(scope)} · ${getGalleryCountLabel(state)}`;
 }
 
 function getEmptyDescription(scope: ImageGalleryScope) {
@@ -145,14 +155,8 @@ function getEmptyDescription(scope: ImageGalleryScope) {
     : "生成图片后会出现在这里。";
 }
 
-function getGalleryTitle(scope: ImageGalleryScope) {
-  return scope === "public" ? "公开图片流" : "我的图库";
-}
-
-function getGallerySubtitle(scope: ImageGalleryScope) {
-  return scope === "public"
-    ? "来自 Image Studio 用户生成的精选图像"
-    : "你的私有与公开作品会集中保存在这里";
+function getScopeLabel(scope: ImageGalleryScope) {
+  return scope === "public" ? "公开图库" : "个人图库";
 }
 
 function getScopeRefreshKey(scope: ImageGalleryScope) {

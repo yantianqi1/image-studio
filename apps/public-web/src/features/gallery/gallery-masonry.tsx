@@ -63,12 +63,18 @@ function GalleryTile({
         type="button"
         onClick={() => onPreview({ src: item.asset_url, alt: title })}
       >
-        <img src={item.asset_url} alt={title} loading="lazy" />
+        <img
+          src={item.asset_url}
+          alt={title}
+          loading="lazy"
+          decoding="async"
+          sizes="(min-width: 1180px) 25vw, (min-width: 820px) 33vw, (min-width: 540px) 50vw, 100vw"
+        />
       </button>
-      <div className={styles.tileMeta}>
+      <div className={styles.tileOverlay}>
         <div className={styles.tileMetaRow}>
           <span className={styles.visibilityPill}>{getVisibilityLabel(item)}</span>
-          <span>{formatDateTime(item.created_at)}</span>
+          <span className={styles.timePill}>{formatDateTime(item.created_at)}</span>
         </div>
         <p className={styles.promptText}>{item.prompt}</p>
       </div>
