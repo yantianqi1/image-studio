@@ -129,6 +129,8 @@
 
 .tile {
   position: relative;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 240px;
   overflow: hidden;
   border: 1px solid rgba(223, 231, 241, 0.72);
   border-radius: 1.35rem;

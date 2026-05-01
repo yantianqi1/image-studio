@@ -2,7 +2,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { ImagePreviewDialogImage } from "@/features/ui/image-preview-dialog";
 import { formatDateTime } from "@/lib/formatters";
@@ -31,15 +31,28 @@ export function GalleryMasonry({
   onPreview: (image: ImagePreviewDialogImage) => void;
 }>) {
   const [imageAspectRatios, setImageAspectRatios] = useState<ImageAspectRatios>({});
+  const pendingAspectRatiosRef = useRef<Record<number, number>>({});
+  const scheduledAspectRatioFrameRef = useRef<number | null>(null);
   const columns = useMeasuredGalleryColumns(items, imageAspectRatios);
-  const updateImageAspectRatio = useCallback((assetId: number, width: number, height: number) => {
+  const flushPendingAspectRatios = useCallback(() => {
+    scheduledAspectRatioFrameRef.current = null;
+    const pendingAspectRatios = pendingAspectRatiosRef.current;
+    pendingAspectRatiosRef.current = {};
+    setImageAspectRatios((current) => mergeImageAspectRatios(current, pendingAspectRatios));
+  }, []);
+  const queueImageAspectRatio = useCallback((assetId: number, width: number, height: number) => {
     const aspectRatio = getSafeAspectRatio(width, height);
-    setImageAspectRatios((current) => {
-      if (current[assetId] === aspectRatio) {
-        return current;
-      }
-      return { ...current, [assetId]: aspectRatio };
-    });
+    pendingAspectRatiosRef.current = { ...pendingAspectRatiosRef.current, [assetId]: aspectRatio };
+    if (scheduledAspectRatioFrameRef.current !== null) {
+      return;
+    }
+    scheduledAspectRatioFrameRef.current = window.requestAnimationFrame(flushPendingAspectRatios);
+  }, [flushPendingAspectRatios]);
+
+  useEffect(() => () => {
+    if (scheduledAspectRatioFrameRef.current !== null) {
+      window.cancelAnimationFrame(scheduledAspectRatioFrameRef.current);
+    }
   }, []);
 
   return (
@@ -50,7 +63,7 @@ export function GalleryMasonry({
             <GalleryTile
               key={`${item.job_id}-${item.result_index}-${item.asset_id}`}
               item={item}
-              onImageMeasure={updateImageAspectRatio}
+              onImageMeasure={queueImageAspectRatio}
               onPreview={onPreview}
             />
           ))}
@@ -120,6 +133,24 @@ function getShortestColumnIndex(columnHeights: readonly number[]) {
 
 function getEstimatedImageHeight(item: ImageGalleryItem, imageAspectRatios: ImageAspectRatios) {
   return imageAspectRatios[item.asset_id] ?? DEFAULT_IMAGE_ASPECT_RATIO;
+}
+
+function mergeImageAspectRatios(current: ImageAspectRatios, pending: ImageAspectRatios) {
+  const entries = Object.entries(pending);
+  if (entries.length === 0) {
+    return current;
+  }
+  let hasChanged = false;
+  const next = { ...current };
+  entries.forEach(([assetId, aspectRatio]) => {
+    const normalizedAssetId = Number(assetId);
+    if (current[normalizedAssetId] === aspectRatio) {
+      return;
+    }
+    next[normalizedAssetId] = aspectRatio;
+    hasChanged = true;
+  });
+  return hasChanged ? next : current;
 }
 
 function getSafeAspectRatio(width: number, height: number) {

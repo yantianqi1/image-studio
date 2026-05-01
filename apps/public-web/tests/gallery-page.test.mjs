@@ -126,3 +126,17 @@ test("gallery stream loads thumbnails and keeps original assets for preview and 
   assert.match(masonrySource, /onPreview\(\{ src: item\.asset_url/);
   assert.match(masonrySource, /href={item\.asset_url}/);
 });
+
+test("gallery batches image measurements to avoid per-image masonry reflows", () => {
+  assert.match(masonrySource, /pendingAspectRatiosRef/);
+  assert.match(masonrySource, /scheduledAspectRatioFrameRef/);
+  assert.match(masonrySource, /requestAnimationFrame/);
+  assert.match(masonrySource, /cancelAnimationFrame/);
+  assert.match(masonrySource, /flushPendingAspectRatios/);
+  assert.doesNotMatch(masonrySource, /onImageMeasure=\{updateImageAspectRatio\}/);
+});
+
+test("gallery cards expose offscreen rendering hints without changing layout", () => {
+  assert.match(stylesSource, /\.tile\s*{[^}]*content-visibility: auto/s);
+  assert.match(stylesSource, /\.tile\s*{[^}]*contain-intrinsic-size:/s);
+});
