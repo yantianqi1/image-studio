@@ -81,6 +81,13 @@ test("gallery homepage has polished image-first product treatment", () => {
   assert.match(masonrySource, /tileOverlay/);
 });
 
+test("gallery header keeps title and controls compact on desktop", () => {
+  assert.match(stylesSource, /\.header\s*{[^}]*display: flex/s);
+  assert.match(stylesSource, /\.masthead\s*{[^}]*display: flex/s);
+  assert.match(stylesSource, /font-size: clamp\(1\.55rem, 2\.4vw, 2\.15rem\)/);
+  assert.doesNotMatch(stylesSource, /font-size: clamp\(2\.45rem, 5vw, 4\.4rem\)/);
+});
+
 test("gallery cards expose hover actions for prompt reuse and download", () => {
   assert.match(masonrySource, /复制/);
   assert.match(masonrySource, /复用/);
