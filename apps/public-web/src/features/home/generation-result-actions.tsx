@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import type { GenerationHistoryImage } from "@/features/home/generation-history.types";
 import type { GenerationSourceImage } from "@/features/home/generation-workbench.types";
@@ -28,14 +28,39 @@ export function ResultActionBar({
   onImageVisibilityChange?: ImageVisibilityChangeHandler;
   onUseAsSourceImage?: (image: GenerationSourceImage) => void;
 }>) {
-  const [visibility, setVisibility] = useState<ImageAssetVisibility>(image?.visibility ?? "private");
+  return (
+    <ResultActionBarState
+      key={getResultActionStateKey(image)}
+      failed={failed}
+      hasImages={hasImages}
+      image={image}
+      imageUrl={imageUrl}
+      onImageVisibilityChange={onImageVisibilityChange}
+      onUseAsSourceImage={onUseAsSourceImage}
+    />
+  );
+}
+
+function ResultActionBarState({
+  failed,
+  hasImages,
+  image,
+  imageUrl,
+  onImageVisibilityChange,
+  onUseAsSourceImage,
+}: Readonly<{
+  failed: boolean;
+  hasImages: boolean;
+  image?: GenerationHistoryImage;
+  imageUrl?: string;
+  onImageVisibilityChange?: ImageVisibilityChangeHandler;
+  onUseAsSourceImage?: (image: GenerationSourceImage) => void;
+}>) {
+  const [visibility, setVisibility] = useState<ImageAssetVisibility>(
+    image?.visibility ?? "private",
+  );
   const [visibilityError, setVisibilityError] = useState<string | null>(null);
   const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
-
-  useEffect(() => {
-    setVisibility(image?.visibility ?? "private");
-    setVisibilityError(null);
-  }, [image?.assetId, image?.visibility]);
 
   async function handleVisibilityToggle() {
     if (!image?.assetId || isUpdatingVisibility) {
@@ -71,6 +96,10 @@ export function ResultActionBar({
       {visibilityError ? <span className={resultStyles.actionError}>{visibilityError}</span> : null}
     </div>
   );
+}
+
+function getResultActionStateKey(image?: GenerationHistoryImage) {
+  return `${image?.assetId ?? "empty"}:${image?.visibility ?? "private"}`;
 }
 
 function DownloadAction({ hasImages, imageUrl }: Readonly<{ hasImages: boolean; imageUrl?: string }>) {
