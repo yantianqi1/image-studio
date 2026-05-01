@@ -1,0 +1,251 @@
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.9)),
+    rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(18px) saturate(1.25);
+  -webkit-backdrop-filter: blur(18px) saturate(1.25);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+}
+
+.headerInner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+  max-width: 1500px;
+  min-height: 4.35rem;
+  margin: 0 auto;
+  padding: 0 1.25rem;
+}
+
+.brandArea,
+.actions {
+  display: flex;
+  flex: 1 1 0;
+  align-items: center;
+  min-width: 0;
+}
+
+.brandArea {
+  gap: 0.55rem;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+  color: #0f172a;
+  font-size: 0.96rem;
+  font-weight: 850;
+  letter-spacing: 0;
+  text-decoration: none;
+}
+
+.brandIcon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  overflow: hidden;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 0.5rem;
+  background: #ffffff;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+}
+
+.brandName,
+.headerTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.headerTitle {
+  max-width: 11rem;
+  border-left: 1px solid rgba(15, 23, 42, 0.12);
+  padding-left: 0.75rem;
+  color: #475569;
+  font-size: 0.86rem;
+  font-weight: 760;
+}
+
+.nav {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.2rem;
+  height: 2.65rem;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  padding: 0.25rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.navItem,
+.mobileNavItem {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #475569;
+  font-weight: 760;
+  text-decoration: none;
+  transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+
+.navItem {
+  min-width: 4.15rem;
+  height: 2.05rem;
+  border-radius: 999px;
+  padding: 0 0.85rem;
+  font-size: 0.9rem;
+}
+
+.navItem:hover,
+.mobileNavItem:hover {
+  background: rgba(15, 23, 42, 0.06);
+  color: #0f172a;
+}
+
+.navItemActive {
+  background: #10251f;
+  color: #ffffff;
+  box-shadow: 0 10px 24px rgba(16, 37, 31, 0.18);
+}
+
+.actions {
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.createButton,
+.accountButton {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  height: 2.35rem;
+  border-radius: 999px;
+  font-size: 0.86rem;
+  font-weight: 800;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.createButton {
+  border: 1px solid rgba(16, 37, 31, 0.9);
+  background: #10251f;
+  color: #ffffff;
+  padding: 0 1rem;
+  box-shadow: 0 12px 26px rgba(16, 37, 31, 0.18);
+}
+
+.createButton:hover {
+  background: #16362d;
+}
+
+.quotaBadge {
+  display: inline-flex;
+  min-width: 0;
+}
+
+.accountButton {
+  gap: 0.45rem;
+  border: 1px solid rgba(15, 23, 42, 0.09);
+  background: rgba(255, 255, 255, 0.82);
+  color: #0f172a;
+  padding: 0 0.72rem 0 0.55rem;
+}
+
+.accountAvatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.45rem;
+  height: 1.45rem;
+  border-radius: 999px;
+  background: #0f172a;
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 850;
+}
+
+.mobileNav {
+  display: none;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.35rem;
+  border-top: 1px solid rgba(15, 23, 42, 0.07);
+  padding: 0.45rem 0.75rem 0.55rem;
+}
+
+.mobileNavItem {
+  min-width: 0;
+  height: 2.35rem;
+  border-radius: 999px;
+  font-size: 0.82rem;
+}
+
+.mobileNavItemActive {
+  background: #10251f;
+  color: #ffffff;
+  box-shadow: 0 8px 20px rgba(16, 37, 31, 0.16);
+}
+
+@media (max-width: 1120px) {
+  .headerInner {
+    gap: 0.7rem;
+  }
+
+  .navItem {
+    min-width: 3.7rem;
+    padding: 0 0.7rem;
+  }
+
+  .headerTitle {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .nav,
+  .createButton {
+    display: none;
+  }
+
+  .headerInner {
+    min-height: 3.8rem;
+    padding: 0 0.85rem;
+  }
+
+  .mobileNav {
+    display: grid;
+  }
+}
+
+@media (max-width: 720px) {
+  .quotaBadge {
+    display: none;
+  }
+
+  .brandName {
+    max-width: 8.5rem;
+  }
+}
+
+@media (max-width: 460px) {
+  .accountButton {
+    width: 2.35rem;
+    padding: 0;
+  }
+
+  .accountButtonText {
+    display: none;
+  }
+}

@@ -2,16 +2,13 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { BrandMark } from "@/features/shell/brand-mark";
-import { ClientProviderControls } from "@/features/shell/client-provider-controls";
 import {
-  APP_HEADER_CONTAINER_CLASS,
-  APP_HEADER_LEFT_CLASS,
-  APP_MOBILE_NAV_CONTAINER_CLASS,
-  APP_HEADER_RIGHT_CLASS,
-  APP_NAV_CONTAINER_CLASS,
+  APP_MOBILE_NAV_ITEMS,
   APP_NAV_ITEMS,
 } from "@/features/shell/app-navigation";
+import { ProviderSettingsPopover } from "@/features/shell/provider-settings-popover";
 import { PublicQuotaStatusBadge } from "@/features/shell/public-quota-status";
+import styles from "./app-header.module.css";
 
 type AppShellProps = Readonly<{
   children: ReactNode;
@@ -31,7 +28,7 @@ export function AppShell({
   eyebrow,
   title,
   description,
-  brandLabel = "image Studio",
+  brandLabel = "image2.mom",
   navAside,
   leadingAction,
   workspaceMode = false,
@@ -63,17 +60,21 @@ type AppHeaderProps = Readonly<{
 
 function AppHeader(props: AppHeaderProps) {
   return (
-    <header className="sticky top-0 z-30 border-b border-black/5 bg-white/90 backdrop-blur-xl">
-      <div className={APP_HEADER_CONTAINER_CLASS}>
-        <div className={APP_HEADER_LEFT_CLASS}>
+    <header className={styles.header}>
+      <div className={styles.headerInner}>
+        <div className={styles.brandArea}>
           {props.leadingAction}
           <BrandLink brandLabel={props.brandLabel} headerTitle={props.headerTitle} />
-          <PublicQuotaStatusBadge />
         </div>
         <MainNav activeHref={props.activeHref} />
-        <div className={APP_HEADER_RIGHT_CLASS}>
-          <ClientProviderControls />
+        <div className={styles.actions}>
+          <CreateAction />
+          <div className={styles.quotaBadge}>
+            <PublicQuotaStatusBadge />
+          </div>
+          <ProviderSettingsPopover />
           {props.navAside}
+          {props.navAside ? null : <AccountButton />}
         </div>
       </div>
       <MobileNav activeHref={props.activeHref} />
@@ -83,21 +84,21 @@ function AppHeader(props: AppHeaderProps) {
 
 function BrandLink(props: Readonly<{ brandLabel: string; headerTitle?: string }>) {
   return (
-    <div className="flex min-w-0 items-center gap-3 overflow-hidden">
-      <Link href="/" className="flex min-w-0 shrink-0 items-center gap-3 rounded-2xl px-1 py-1.5 text-sm font-semibold tracking-[-0.01em] text-gray-900" aria-label="image Studio 首页">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-black/10 bg-white shadow-sm">
+    <>
+      <Link href="/" className={styles.brand} aria-label="image2.mom 首页">
+        <span className={styles.brandIcon}>
           <BrandMark />
         </span>
-        <span className="hidden truncate sm:inline">{props.brandLabel}</span>
+        <span className={styles.brandName}>{props.brandLabel}</span>
       </Link>
-      {props.headerTitle ? <span className="hidden min-w-0 truncate border-l border-gray-200 pl-3 text-sm font-semibold text-gray-900 sm:inline">{props.headerTitle}</span> : null}
-    </div>
+      {props.headerTitle ? <span className={styles.headerTitle}>{props.headerTitle}</span> : null}
+    </>
   );
 }
 
 function MainNav({ activeHref }: Readonly<{ activeHref?: string }>) {
   return (
-    <nav className={APP_NAV_CONTAINER_CLASS} aria-label="功能切换">
+    <nav className={styles.nav} aria-label="产品导航">
       {APP_NAV_ITEMS.map((item) => <NavLink key={item.href} active={activeHref === item.href} item={item} />)}
     </nav>
   );
@@ -105,8 +106,10 @@ function MainNav({ activeHref }: Readonly<{ activeHref?: string }>) {
 
 function MobileNav({ activeHref }: Readonly<{ activeHref?: string }>) {
   return (
-    <nav className={APP_MOBILE_NAV_CONTAINER_CLASS} aria-label="移动端功能切换">
-      {APP_NAV_ITEMS.map((item) => <NavLink key={item.href} active={activeHref === item.href} item={item} />)}
+    <nav className={styles.mobileNav} aria-label="移动端功能切换">
+      {APP_MOBILE_NAV_ITEMS.map((item) => (
+        <MobileNavLink key={item.href} active={activeHref === item.href} item={item} />
+      ))}
     </nav>
   );
 }
@@ -115,19 +118,49 @@ function NavLink(props: Readonly<{ active: boolean; item: (typeof APP_NAV_ITEMS)
   return (
     <Link
       href={props.item.href}
-      className={getNavLinkClass(props.item)}
+      className={getNavLinkClass(props.active)}
       aria-current={props.active ? "page" : undefined}
-      data-active={props.active ? "true" : "false"}
     >
       {props.item.label}
     </Link>
   );
 }
 
-function getNavLinkClass(item: (typeof APP_NAV_ITEMS)[number]) {
-  return item.tone === "featured"
-    ? "nav-pill nav-pill-featured whitespace-nowrap"
-    : "nav-pill whitespace-nowrap";
+function MobileNavLink(props: Readonly<{ active: boolean; item: (typeof APP_MOBILE_NAV_ITEMS)[number] }>) {
+  return (
+    <Link
+      href={props.item.href}
+      className={getMobileNavLinkClass(props.active)}
+      aria-current={props.active ? "page" : undefined}
+    >
+      {props.item.label}
+    </Link>
+  );
+}
+
+function CreateAction() {
+  return (
+    <Link href="/generate" className={styles.createButton}>
+      + 生成
+    </Link>
+  );
+}
+
+function AccountButton() {
+  return (
+    <Link href="/login" className={styles.accountButton} aria-label="账号中心">
+      <span className={styles.accountAvatar} aria-hidden="true">我</span>
+      <span className={styles.accountButtonText}>我的</span>
+    </Link>
+  );
+}
+
+function getNavLinkClass(active: boolean) {
+  return active ? `${styles.navItem} ${styles.navItemActive}` : styles.navItem;
+}
+
+function getMobileNavLinkClass(active: boolean) {
+  return active ? `${styles.mobileNavItem} ${styles.mobileNavItemActive}` : styles.mobileNavItem;
 }
 
 function HeroSection(props: Readonly<{ description?: string; eyebrow?: string; title?: string }>) {

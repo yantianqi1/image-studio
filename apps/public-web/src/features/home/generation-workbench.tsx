@@ -32,7 +32,6 @@ import {
   getImageModelsState,
   getReferenceImagesFromHistory,
   getWorkspaceClass,
-  getSiteTitle,
   getStateFromHistory,
   getWalletLabel,
   INITIAL_FORM,
@@ -58,7 +57,6 @@ export function GenerationWorkbench() {
   const failHistory = history.failHistory;
   const modelsState = useApiResource(() => publicApi.getModels());
   const imageModelsState = getImageModelsState(modelsState);
-  const settingsState = useApiResource(() => publicApi.getSiteSettings());
   const walletState = useApiResource(() => publicApi.getWalletSummary());
   const { resolvedModelCode, selectedModel } = imageModelsState.status === "ready"
     ? resolveImageModel(imageModelsState.data, form.model_code)
@@ -219,7 +217,6 @@ export function GenerationWorkbench() {
   return (
     <AppShell
       activeHref="/generate"
-      brandLabel={getSiteTitle(settingsState)}
       navAside={<TopBarActions walletLabel={walletLabel} />}
       workspaceMode
     >

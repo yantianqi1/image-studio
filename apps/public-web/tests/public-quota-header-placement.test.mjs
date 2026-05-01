@@ -12,8 +12,8 @@ const quotaSource = readFileSync(
   "utf8",
 );
 
-test("public quota display is mounted beside the image Studio brand", () => {
-  assert.match(appShellSource, /<BrandLink[^>]*\/>\s*<PublicQuotaStatusBadge \/>/s);
+test("public quota display is mounted in the right action cluster", () => {
+  assert.match(appShellSource, /<CreateAction \/>[\s\S]*<PublicQuotaStatusBadge \/>/);
   assert.doesNotMatch(appShellSource, /<PublicQuotaStatusBar/);
 });
 

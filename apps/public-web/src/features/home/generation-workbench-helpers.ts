@@ -55,12 +55,6 @@ export function getImageModelsState(
   return { status: "ready", data: filterImageModels(modelsState.data) };
 }
 
-export function getSiteTitle(settingsState: ResourceState<{ site_title: string }>) {
-  return settingsState.status === "ready"
-    ? settingsState.data.site_title
-    : "image Studio";
-}
-
 export function getWalletLabel(walletState: ResourceState<WalletSummary>) {
   if (walletState.status === "error" && walletState.statusCode === UNAUTHORIZED_STATUS) {
     return "未登录";
