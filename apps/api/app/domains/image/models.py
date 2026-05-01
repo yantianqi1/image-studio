@@ -22,6 +22,8 @@ class Asset(Base):
     owner_client_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     storage_path: Mapped[str] = mapped_column(String(255), nullable=False)
     mime_type: Mapped[str] = mapped_column(String(128), nullable=False)
+    visibility: Mapped[str] = mapped_column(String(16), default="private", nullable=False, index=True)
+    published_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
 
@@ -45,6 +47,7 @@ class ImageJob(Base):
     client_access_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     client_provider_config: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     storage_subdir: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    visibility: Mapped[str] = mapped_column(String(16), default="private", nullable=False)
     status: Mapped[str] = mapped_column(String(32), default="queued", nullable=False)
     requested_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     attempt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
