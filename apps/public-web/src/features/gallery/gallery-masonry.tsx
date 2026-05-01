@@ -11,13 +11,13 @@ import actionStyles from "./gallery-actions.module.css";
 import styles from "./gallery-page.module.css";
 
 const DEFAULT_IMAGE_ASPECT_RATIO = 1.2;
-const MIN_GALLERY_COLUMN_COUNT = 1;
+const MIN_GALLERY_COLUMN_COUNT = 2;
 const COPY_FEEDBACK_VISIBLE_MS = 1600;
 
 const GALLERY_MASONRY_BREAKPOINTS = [
   { minWidth: 1180, columns: 4 },
-  { minWidth: 820, columns: 3 },
-  { minWidth: 540, columns: 2 },
+  { minWidth: 820, columns: 4 },
+  { minWidth: 540, columns: 3 },
 ] as const;
 
 type ImageAspectRatios = Readonly<Record<number, number>>;
@@ -152,7 +152,7 @@ function GalleryTile({
           alt={title}
           loading="lazy"
           decoding="async"
-          sizes="(min-width: 1180px) 25vw, (min-width: 820px) 33vw, (min-width: 540px) 50vw, 100vw"
+          sizes="(min-width: 1180px) 25vw, (min-width: 820px) 25vw, (min-width: 540px) 33vw, 50vw"
           onLoad={(event) => {
             onImageMeasure(
               item.asset_id,

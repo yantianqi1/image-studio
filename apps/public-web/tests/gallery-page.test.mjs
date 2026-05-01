@@ -74,6 +74,22 @@ test("gallery page uses a responsive masonry layout", () => {
   assert.match(stylesSource, /column/);
 });
 
+test("gallery keeps phone and tablet masonry dense", () => {
+  assert.match(masonrySource, /const MIN_GALLERY_COLUMN_COUNT = 2/);
+  assert.match(masonrySource, /{ minWidth: 1180, columns: 4 }/);
+  assert.match(masonrySource, /{ minWidth: 820, columns: 4 }/);
+  assert.match(masonrySource, /{ minWidth: 540, columns: 3 }/);
+  assert.match(stylesSource, /@media \(max-width: 1179px\)/);
+  assert.match(stylesSource, /@media \(max-width: 819px\)/);
+  assert.match(stylesSource, /@media \(max-width: 539px\)/);
+  assert.match(
+    masonrySource,
+    /sizes="\(min-width: 1180px\) 25vw, \(min-width: 820px\) 25vw, \(min-width: 540px\) 33vw, 50vw"/,
+  );
+  assert.match(stylesSource, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.doesNotMatch(stylesSource, /grid-template-columns: 1fr/);
+});
+
 test("gallery homepage has polished image-first product treatment", () => {
   assert.match(gallerySource, /图片库/);
   assert.match(gallerySource, /公开图库/);
