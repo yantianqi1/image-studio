@@ -23,13 +23,18 @@ export type ImageGenerationRequest = Readonly<{
   mode?: "generate" | "edit";
   source_asset_id?: number;
   reference_asset_ids?: readonly number[];
+  visibility?: ImageAssetVisibility;
 }>;
+
+export type ImageAssetVisibility = "private" | "public";
+export type ImageGalleryScope = "mine" | "public";
 
 export type ImageGenerationResponse = Readonly<{
   id: number;
   status: string;
   prompt: string;
   model_code: string;
+  visibility?: ImageAssetVisibility;
   charge_cents: number;
   error_message?: string | null;
   source_asset_id?: number | null;
@@ -49,8 +54,23 @@ export type ImageJobResult = Readonly<{
   result_index: number;
   asset_id: number;
   asset_url: string;
+  visibility?: ImageAssetVisibility;
+  published_at?: string | null;
+  created_at?: string;
   revised_prompt: string;
   provider_request_id: string | null;
+}>;
+
+export type ImageGalleryItem = Readonly<{
+  asset_id: number;
+  asset_url: string;
+  visibility: ImageAssetVisibility;
+  published_at: string | null;
+  created_at: string;
+  job_id: number;
+  result_index: number;
+  prompt: string;
+  revised_prompt: string | null;
 }>;
 
 export type PublicModelSummary = Readonly<{
@@ -240,6 +260,15 @@ export const publicApi = {
   },
   getImageJobResults(jobId: number) {
     return apiFetch<readonly ImageJobResult[]>(`/image/jobs/${jobId}/results`);
+  },
+  getImageGallery(scope: ImageGalleryScope) {
+    return apiFetch<readonly ImageGalleryItem[]>(`/image/gallery?scope=${scope}`);
+  },
+  updateImageAssetVisibility(assetId: number, visibility: ImageAssetVisibility) {
+    return apiFetch<ImageGalleryItem>(`/image/assets/${assetId}/visibility`, {
+      method: "PATCH",
+      body: { visibility },
+    });
   },
   deleteImageJob(jobId: number) {
     return apiFetch<DeleteResult>(`/image/jobs/${jobId}`, { method: "DELETE" });

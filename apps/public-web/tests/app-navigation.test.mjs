@@ -20,24 +20,25 @@ function loadAppNavigation() {
   return sandbox.module.exports;
 }
 
-test("app navigation exposes 应用 after 生图", () => {
+test("app navigation exposes 图库 after 生图", () => {
   const { APP_HEADER_CONTAINER_CLASS, APP_HEADER_LEFT_CLASS, APP_HEADER_RIGHT_CLASS, APP_MOBILE_NAV_CONTAINER_CLASS, APP_NAV_CONTAINER_CLASS, APP_NAV_ITEMS } = loadAppNavigation();
 
-  assert.equal(APP_NAV_ITEMS.length, 6);
+  assert.equal(APP_NAV_ITEMS.length, 7);
   assert.equal(APP_NAV_ITEMS[0].label, "生图");
-  assert.equal(APP_NAV_ITEMS[1].label, "漫画");
-  assert.equal(APP_NAV_ITEMS[2].label, "应用");
-  assert.equal(APP_NAV_ITEMS[3].label, "任务");
-  assert.equal(APP_NAV_ITEMS[4].label, "钱包");
-  assert.equal(APP_NAV_ITEMS[5].label, "登录");
-  assert.equal(APP_NAV_ITEMS[2].href, "/apps");
+  assert.equal(APP_NAV_ITEMS[1].label, "图库");
+  assert.equal(APP_NAV_ITEMS[2].label, "漫画");
+  assert.equal(APP_NAV_ITEMS[3].label, "应用");
+  assert.equal(APP_NAV_ITEMS[4].label, "任务");
+  assert.equal(APP_NAV_ITEMS[5].label, "钱包");
+  assert.equal(APP_NAV_ITEMS[6].label, "登录");
+  assert.equal(APP_NAV_ITEMS[1].href, "/gallery");
   assert.match(APP_HEADER_CONTAINER_CLASS, /grid-cols-\[minmax\(0,1fr\)_auto\]/);
-  assert.match(APP_HEADER_CONTAINER_CLASS, /md:grid-cols-\[minmax\(0,1fr\)_27rem_minmax\(0,1fr\)\]/);
+  assert.match(APP_HEADER_CONTAINER_CLASS, /md:grid-cols-\[minmax\(0,1fr\)_31rem_minmax\(0,1fr\)\]/);
   assert.match(APP_HEADER_LEFT_CLASS, /col-start-1/);
   assert.match(APP_HEADER_RIGHT_CLASS, /md:col-start-3/);
-  assert.match(APP_NAV_CONTAINER_CLASS, /grid-cols-6/);
+  assert.match(APP_NAV_CONTAINER_CLASS, /grid-cols-7/);
   assert.match(APP_MOBILE_NAV_CONTAINER_CLASS, /md:hidden/);
-  assert.match(APP_MOBILE_NAV_CONTAINER_CLASS, /grid-cols-6/);
+  assert.match(APP_MOBILE_NAV_CONTAINER_CLASS, /grid-cols-7/);
   assert.doesNotMatch(APP_NAV_CONTAINER_CLASS, /absolute/);
 });
 
