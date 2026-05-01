@@ -17,8 +17,8 @@ const GALLERY_SCOPES: readonly Readonly<{
   value: ImageGalleryScope;
   label: string;
 }>[] = [
+  { value: "public", label: "公开流" },
   { value: "mine", label: "我的图库" },
-  { value: "public", label: "公开瀑布流" },
 ];
 
 type GalleryPageProps = Readonly<{
@@ -59,11 +59,12 @@ function GalleryHeader({
 }>) {
   return (
     <header className={styles.header}>
-      <div>
+      <div className={styles.heroPanel}>
         <p className={styles.eyebrow}>Gallery</p>
-        <h1 className={styles.title}>图片图库</h1>
+        <h1 className={styles.title}>{getGalleryTitle(scope)}</h1>
+        <p className={styles.subtitle}>{getGallerySubtitle(scope)}</p>
       </div>
-      <div className={styles.headerActions}>
+      <div className={styles.filterBar}>
         <span className={styles.countBadge}>{getGalleryCountLabel(state)}</span>
         <ScopeSegmentedControl scope={scope} onScopeChange={onScopeChange} />
       </div>
@@ -142,6 +143,16 @@ function getEmptyDescription(scope: ImageGalleryScope) {
   return scope === "public"
     ? "还没有公开展示的图片。"
     : "生成图片后会出现在这里。";
+}
+
+function getGalleryTitle(scope: ImageGalleryScope) {
+  return scope === "public" ? "公开图片流" : "我的图库";
+}
+
+function getGallerySubtitle(scope: ImageGalleryScope) {
+  return scope === "public"
+    ? "来自 image2.mom 用户生成的精选图像"
+    : "你的私有与公开作品会集中保存在这里";
 }
 
 function getScopeRefreshKey(scope: ImageGalleryScope) {

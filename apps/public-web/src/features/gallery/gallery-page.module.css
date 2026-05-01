@@ -1,40 +1,57 @@
 .page {
   display: grid;
-  gap: 1rem;
+  gap: 1.1rem;
 }
 
 .header {
   display: flex;
-  align-items: end;
+  align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  border: 1px solid rgba(17, 24, 39, 0.08);
-  border-radius: 1.25rem;
-  background: rgba(255, 255, 255, 0.72);
-  padding: 1.1rem 1.25rem;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  border: 1px solid rgba(15, 23, 42, 0.07);
+  border-radius: 0.5rem;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(240, 253, 250, 0.58)),
+    #ffffff;
+  padding: 1rem 1.1rem;
+  box-shadow: 0 14px 40px rgba(15, 23, 42, 0.06);
+}
+
+.heroPanel {
+  min-width: 0;
 }
 
 .eyebrow {
-  color: #9ca3af;
+  color: #0f766e;
   font-size: 0.7rem;
   font-weight: 800;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .title {
-  margin-top: 0.25rem;
+  margin-top: 0.18rem;
   color: #111827;
-  font-size: 1.65rem;
-  font-weight: 760;
+  font-size: clamp(1.45rem, 2vw, 2.15rem);
+  font-weight: 850;
+  letter-spacing: 0;
+  line-height: 1.1;
 }
 
-.headerActions {
+.subtitle {
+  margin-top: 0.38rem;
+  max-width: 36rem;
+  color: #64748b;
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+.filterBar {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 0.65rem;
+  align-items: center;
+  gap: 0.55rem;
 }
 
 .countBadge,
@@ -43,10 +60,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(17, 24, 39, 0.08);
+  border: 1px solid rgba(15, 23, 42, 0.08);
   border-radius: 999px;
   background: #ffffff;
-  color: #4b5563;
+  color: #475569;
   font-size: 0.78rem;
   font-weight: 700;
 }
@@ -60,9 +77,9 @@
   display: inline-grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.25rem;
-  border: 1px solid rgba(17, 24, 39, 0.08);
+  border: 1px solid rgba(15, 23, 42, 0.08);
   border-radius: 999px;
-  background: #f3f4f6;
+  background: #f8fafc;
   padding: 0.25rem;
 }
 
@@ -75,9 +92,9 @@
 }
 
 .scopeTabActive {
-  background: #111827;
+  background: #10251f;
   color: #ffffff;
-  box-shadow: 0 6px 18px rgba(17, 24, 39, 0.14);
+  box-shadow: 0 8px 20px rgba(16, 37, 31, 0.16);
 }
 
 .galleryGrid {
@@ -95,7 +112,7 @@
 .tile {
   overflow: hidden;
   border: 1px solid rgba(17, 24, 39, 0.08);
-  border-radius: 1.15rem;
+  border-radius: 0.5rem;
   background: #ffffff;
   box-shadow: 0 14px 30px rgba(15, 23, 42, 0.05);
 }
@@ -162,7 +179,7 @@
     flex-direction: column;
   }
 
-  .headerActions {
+  .filterBar {
     justify-content: space-between;
   }
 
@@ -176,7 +193,7 @@
     grid-template-columns: 1fr;
   }
 
-  .headerActions,
+  .filterBar,
   .scopeTabs {
     width: 100%;
   }

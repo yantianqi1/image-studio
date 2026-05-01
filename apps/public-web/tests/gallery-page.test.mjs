@@ -55,3 +55,10 @@ test("gallery page uses a responsive masonry layout", () => {
   assert.match(stylesSource, /galleryGrid/);
   assert.match(stylesSource, /column/);
 });
+
+test("gallery homepage has public stream product treatment", () => {
+  assert.match(gallerySource, /公开图片流/);
+  assert.match(gallerySource, /来自 image2\.mom/);
+  assert.match(stylesSource, /heroPanel/);
+  assert.match(stylesSource, /filterBar/);
+});
