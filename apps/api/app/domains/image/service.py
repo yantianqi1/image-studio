@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 from apps.api.app.core.errors import AppError
 from apps.api.app.domains.auth.ownership import OwnerContext
 from apps.api.app.domains.image.assets import persist_rendered_asset
+from apps.api.app.domains.image.gallery import normalize_asset_visibility, set_asset_visibility
+from apps.api.app.domains.image.job_recovery import IMAGE_JOB_RETRY_ERROR_CODE, recover_stale_running_jobs
 from apps.api.app.domains.image.models import ImageJob
 from apps.api.app.domains.image.repository import (
     build_reservation,
@@ -44,7 +46,6 @@ from apps.api.app.domains.llm.service import (
 IMAGE_JOB_MAX_ATTEMPTS = 3
 IMAGE_JOB_RETRY_DELAY_SECONDS = 5
 IMAGE_JOB_STALE_TIMEOUT_SECONDS = 300
-IMAGE_JOB_RETRY_ERROR_CODE = "image_job_retry_scheduled"
 CLAIM_BATCH_SIZE = 10
 
 
@@ -62,6 +63,7 @@ def create_job(
     client_access_id: str | None = None,
     client_provider_config: ClientProviderConfig | None = None,
     storage_subdir: str | None = None,
+    visibility: str = "private",
 ) -> ImageJob:
     target = resolve_model_execution_target(session, model_code=model_code)
     source_asset = resolve_source_asset(session, mode=mode, source_asset_id=source_asset_id, owner=owner)
@@ -86,6 +88,7 @@ def create_job(
         client_access_id=client_access_id,
         client_provider_config=serialize_client_provider_config(config=client_provider_config, provider_type=target.provider.type),
         storage_subdir=storage_subdir,
+        visibility=visibility,
         charge_cents=charge_cents,
         reservation_id=build_reservation(session, owner=owner, charge_cents=charge_cents),
     )
@@ -109,6 +112,7 @@ def build_image_job(
     client_access_id: str | None,
     client_provider_config: dict[str, str] | None,
     storage_subdir: str | None,
+    visibility: str,
     charge_cents: int,
     reservation_id: int | None,
 ) -> ImageJob:
@@ -124,6 +128,7 @@ def build_image_job(
         client_access_id=client_access_id,
         client_provider_config=client_provider_config,
         storage_subdir=storage_subdir,
+        visibility=normalize_asset_visibility(visibility),
         requested_count=requested_count,
         mode=mode,
         charge_cents=charge_cents,
@@ -134,7 +139,7 @@ def build_image_job(
 
 
 def claim_next_job(session: Session) -> ImageJob | None:
-    recover_stale_running_jobs(session)
+    recover_stale_running_jobs(session, stale_timeout_seconds=IMAGE_JOB_STALE_TIMEOUT_SECONDS)
     current_time = datetime.utcnow()
     job_ids = list(
         session.execute(
@@ -196,6 +201,7 @@ def process_render_results(session: Session, *, job: ImageJob) -> None:
             client_id=job.client_access_id,
             storage_subdir=job.storage_subdir,
         )
+        set_asset_visibility(asset, job.visibility)
         add_job_result(session, job=job, result_index=result_index, asset_id=asset.id, rendered=rendered)
 
 
@@ -274,29 +280,3 @@ def handle_job_failure(session: Session, *, job: ImageJob, exc: Exception) -> No
     job.finished_at = None
     session.flush()
 
-
-def recover_stale_running_jobs(session: Session) -> None:
-    stale_before = datetime.utcnow() - timedelta(seconds=IMAGE_JOB_STALE_TIMEOUT_SECONDS)
-    jobs = list(
-        session.execute(
-            select(ImageJob).where(
-                ImageJob.status == "running",
-                ImageJob.started_at.is_not(None),
-                ImageJob.started_at <= stale_before,
-            )
-        ).scalars()
-    )
-    for job in jobs:
-        recover_stale_job(session, job=job)
-    session.flush()
-
-
-def recover_stale_job(session: Session, *, job: ImageJob) -> None:
-    if job.attempt_count >= job.max_attempts:
-        mark_job_failed(session, job=job, error_message="stale running image job expired")
-        return
-    job.status = "queued"
-    job.error_code = IMAGE_JOB_RETRY_ERROR_CODE
-    job.error_message = "stale running image job requeued"
-    job.available_at = datetime.utcnow()
-    job.finished_at = None

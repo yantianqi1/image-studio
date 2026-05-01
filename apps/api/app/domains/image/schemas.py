@@ -12,3 +12,8 @@ class CreateImageJobRequest(BaseModel):
     mode: str = Field(default="generate", pattern="^(generate|edit)$")
     source_asset_id: int | None = Field(default=None, ge=1)
     reference_asset_ids: list[ReferenceAssetId] = Field(default_factory=list)
+    visibility: str = Field(default="private", pattern="^(private|public)$")
+
+
+class UpdateAssetVisibilityRequest(BaseModel):
+    visibility: str = Field(default="private", pattern="^(private|public)$")

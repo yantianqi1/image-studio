@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Request, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, Query, Request, Response, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -10,12 +10,17 @@ from apps.api.app.domains.auth.ownership import ensure_anonymous_owner, resolve_
 from apps.api.app.domains.auth.service import require_admin
 from apps.api.app.domains.image.admin_service import list_admin_jobs_with_results
 from apps.api.app.domains.image.assets import persist_uploaded_asset
-from apps.api.app.domains.image.schemas import CreateImageJobRequest
+from apps.api.app.domains.image.gallery import (
+    get_asset_for_read,
+    list_gallery_items,
+    load_assets_by_id,
+    update_owned_asset_visibility,
+)
+from apps.api.app.domains.image.schemas import CreateImageJobRequest, UpdateAssetVisibilityRequest
 from apps.api.app.domains.image.service import (
     create_job,
     delete_job,
     get_asset,
-    get_asset_for_owner,
     get_job_for_owner,
     list_job_results_for_owner,
     list_jobs_for_owner,
@@ -55,6 +60,7 @@ def create_image_job(
         reference_asset_ids=payload.reference_asset_ids,
         client_access_id=client_config.client_id if owner.user_id is None and client_config else None,
         client_provider_config=client_config if owner.user_id is None else None,
+        visibility=payload.visibility,
     )
     if should_consume_public_quota(owner=owner, has_client_provider=client_config is not None):
         consume_public_quota(
@@ -66,6 +72,17 @@ def create_image_job(
         )
     session.commit()
     return api_ok(job_payload(job))
+
+
+@public_router.get("/gallery")
+def get_image_gallery(
+    request: Request,
+    response: Response,
+    scope: str = Query(default="mine"),
+    session: Session = Depends(get_db_session),
+):
+    owner = resolve_gallery_owner(request=request, response=response, session=session, scope=scope)
+    return api_ok([gallery_item_payload(result, job=job, asset=asset) for result, job, asset in list_gallery_items(session, owner=owner, scope=scope)])
 
 
 @public_router.get("/jobs")
@@ -84,7 +101,9 @@ def get_image_job(job_id: int, request: Request, session: Session = Depends(get_
 
 @public_router.get("/jobs/{job_id}/results")
 def get_image_results(job_id: int, request: Request, session: Session = Depends(get_db_session)):
-    return api_ok([result_payload(item) for item in list_job_results_for_owner(session, job_id, resolve_request_owner(request, session))])
+    results = list_job_results_for_owner(session, job_id, resolve_request_owner(request, session))
+    assets_by_id = load_assets_by_id(session, [item.asset_id for item in results])
+    return api_ok([result_payload(item, asset=assets_by_id.get(item.asset_id)) for item in results])
 
 
 @public_router.delete("/jobs/{job_id}")
@@ -97,8 +116,20 @@ def delete_image_job(job_id: int, request: Request, session: Session = Depends(g
 
 @public_router.get("/assets/{asset_id}")
 def get_image_asset(asset_id: int, request: Request, session: Session = Depends(get_db_session)):
-    asset = get_asset_for_owner(session, asset_id, resolve_request_owner(request, session))
+    asset = get_asset_for_read(session, asset_id, resolve_request_owner(request, session))
     return FileResponse(Path(asset.storage_path), media_type=asset.mime_type)
+
+
+@public_router.patch("/assets/{asset_id}/visibility")
+def update_image_asset_visibility(
+    asset_id: int,
+    payload: UpdateAssetVisibilityRequest,
+    request: Request,
+    session: Session = Depends(get_db_session),
+):
+    asset = update_owned_asset_visibility(session, asset_id=asset_id, owner=resolve_request_owner(request, session), visibility=payload.visibility)
+    session.commit()
+    return api_ok(asset_payload(asset))
 
 
 @public_router.post("/uploads", status_code=status.HTTP_201_CREATED)
@@ -137,6 +168,12 @@ def should_consume_public_quota(*, owner, has_client_provider: bool) -> bool:
     return owner.user_id is None and not has_client_provider
 
 
+def resolve_gallery_owner(*, request: Request, response: Response, session: Session, scope: str):
+    if scope == "mine":
+        return ensure_anonymous_owner(request, response, session)
+    return resolve_request_owner(request, session)
+
+
 @admin_router.get("/image-tasks")
 @admin_router.get("/image/jobs")
 def get_admin_jobs(request: Request, session: Session = Depends(get_db_session)):
@@ -168,6 +205,7 @@ def job_payload(job) -> dict[str, object]:
         "mode": job.mode,
         "prompt": job.prompt,
         "model_code": job.model_code,
+        "visibility": job.visibility,
         "source_asset_id": job.source_asset_id,
         "provider_id": job.provider_id,
         "provider_model": job.provider_model,
@@ -185,8 +223,8 @@ def job_payload(job) -> dict[str, object]:
     }
 
 
-def result_payload(result) -> dict[str, object]:
-    return {
+def result_payload(result, *, asset=None) -> dict[str, object]:
+    payload = {
         "id": result.id,
         "job_id": result.job_id,
         "result_index": result.result_index,
@@ -195,6 +233,9 @@ def result_payload(result) -> dict[str, object]:
         "revised_prompt": result.revised_prompt,
         "provider_request_id": result.provider_request_id,
     }
+    if asset is not None:
+        payload.update(asset_payload(asset))
+    return payload
 
 
 def admin_result_payload(result) -> dict[str, object]:
@@ -211,3 +252,24 @@ def upload_payload(asset) -> dict[str, object]:
         "mime_type": asset.mime_type,
         "created_at": asset.created_at.isoformat(),
     }
+
+
+def asset_payload(asset) -> dict[str, object]:
+    return {
+        "asset_id": asset.id,
+        "asset_url": f"/api/public/image/assets/{asset.id}",
+        "visibility": asset.visibility,
+        "published_at": asset.published_at.isoformat() if asset.published_at else None,
+        "created_at": asset.created_at.isoformat(),
+    }
+
+
+def gallery_item_payload(result, *, job, asset) -> dict[str, object]:
+    payload = asset_payload(asset)
+    payload.update({
+        "job_id": job.id,
+        "result_index": result.result_index,
+        "prompt": job.prompt,
+        "revised_prompt": result.revised_prompt,
+    })
+    return payload
