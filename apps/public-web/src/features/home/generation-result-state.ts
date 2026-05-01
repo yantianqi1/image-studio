@@ -1,13 +1,12 @@
 import type { GenerationHistoryItem } from "@/features/home/generation-history.types";
 import type { GenerationState } from "@/features/home/generation-workbench.types";
 
-export type ResultStep = "submit" | "queue" | "generate" | "writeback" | "complete";
+export type ResultStep = "submit" | "queue" | "generate" | "complete";
 export type ResultViewKind =
   | "idle"
   | "created"
   | "queued"
   | "generating"
-  | "success_without_images"
   | "success_with_images"
   | "failed";
 
@@ -37,7 +36,7 @@ export function deriveResultView(
     return successWithImagesView;
   }
   if (isSucceededWithoutImages(historyItem, state)) {
-    return successWithoutImagesView;
+    return missingResultsView;
   }
   if (isGenerating(historyItem)) {
     return generatingView;
@@ -124,14 +123,14 @@ const generatingView: ResultView = {
   description: "模型正在创作图像，你可以保留当前页面，结果会自动刷新。",
 };
 
-const successWithoutImagesView: ResultView = {
-  kind: "success_without_images",
-  badgeLabel: "处理中",
-  badgeTone: "generating",
-  activeStep: "writeback",
-  eyebrow: "SYNCING",
-  title: "正在等待图片结果写回",
-  description: "任务流程正常，图片结果写回后会自动出现在预览画布中。",
+const missingResultsView: ResultView = {
+  kind: "failed",
+  badgeLabel: "结果缺失",
+  badgeTone: "failed",
+  activeStep: "complete",
+  eyebrow: "INCONSISTENT",
+  title: "图片结果缺失",
+  description: "后端任务已完成，但没有返回图片结果记录，请检查 image_job_results。",
 };
 
 const successWithImagesView: ResultView = {

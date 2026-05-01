@@ -10,8 +10,15 @@ const HISTORY_STATUS_PENDING = "pending";
 const HISTORY_STATUS_SUCCESS = "success";
 const TERMINAL_FAILED_STATUS = "failed";
 const TERMINAL_SUCCEEDED_STATUS = "succeeded";
+const MISSING_RESULTS_MESSAGE = "生成任务已完成，但没有返回图片结果";
 
 type Sleep = (milliseconds: number) => Promise<void>;
+type JobUpdateHandler = (job: ImageGenerationResponse) => void;
+
+type WaitForImageJobOptions = Readonly<{
+  onJobUpdate?: JobUpdateHandler;
+  sleep?: Sleep;
+}>;
 
 export type CompletedImageJob = Readonly<{
   job: ImageGenerationResponse;
@@ -47,15 +54,20 @@ export function imageJobResultsToHistoryImages(results: readonly ImageJobResult[
 export async function waitForImageJobResults(
   api: Pick<PublicApiClient, "getImageJob" | "getImageJobResults">,
   jobId: number,
-  sleep: Sleep = defaultSleep,
+  options: WaitForImageJobOptions = {},
 ): Promise<CompletedImageJob> {
+  const sleep = options.sleep ?? defaultSleep;
   while (true) {
     const job = await api.getImageJob(jobId);
+    options.onJobUpdate?.(job);
     if (job.status === TERMINAL_FAILED_STATUS) {
       throw new Error(job.error_message || "生成任务失败");
     }
     if (job.status === TERMINAL_SUCCEEDED_STATUS) {
       const results = await api.getImageJobResults(jobId);
+      if (results.length === 0) {
+        throw new Error(MISSING_RESULTS_MESSAGE);
+      }
       return { job, results };
     }
     await sleep(POLL_INTERVAL_MS);

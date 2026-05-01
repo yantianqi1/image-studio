@@ -52,11 +52,11 @@ test("deriveResultView maps running task to generating UI", () => {
   assert.equal(view.activeStep, "generate");
 });
 
-test("deriveResultView maps succeeded task without images to writeback waiting UI", () => {
+test("deriveResultView exposes succeeded task without images as inconsistent", () => {
   const { deriveResultView } = loadResultState();
   const view = deriveResultView({ ...baseHistory, status: "success", taskStatus: "succeeded" }, { status: "success", jobId: 11, taskStatus: "succeeded" });
 
-  assert.equal(view.kind, "success_without_images");
-  assert.equal(view.badgeLabel, "处理中");
-  assert.equal(view.activeStep, "writeback");
+  assert.equal(view.kind, "failed");
+  assert.equal(view.badgeLabel, "结果缺失");
+  assert.equal(view.activeStep, "complete");
 });

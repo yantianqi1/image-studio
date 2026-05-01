@@ -23,6 +23,10 @@ export const INITIAL_FORM: ImageFormState = {
   visibility: "private",
 };
 
+export type SubmissionModelResult =
+  | Readonly<{ model: PublicModelSummary }>
+  | Readonly<{ error: string }>;
+
 export function readSidebarCollapsed() {
   if (typeof window === "undefined") {
     return false;
@@ -53,6 +57,25 @@ export function getImageModelsState(
   }
 
   return { status: "ready", data: filterImageModels(modelsState.data) };
+}
+
+export function resolveSubmissionModel({
+  imageModelsState,
+  selectedModel,
+}: Readonly<{
+  imageModelsState: ReturnType<typeof getImageModelsState>;
+  selectedModel: PublicModelSummary | null;
+}>): SubmissionModelResult {
+  if (imageModelsState.status !== "ready") {
+    return { error: "模型列表尚未就绪，暂时无法提交生成任务。" } as const;
+  }
+  if (imageModelsState.data.length === 0) {
+    return { error: "当前没有可用模型，无法创建生成任务。" } as const;
+  }
+  if (!selectedModel) {
+    return { error: "所选模型不存在，请重新选择后再提交。" } as const;
+  }
+  return { model: selectedModel } as const;
 }
 
 export function getWalletLabel(walletState: ResourceState<WalletSummary>) {

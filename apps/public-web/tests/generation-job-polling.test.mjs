@@ -22,6 +22,7 @@ test("waitForImageJobResults polls until succeeded and returns image results", a
   const { waitForImageJobResults } = loadPolling();
   const statuses = ["queued", "running", "succeeded"];
   const seenSleeps = [];
+  const seenStatuses = [];
   const api = {
     async getImageJob(jobId) {
       return { id: jobId, status: statuses.shift(), error_message: null };
@@ -31,13 +32,19 @@ test("waitForImageJobResults polls until succeeded and returns image results", a
     },
   };
 
-  const completed = await waitForImageJobResults(api, 11, async (milliseconds) => {
-    seenSleeps.push(milliseconds);
+  const completed = await waitForImageJobResults(api, 11, {
+    sleep: async (milliseconds) => {
+      seenSleeps.push(milliseconds);
+    },
+    onJobUpdate: (job) => {
+      seenStatuses.push(job.status);
+    },
   });
 
   assert.equal(completed.job.status, "succeeded");
   assert.deepEqual(completed.results.map((result) => result.asset_url), ["/api/public/image/assets/9"]);
   assert.deepEqual(seenSleeps, [2000, 2000]);
+  assert.deepEqual(seenStatuses, ["queued", "running", "succeeded"]);
 });
 
 test("waitForImageJobResults surfaces terminal failure", async () => {
@@ -52,8 +59,25 @@ test("waitForImageJobResults surfaces terminal failure", async () => {
   };
 
   await assert.rejects(
-    () => waitForImageJobResults(api, 12, async () => undefined),
+    () => waitForImageJobResults(api, 12, { sleep: async () => undefined }),
     /provider rejected/,
+  );
+});
+
+test("waitForImageJobResults exposes succeeded job without result rows", async () => {
+  const { waitForImageJobResults } = loadPolling();
+  const api = {
+    async getImageJob(jobId) {
+      return { id: jobId, status: "succeeded", error_message: null };
+    },
+    async getImageJobResults() {
+      return [];
+    },
+  };
+
+  await assert.rejects(
+    () => waitForImageJobResults(api, 13, { sleep: async () => undefined }),
+    /生成任务已完成，但没有返回图片结果/,
   );
 });
 

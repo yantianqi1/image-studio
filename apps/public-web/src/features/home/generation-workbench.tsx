@@ -24,7 +24,6 @@ import { AppShell } from "@/features/shell/app-shell";
 import {
   publicApi,
   type ImageAssetVisibility,
-  type PublicModelSummary,
 } from "@/lib/public-api";
 import { useApiResource } from "@/lib/use-api-resource";
 import {
@@ -36,13 +35,10 @@ import {
   getWalletLabel,
   INITIAL_FORM,
   readSidebarCollapsed,
+  resolveSubmissionModel,
   saveSidebarCollapsed,
 } from "@/features/home/generation-workbench-helpers";
 import styles from "./generation-workbench.module.css";
-
-type SubmissionModelResult =
-  | Readonly<{ model: PublicModelSummary }>
-  | Readonly<{ error: string }>;
 
 export function GenerationWorkbench() {
   const [form, setForm] = useState<ImageFormState>(INITIAL_FORM);
@@ -87,7 +83,18 @@ export function GenerationWorkbench() {
     }
 
     let active = true;
-    waitForImageJobResults(publicApi, taskId)
+    waitForImageJobResults(publicApi, taskId, {
+      onJobUpdate: (job) => {
+        if (!active || job.status === "succeeded") {
+          return;
+        }
+        completeHistory(activeHistory.id, {
+          status: "generating",
+          taskId: job.id,
+          taskStatus: job.status,
+        });
+      },
+    })
       .then((completed) => {
         if (!active) {
           return;
@@ -153,7 +160,18 @@ export function GenerationWorkbench() {
         taskId: result.id,
         taskStatus: result.status,
       });
-      const completed = await waitForImageJobResults(publicApi, result.id);
+      const completed = await waitForImageJobResults(publicApi, result.id, {
+        onJobUpdate: (job) => {
+          if (job.status === "succeeded") {
+            return;
+          }
+          history.completeHistory(historyId, {
+            status: "generating",
+            taskId: job.id,
+            taskStatus: job.status,
+          });
+        },
+      });
       history.completeHistory(historyId, {
         status: "success",
         taskId: completed.job.id,
@@ -260,25 +278,6 @@ export function GenerationWorkbench() {
       </div>
     </AppShell>
   );
-}
-
-function resolveSubmissionModel({
-  imageModelsState,
-  selectedModel,
-}: Readonly<{
-  imageModelsState: ReturnType<typeof getImageModelsState>;
-  selectedModel: PublicModelSummary | null;
-}>): SubmissionModelResult {
-  if (imageModelsState.status !== "ready") {
-    return { error: "模型列表尚未就绪，暂时无法提交生成任务。" } as const;
-  }
-  if (imageModelsState.data.length === 0) {
-    return { error: "当前没有可用模型，无法创建生成任务。" } as const;
-  }
-  if (!selectedModel) {
-    return { error: "所选模型不存在，请重新选择后再提交。" } as const;
-  }
-  return { model: selectedModel } as const;
 }
 
 async function uploadReferenceImages(files: readonly File[]) {

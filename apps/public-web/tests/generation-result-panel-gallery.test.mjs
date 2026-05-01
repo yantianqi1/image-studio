@@ -18,3 +18,12 @@ test("generation result cards can publish or privatize rendered assets", () => {
   assert.match(actionsSource, /公开到图库/);
   assert.match(actionsSource, /取消公开/);
 });
+
+test("generation progress uses observable image job states", () => {
+  assert.match(source, /提交成功/);
+  assert.match(source, /队列等待/);
+  assert.match(source, /Worker 生成/);
+  assert.match(source, /已完成/);
+  assert.doesNotMatch(source, /结果写回/);
+  assert.doesNotMatch(source, /完成展示/);
+});

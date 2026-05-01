@@ -12,14 +12,13 @@ import styles from "./generation-workbench.module.css";
 import resultStyles from "./generation-result-panel.module.css";
 
 const RESULT_STEPS: readonly Readonly<{ key: ResultStep; label: string }>[]= [
-  { key: "submit", label: "提交任务" },
-  { key: "queue", label: "进入队列" },
-  { key: "generate", label: "模型生成中" },
-  { key: "writeback", label: "结果写回" },
-  { key: "complete", label: "完成展示" },
+  { key: "submit", label: "提交成功" },
+  { key: "queue", label: "队列等待" },
+  { key: "generate", label: "Worker 生成" },
+  { key: "complete", label: "已完成" },
 ];
 
-const STEP_ORDER: readonly ResultStep[] = ["submit", "queue", "generate", "writeback", "complete"];
+const STEP_ORDER: readonly ResultStep[] = ["submit", "queue", "generate", "complete"];
 
 type ResultPanelProps = Readonly<{
   historyItem: GenerationHistoryItem | null;
@@ -233,7 +232,7 @@ function ErrorState({ historyItem, message, view }: Readonly<{ historyItem: Gene
         <div>
           <div className={resultStyles.pulseOrb}><CanvasIcon compact /></div>
           <p className="mt-5 text-xs font-bold uppercase tracking-[0.18em] text-red-300">{view.eyebrow}</p>
-          <h3 className={resultStyles.canvasTitle}>生成失败</h3>
+          <h3 className={resultStyles.canvasTitle}>{view.title}</h3>
           <p className={resultStyles.canvasText}>{message}</p>
           {historyItem?.prompt ? <div className={resultStyles.promptBox}><p className={resultStyles.infoLabel}>Prompt</p><p className={resultStyles.promptText}>{historyItem.prompt}</p></div> : null}
         </div>
