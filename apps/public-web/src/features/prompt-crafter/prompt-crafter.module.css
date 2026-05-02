@@ -84,7 +84,6 @@
   font-weight: 750;
   text-decoration: none;
 }
-
 .starterButton:hover,
 .secondaryButton:hover,
 .textButton:hover,
@@ -92,12 +91,10 @@
   border-color: rgba(20, 35, 29, 0.28);
   background: #f7f1e8;
 }
-
 .form {
   display: grid;
   gap: 0.85rem;
 }
-
 .fieldGroup {
   display: grid;
   gap: 0.45rem;
@@ -105,7 +102,6 @@
   font-size: 0.88rem;
   font-weight: 800;
 }
-
 .ideaInput {
   min-height: 14rem;
   width: 100%;
@@ -121,18 +117,15 @@
   outline: none;
   padding: 0.85rem;
 }
-
 .ideaInput:focus {
   border-color: #17473c;
   box-shadow: 0 0 0 3px rgba(23, 71, 60, 0.1);
 }
-
 .inputActions {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.6rem;
 }
-
 .primaryButton {
   min-height: 2.75rem;
   border: 0;
@@ -143,11 +136,9 @@
   font-size: 0.92rem;
   font-weight: 850;
 }
-
 .primaryButton:hover:not(:disabled) {
   background: #12352e;
 }
-
 .primaryButton:disabled,
 .secondaryButton:disabled,
 .textButton:disabled,
@@ -156,11 +147,9 @@
   cursor: not-allowed;
   pointer-events: none;
 }
-
 .secondaryButton {
   padding: 0 0.85rem;
 }
-
 .errorText {
   margin: 0;
   color: #b42318;
@@ -169,7 +158,6 @@
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
-
 .resultPanel {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -180,7 +168,6 @@
     #fffdf8;
   background-size: 28px 28px;
 }
-
 .resultHeader {
   display: flex;
   align-items: center;
@@ -190,21 +177,18 @@
   background: rgba(255, 253, 248, 0.92);
   padding: 0.85rem 1rem;
 }
-
 .resultLabel {
   border: 1px solid rgba(23, 71, 60, 0.16);
   background: #edf4ef;
   color: #17473c;
   padding: 0.22rem 0.6rem;
 }
-
 .resultActions {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 0.45rem;
 }
-
 .textButton,
 .textButtonLink,
 .textButtonLinkDisabled {
@@ -213,7 +197,6 @@
   justify-content: center;
   padding: 0 0.72rem;
 }
-
 .messageList {
   display: flex;
   min-height: 0;
@@ -222,54 +205,32 @@
   overflow: auto;
   padding: 1rem;
 }
-
 .message {
   display: grid;
   gap: 0.45rem;
   max-width: min(100%, 58rem);
 }
-
 .userMessage {
   align-self: flex-end;
 }
-
 .assistantMessage {
   align-self: stretch;
 }
-
 .messageMeta {
   background: rgba(255, 255, 255, 0.76);
   padding: 0.18rem 0.55rem;
 }
-
-.userText,
-.resultText {
+.userText {
   margin: 0;
   border-radius: 8px;
-  overflow-wrap: anywhere;
-}
-
-.userText {
   background: #17473c;
   color: #ffffff;
   padding: 0.75rem 0.85rem;
   font-size: 0.92rem;
   font-weight: 650;
   line-height: 1.6;
+  overflow-wrap: anywhere;
 }
-
-.resultText {
-  border: 1px solid rgba(20, 35, 29, 0.1);
-  background: rgba(255, 255, 255, 0.9);
-  color: #14231d;
-  font-family: "SFMono-Regular", "Menlo", "Consolas", monospace;
-  font-size: 0.88rem;
-  font-weight: 520;
-  line-height: 1.75;
-  padding: 0.95rem;
-  white-space: pre-wrap;
-}
-
 .emptyState {
   display: grid;
   min-height: 100%;
@@ -278,14 +239,58 @@
   font-size: 0.9rem;
   font-weight: 750;
 }
-
 @media (max-width: 900px) {
-  .workspace {
-    grid-template-columns: 1fr;
-    height: auto;
+  .workspace { grid-template-columns: 1fr; height: auto; }
+  .resultPanel { min-height: 28rem; }
+}
+@media (max-width: 640px) {
+  .inputPanel {
+    gap: 0.82rem;
+    padding: 0.85rem;
   }
-
-  .resultPanel {
-    min-height: 28rem;
+  .heading {
+    font-size: 1.42rem;
+  }
+  .starterGrid {
+    gap: 0.45rem;
+  }
+  .starterButton,
+  .secondaryButton,
+  .textButton,
+  .textButtonLink,
+  .textButtonLinkDisabled {
+    min-height: 2.2rem;
+    font-size: 0.78rem;
+  }
+  .ideaInput {
+    min-height: 10rem;
+    font-size: 0.9rem;
+    padding: 0.75rem;
+  }
+  .inputActions {
+    grid-template-columns: 1fr;
+  }
+  .resultHeader {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 0.7rem;
+  }
+  .resultActions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .messageList {
+    gap: 0.75rem;
+    padding: 0.7rem;
+  }
+  .userText {
+    font-size: 0.88rem;
+    padding: 0.68rem 0.72rem;
+  }
+}
+@media (max-width: 420px) {
+  .starterGrid,
+  .resultActions {
+    grid-template-columns: 1fr;
   }
 }

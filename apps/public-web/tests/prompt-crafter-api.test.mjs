@@ -43,13 +43,35 @@ test("buildPromptCrafterStreamPayload preserves chat messages", () => {
   );
 });
 
-test("readPromptCrafterTextStream emits decoded chunks", async () => {
-  const { readPromptCrafterTextStream } = loadPromptCrafterApi();
+test("readPromptCrafterEventStream emits decoded SSE chunks as they arrive", async () => {
+  const { readPromptCrafterEventStream } = loadPromptCrafterApi();
   const chunks = [];
+  let controller;
+  const stream = new ReadableStream({
+    start(nextController) {
+      controller = nextController;
+      controller.enqueue(new TextEncoder().encode('event: chunk\ndata: {"content":"第一段"}\n\n'));
+    },
+  });
 
-  await readPromptCrafterTextStream(new Response("最终提示词：\n生成一张海报。"), (chunk) => {
+  const reading = readPromptCrafterEventStream(new Response(stream), (chunk) => {
     chunks.push(chunk);
   });
 
-  assert.equal(chunks.join(""), "最终提示词：\n生成一张海报。");
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(chunks, ["第一段"]);
+  controller.enqueue(new TextEncoder().encode('event: chunk\ndata: {"content":"第二段"}\n\n'));
+  controller.enqueue(new TextEncoder().encode("event: done\ndata: {}\n\n"));
+  controller.close();
+  await reading;
+  assert.deepEqual(chunks, ["第一段", "第二段"]);
+});
+
+test("parsePromptCrafterSseBlock surfaces stream error events", () => {
+  const { parsePromptCrafterSseBlock } = loadPromptCrafterApi();
+
+  assert.throws(
+    () => parsePromptCrafterSseBlock('event: error\ndata: {"code":"provider_request_failed","message":"provider down"}'),
+    /provider down/,
+  );
 });

@@ -57,6 +57,7 @@ def open_streaming_chat_response(*, target: ChatTarget, payload: dict[str, objec
         client.close()
         raise AppError(code="provider_request_failed", message=str(exc), status_code=502) from exc
     if response.status_code >= 400:
+        response.read()
         message = extract_provider_error(response)
         response.close()
         client.close()

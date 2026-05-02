@@ -272,8 +272,12 @@ def extract_provider_error(response: httpx.Response | object) -> str:
     try:
         payload = response.json()
     except Exception:
-        return getattr(response, "text", "provider request failed")
+        text = getattr(response, "text", "").strip()
+        return text or "provider request failed"
     error = payload.get("error") if isinstance(payload, dict) else None
     if isinstance(error, dict) and isinstance(error.get("message"), str):
-        return error["message"]
-    return getattr(response, "text", "provider request failed")
+        message = error["message"].strip()
+        if message:
+            return message
+    text = getattr(response, "text", "").strip()
+    return text or "provider request failed"

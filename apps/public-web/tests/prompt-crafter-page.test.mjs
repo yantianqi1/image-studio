@@ -1,15 +1,34 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
+import vm from "node:vm";
+import ts from "typescript";
 
 const pageFile = new URL("../src/app/apps/prompt-crafter/page.tsx", import.meta.url);
 const appFile = new URL("../src/features/prompt-crafter/prompt-crafter-app.tsx", import.meta.url);
 const apiFile = new URL("../src/features/prompt-crafter/prompt-crafter-api.ts", import.meta.url);
+const markdownFile = new URL("../src/features/prompt-crafter/prompt-markdown.ts", import.meta.url);
+const markdownViewFile = new URL("../src/features/prompt-crafter/prompt-markdown-view.tsx", import.meta.url);
+const markdownStylesFile = new URL("../src/features/prompt-crafter/prompt-markdown.module.css", import.meta.url);
 const stylesFile = new URL("../src/features/prompt-crafter/prompt-crafter.module.css", import.meta.url);
 
 function readRequiredSource(file, label) {
   assert.equal(existsSync(file), true, `${label} should exist`);
   return readFileSync(file, "utf8");
+}
+
+function loadPromptMarkdown() {
+  const source = readRequiredSource(markdownFile, "prompt markdown parser");
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
+  }).outputText;
+  const sandbox = { exports: {}, module: { exports: {} } };
+  sandbox.exports = sandbox.module.exports;
+  vm.runInNewContext(compiled, sandbox);
+  return sandbox.module.exports;
 }
 
 test("prompt crafter route renders the app component", () => {
@@ -22,6 +41,8 @@ test("prompt crafter route renders the app component", () => {
 test("prompt crafter page exposes a streaming workspace", () => {
   const appSource = readRequiredSource(appFile, "prompt crafter app");
   const apiSource = readRequiredSource(apiFile, "prompt crafter api");
+  const markdownViewSource = readRequiredSource(markdownViewFile, "prompt markdown view");
+  const markdownStylesSource = readRequiredSource(markdownStylesFile, "prompt markdown styles");
   const stylesSource = readRequiredSource(stylesFile, "prompt crafter styles");
 
   assert.match(appSource, /headerTitle="提示词工坊"/);
@@ -30,9 +51,21 @@ test("prompt crafter page exposes a streaming workspace", () => {
   assert.match(appSource, /继续优化/);
   assert.match(appSource, /发送到生图/);
   assert.match(appSource, /streamPromptCrafter/);
+  assert.match(appSource, /PromptMarkdownView/);
+  assert.match(markdownViewSource, /复制生成提示词/);
+  assert.match(markdownViewSource, /copyGeneratedPrompt/);
   assert.match(apiSource, /\/prompt-crafter\/chat\/stream/);
+  assert.match(apiSource, /readPromptCrafterEventStream/);
   assert.match(stylesSource, /\.workspace\s*\{[\s\S]*grid-template-columns:/);
-  assert.match(stylesSource, /\.resultText\s*\{[\s\S]*white-space:\s*pre-wrap;/);
+  assert.match(markdownStylesSource, /\.markdownShell\s*\{/);
+  assert.match(markdownStylesSource, /\.copyButton\s*\{/);
+  assert.match(markdownStylesSource, /\.markdown h2/);
+  assert.match(markdownStylesSource, /\.markdown blockquote/);
+  assert.match(markdownStylesSource, /\.markdown pre/);
+  assert.match(markdownStylesSource, /linear-gradient\(180deg, #fbfdff 0%, #f4f8fc 100%\)/);
+  assert.match(markdownStylesSource, /white-space:\s*pre-wrap;/);
+  assert.match(stylesSource, /@media \(max-width:\s*640px\)/);
+  assert.equal(existsSync(markdownViewFile), true);
 });
 
 test("prompt crafter page keeps skill internals out of the UI source", () => {
@@ -41,4 +74,15 @@ test("prompt crafter page keeps skill internals out of the UI source", () => {
   assert.doesNotMatch(appSource, /Human-Subject Photography/);
   assert.doesNotMatch(appSource, /Face detail recipes/);
   assert.doesNotMatch(appSource, /Default Output/);
+});
+
+test("prompt markdown parser extracts common markdown blocks", () => {
+  const { parsePromptMarkdown } = loadPromptMarkdown();
+  const blocks = JSON.parse(JSON.stringify(parsePromptMarkdown("## 标题\n\n- 镜头\n- 光线\n\n```text\nprompt\n```")));
+
+  assert.deepEqual(blocks, [
+    { type: "heading", level: 2, text: "标题" },
+    { type: "unordered-list", items: ["镜头", "光线"] },
+    { type: "code", language: "text", code: "prompt" },
+  ]);
 });

@@ -12,6 +12,13 @@ export type PromptCrafterStreamOptions = Readonly<{
 }>;
 
 const PROMPT_CRAFTER_STREAM_ENDPOINT = "/api/public/prompt-crafter/chat/stream";
+const PROMPT_CRAFTER_SSE_SEPARATOR = "\n\n";
+
+type PromptCrafterSseEvent = Readonly<
+  | { type: "chunk"; content: string }
+  | { type: "done" }
+  | { type: "start" }
+>;
 
 export function buildPromptCrafterStreamPayload(messages: readonly PromptCrafterMessage[]) {
   return { messages };
@@ -31,10 +38,10 @@ export async function streamPromptCrafter(options: PromptCrafterStreamOptions): 
     throw new Error(await readPromptCrafterErrorMessage(response));
   }
 
-  await readPromptCrafterTextStream(response, options.onChunk);
+  await readPromptCrafterEventStream(response, options.onChunk);
 }
 
-export async function readPromptCrafterTextStream(
+export async function readPromptCrafterEventStream(
   response: Response,
   onChunk: (chunk: string) => void,
 ): Promise<void> {
@@ -43,11 +50,13 @@ export async function readPromptCrafterTextStream(
   }
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
-  await readPromptCrafterChunks({ decoder, onChunk, reader });
+  await readPromptCrafterChunks({ buffer: "", decoder, onChunk, reader });
 }
 
+export const readPromptCrafterTextStream = readPromptCrafterEventStream;
+
 function buildPromptCrafterHeaders(): Headers {
-  const headers = new Headers({ Accept: "text/plain", "Content-Type": "application/json" });
+  const headers = new Headers({ Accept: "text/event-stream", "Content-Type": "application/json" });
   for (const [key, value] of Object.entries(getClientProviderRequestHeaders())) {
     headers.set(key, value);
   }
@@ -55,23 +64,50 @@ function buildPromptCrafterHeaders(): Headers {
 }
 
 async function readPromptCrafterChunks(input: Readonly<{
+  buffer: string;
   decoder: TextDecoder;
   onChunk: (chunk: string) => void;
   reader: ReadableStreamDefaultReader<Uint8Array>;
 }>): Promise<void> {
+  let buffer = input.buffer;
   for (;;) {
     const { value, done } = await input.reader.read();
     if (done) {
-      emitDecodedChunk(input.decoder.decode(), input.onChunk);
+      buffer = consumePromptCrafterSseBuffer(buffer + input.decoder.decode(), input.onChunk);
+      consumePromptCrafterSseBuffer(`${buffer}${PROMPT_CRAFTER_SSE_SEPARATOR}`, input.onChunk);
       return;
     }
-    emitDecodedChunk(input.decoder.decode(value, { stream: true }), input.onChunk);
+    buffer = consumePromptCrafterSseBuffer(buffer + input.decoder.decode(value, { stream: true }), input.onChunk);
   }
 }
 
-function emitDecodedChunk(chunk: string, onChunk: (chunk: string) => void): void {
-  if (chunk) {
-    onChunk(chunk);
+export function parsePromptCrafterSseBlock(block: string): PromptCrafterSseEvent | null {
+  const lines = block.replaceAll("\r\n", "\n").split("\n");
+  const event = readPromptCrafterSseEventName(lines);
+  const data = readPromptCrafterSseData(lines);
+  if (!event && !data.trim()) {
+    return null;
+  }
+  return buildPromptCrafterSseEvent(event || "message", data);
+}
+
+function consumePromptCrafterSseBuffer(buffer: string, onChunk: (chunk: string) => void): string {
+  const normalized = buffer.replaceAll("\r\n", "\n");
+  let remainder = normalized;
+  for (;;) {
+    const splitIndex = remainder.indexOf(PROMPT_CRAFTER_SSE_SEPARATOR);
+    if (splitIndex < 0) {
+      return remainder;
+    }
+    emitPromptCrafterSseEvent(remainder.slice(0, splitIndex), onChunk);
+    remainder = remainder.slice(splitIndex + PROMPT_CRAFTER_SSE_SEPARATOR.length);
+  }
+}
+
+function emitPromptCrafterSseEvent(block: string, onChunk: (chunk: string) => void): void {
+  const event = parsePromptCrafterSseBlock(block);
+  if (event?.type === "chunk" && event.content) {
+    onChunk(event.content);
   }
 }
 
@@ -95,4 +131,54 @@ function extractPromptCrafterEnvelopeError(payload: unknown, fallback: string): 
     }
   }
   return fallback;
+}
+
+function readPromptCrafterSseEventName(lines: readonly string[]): string {
+  return lines.find((line) => line.startsWith("event:"))?.slice("event:".length).trim() ?? "";
+}
+
+function readPromptCrafterSseData(lines: readonly string[]): string {
+  return lines
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.slice("data:".length).replace(/^ /, ""))
+    .join("\n");
+}
+
+function buildPromptCrafterSseEvent(event: string, data: string): PromptCrafterSseEvent | null {
+  if (event === "start" || event === "done") {
+    return { type: event };
+  }
+  if (event === "error") {
+    throw new Error(readPromptCrafterSseError(data));
+  }
+  return buildPromptCrafterChunkEvent(data);
+}
+
+function buildPromptCrafterChunkEvent(data: string): PromptCrafterSseEvent | null {
+  if (!data.trim()) {
+    return null;
+  }
+  const payload = parsePromptCrafterSseJson(data);
+  if (payload && typeof payload === "object" && "content" in payload) {
+    const content = (payload as { content?: unknown }).content;
+    return typeof content === "string" ? { type: "chunk", content } : null;
+  }
+  return typeof payload === "string" ? { type: "chunk", content: payload } : { type: "chunk", content: data };
+}
+
+function readPromptCrafterSseError(data: string): string {
+  const payload = parsePromptCrafterSseJson(data);
+  if (payload && typeof payload === "object" && "message" in payload) {
+    const message = (payload as { message?: unknown }).message;
+    return typeof message === "string" && message.trim() ? message : "提示词流错误";
+  }
+  return data.trim() || "提示词流错误";
+}
+
+function parsePromptCrafterSseJson(data: string): unknown {
+  try {
+    return JSON.parse(data);
+  } catch {
+    return null;
+  }
 }

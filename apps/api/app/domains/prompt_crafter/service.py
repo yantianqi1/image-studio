@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from collections.abc import Iterator, Sequence
 from itertools import chain
+import json
 from pathlib import Path
 
+import httpx
 from sqlalchemy.orm import Session
 
 from apps.api.app.core.config import get_settings
@@ -18,6 +21,16 @@ PROMPT_CRAFTER_PATTERN_FILE = Path("references") / "prompt-patterns.md"
 PROMPT_CRAFTER_SYSTEM_PREFIX = "你正在使用 gpt-image-2-prompt-crafter skill。请严格遵守下面的 skill 与参考模式。"
 PROMPT_CRAFTER_SKILL_MISSING_CODE = "prompt_crafter_skill_missing"
 PROMPT_CRAFTER_MESSAGE_INVALID_CODE = "prompt_crafter_message_invalid"
+PROMPT_CRAFTER_SSE_EVENT_START = "start"
+PROMPT_CRAFTER_SSE_EVENT_CHUNK = "chunk"
+PROMPT_CRAFTER_SSE_EVENT_DONE = "done"
+PROMPT_CRAFTER_SSE_EVENT_ERROR = "error"
+
+
+@dataclass(frozen=True)
+class PromptCrafterStreamContext:
+    target: ChatTarget
+    payload: dict[str, object]
 
 
 def build_prompt_crafter_system_prompt() -> str:
@@ -33,6 +46,36 @@ def stream_prompt_crafter_completion(
     messages: Sequence[dict[str, str]],
     client_provider_config: ClientProviderConfig | None = None,
 ) -> Iterator[str]:
+    context = prepare_prompt_crafter_stream_context(
+        session,
+        messages=messages,
+        client_provider_config=client_provider_config,
+    )
+    return prime_prompt_crafter_stream(
+        openai_chat_stream.stream_chat_completion(target=context.target, payload=context.payload)
+    )
+
+
+def stream_prompt_crafter_sse_completion(
+    session: Session,
+    *,
+    messages: Sequence[dict[str, str]],
+    client_provider_config: ClientProviderConfig | None = None,
+) -> Iterator[str]:
+    context = prepare_prompt_crafter_stream_context(
+        session,
+        messages=messages,
+        client_provider_config=client_provider_config,
+    )
+    return iterate_prompt_crafter_sse_stream(context)
+
+
+def prepare_prompt_crafter_stream_context(
+    session: Session,
+    *,
+    messages: Sequence[dict[str, str]],
+    client_provider_config: ClientProviderConfig | None = None,
+) -> PromptCrafterStreamContext:
     validate_prompt_crafter_messages(messages)
     target = resolve_prompt_crafter_target(session, client_provider_config)
     payload = openai_chat_stream.build_streaming_chat_payload(
@@ -40,7 +83,7 @@ def stream_prompt_crafter_completion(
         system_prompt=build_prompt_crafter_system_prompt(),
         messages=list(messages),
     )
-    return prime_prompt_crafter_stream(openai_chat_stream.stream_chat_completion(target=target, payload=payload))
+    return PromptCrafterStreamContext(target=target, payload=payload)
 
 
 def resolve_prompt_crafter_target(session: Session, client_provider_config: ClientProviderConfig | None) -> ChatTarget:
@@ -72,6 +115,34 @@ def prime_prompt_crafter_stream(stream: Iterator[str]) -> Iterator[str]:
     except StopIteration as exc:
         raise AppError(code="provider_response_invalid", message="provider response empty", status_code=502) from exc
     return chain([first_chunk], stream)
+
+
+def iterate_prompt_crafter_sse_stream(context: PromptCrafterStreamContext) -> Iterator[str]:
+    yield build_prompt_crafter_sse_event(PROMPT_CRAFTER_SSE_EVENT_START, {})
+    try:
+        for chunk in openai_chat_stream.stream_chat_completion(target=context.target, payload=context.payload):
+            yield build_prompt_crafter_sse_event(PROMPT_CRAFTER_SSE_EVENT_CHUNK, {"content": chunk})
+    except AppError as exc:
+        yield build_prompt_crafter_sse_event(
+            PROMPT_CRAFTER_SSE_EVENT_ERROR,
+            {"code": exc.code, "message": exc.message},
+        )
+    except httpx.HTTPError as exc:
+        yield build_prompt_crafter_sse_event(
+            PROMPT_CRAFTER_SSE_EVENT_ERROR,
+            {"code": "provider_request_failed", "message": str(exc)},
+        )
+    except OSError as exc:
+        yield build_prompt_crafter_sse_event(
+            PROMPT_CRAFTER_SSE_EVENT_ERROR,
+            {"code": "provider_request_failed", "message": str(exc)},
+        )
+    else:
+        yield build_prompt_crafter_sse_event(PROMPT_CRAFTER_SSE_EVENT_DONE, {})
+
+
+def build_prompt_crafter_sse_event(event: str, payload: dict[str, str]) -> str:
+    return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False, separators=(',', ':'))}\n\n"
 
 
 def resolve_prompt_crafter_skill_dir() -> Path:

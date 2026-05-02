@@ -1,0 +1,234 @@
+.markdownShell {
+  position: relative;
+  min-height: 3.25rem;
+  border: 1px solid #d7dde5;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 10px 28px rgba(31, 41, 55, 0.07);
+  color: #24292f;
+  overflow: hidden;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: flex-end;
+  border-bottom: 1px solid #d7dde5;
+  background: #f8fafc;
+  padding: 0.48rem 0.62rem;
+}
+
+.copyButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.85rem;
+  border: 1px solid #d0d7de;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #24292f;
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: 760;
+  line-height: 1;
+  padding: 0 0.68rem;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, transform 150ms ease;
+}
+
+.copyButton:hover:not(:disabled) {
+  border-color: #8c959f;
+  background: #eef6ff;
+  color: #0757b8;
+  transform: translateY(-1px);
+}
+
+.copyButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.copyButton[data-state="success"] {
+  border-color: #54aeff;
+  background: #ddf4ff;
+  color: #0969da;
+}
+
+.copyButton[data-state="error"] {
+  border-color: #ffaba8;
+  background: #ffebe9;
+  color: #cf222e;
+}
+
+.markdown {
+  color: #24292f;
+  font-size: 0.94rem;
+  font-weight: 500;
+  line-height: 1.72;
+  overflow-wrap: anywhere;
+  padding: 1rem 1rem 1.08rem;
+}
+
+.markdown > *:first-child {
+  margin-top: 0;
+}
+
+.markdown > *:last-child {
+  margin-bottom: 0;
+}
+
+.markdown h2,
+.markdown h3,
+.markdown h4 {
+  color: #1f2328;
+  font-weight: 780;
+  letter-spacing: 0;
+  line-height: 1.25;
+  margin: 1.05rem 0 0.5rem;
+}
+
+.markdown h2 {
+  border-bottom: 1px solid #d8dee4;
+  font-size: 1.22rem;
+  padding-bottom: 0.42rem;
+}
+
+.markdown h3 {
+  font-size: 1.06rem;
+}
+
+.markdown h4 {
+  color: #57606a;
+  font-size: 0.96rem;
+}
+
+.markdown p {
+  margin: 0.65rem 0;
+  white-space: pre-wrap;
+}
+
+.markdown ul,
+.markdown ol {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.72rem 0;
+  padding-left: 1.45rem;
+}
+
+.markdown li {
+  padding-left: 0.12rem;
+}
+
+.markdown li::marker {
+  color: #57606a;
+  font-weight: 760;
+}
+
+.markdown blockquote {
+  border-left: 0.25rem solid #7aa7d9;
+  background: #f6f8fa;
+  color: #57606a;
+  margin: 0.82rem 0;
+  padding: 0.62rem 0.9rem;
+}
+
+.markdown pre {
+  border: 1px solid #cbd5e1;
+  border-left: 3px solid #4f8bd6;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #fbfdff 0%, #f4f8fc 100%);
+  color: #172033;
+  margin: 0.9rem 0;
+  overflow-x: hidden;
+  padding: 0.95rem 1rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78);
+}
+
+.markdown code {
+  border-radius: 6px;
+  background: rgba(175, 184, 193, 0.22);
+  color: #24292f;
+  font-family: "SFMono-Regular", "Menlo", "Consolas", monospace;
+  font-size: 0.86em;
+  padding: 0.12rem 0.34rem;
+}
+
+.markdown pre code {
+  background: transparent;
+  color: inherit;
+  display: block;
+  line-height: 1.78;
+  padding: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.markdown strong {
+  color: #1f2328;
+  font-weight: 780;
+}
+
+.markdown em {
+  color: #57606a;
+}
+
+.markdown hr {
+  border: 0;
+  border-top: 1px solid #d8dee4;
+  margin: 0.95rem 0;
+}
+
+.pending {
+  color: #6e7781;
+  font-family: "SFMono-Regular", "Menlo", "Consolas", monospace;
+}
+
+.caret {
+  display: inline-block;
+  width: 0.48rem;
+  height: 1rem;
+  margin-left: 0.12rem;
+  border-radius: 3px;
+  background: #0969da;
+  vertical-align: -0.15rem;
+  animation: prompt-crafter-caret 0.9s steps(2, start) infinite;
+}
+
+@keyframes prompt-crafter-caret {
+  50% {
+    opacity: 0.18;
+  }
+}
+
+@media (max-width: 640px) {
+  .toolbar {
+    padding: 0.42rem;
+  }
+
+  .copyButton {
+    width: 100%;
+    min-height: 2.15rem;
+  }
+
+  .markdown {
+    font-size: 0.9rem;
+    line-height: 1.68;
+    padding: 0.85rem;
+  }
+
+  .markdown h2 {
+    font-size: 1.08rem;
+  }
+
+  .markdown h3 {
+    font-size: 0.98rem;
+  }
+
+  .markdown ul,
+  .markdown ol {
+    padding-left: 1.2rem;
+  }
+
+  .markdown pre {
+    margin: 0.75rem 0;
+    padding: 0.78rem 0.82rem;
+  }
+}

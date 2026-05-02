@@ -1,4 +1,7 @@
 from collections.abc import Iterator
+import json
+
+import httpx
 
 from apps.api.app.core.errors import AppError
 from apps.api.app.domains.prompt_crafter import service as prompt_crafter_service
@@ -35,7 +38,11 @@ def test_prompt_crafter_stream_returns_text_chunks(client, monkeypatch) -> None:
     )
 
     assert response.status_code == 200
-    assert response.text == "最终提示词：\n生成一张咖啡包装海报。"
+    assert response.headers["content-type"].startswith("text/event-stream")
+    assert "event: start" in response.text
+    assert_sse_event(response.text, "chunk", {"content": "最终提示词："})
+    assert_sse_event(response.text, "chunk", {"content": "\n生成一张咖啡包装海报。"})
+    assert_sse_event(response.text, "done", {})
     payload = captured["payload"]
     assert payload["stream"] is True
     assert payload["messages"][0]["role"] == "system"
@@ -61,6 +68,59 @@ def test_prompt_crafter_provider_errors_surface_as_api_errors(client, monkeypatc
         json={"messages": [{"role": "user", "content": "产品海报"}]},
     )
 
-    assert response.status_code == 502
-    assert response.json()["error"]["code"] == "provider_request_failed"
-    assert response.json()["error"]["message"] == "provider down"
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    assert_sse_event(response.text, "error", {"code": "provider_request_failed", "message": "provider down"})
+
+
+def test_prompt_crafter_raw_http_errors_surface_as_sse_errors(client, monkeypatch) -> None:
+    def raise_http_error(*, target, payload) -> Iterator[str]:
+        del target, payload
+        raise httpx.ConnectError("provider blocked")
+        yield ""
+
+    monkeypatch.setenv("OPENAI_PROVIDER_KEY", "sk-test")
+    monkeypatch.setattr(
+        prompt_crafter_service.openai_chat_stream,
+        "stream_chat_completion",
+        raise_http_error,
+    )
+
+    response = client.post(
+        "/api/public/prompt-crafter/chat/stream",
+        json={"messages": [{"role": "user", "content": "产品海报"}]},
+    )
+
+    assert response.status_code == 200
+    assert_sse_event(response.text, "error", {"code": "provider_request_failed", "message": "provider blocked"})
+
+
+def test_prompt_crafter_raw_os_errors_surface_as_sse_errors(client, monkeypatch) -> None:
+    def raise_os_error(*, target, payload) -> Iterator[str]:
+        del target, payload
+        raise OSError("provider blocked by sandbox")
+        yield ""
+
+    monkeypatch.setenv("OPENAI_PROVIDER_KEY", "sk-test")
+    monkeypatch.setattr(
+        prompt_crafter_service.openai_chat_stream,
+        "stream_chat_completion",
+        raise_os_error,
+    )
+
+    response = client.post(
+        "/api/public/prompt-crafter/chat/stream",
+        json={"messages": [{"role": "user", "content": "产品海报"}]},
+    )
+
+    assert response.status_code == 200
+    assert_sse_event(
+        response.text,
+        "error",
+        {"code": "provider_request_failed", "message": "provider blocked by sandbox"},
+    )
+
+
+def assert_sse_event(stream: str, event: str, payload: dict[str, str]) -> None:
+    encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    assert f"event: {event}\ndata: {encoded}\n\n" in stream

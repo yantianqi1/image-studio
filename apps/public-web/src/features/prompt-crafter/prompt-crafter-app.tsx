@@ -10,6 +10,7 @@ import {
   type PromptCrafterMessage,
   streamPromptCrafter,
 } from "./prompt-crafter-api";
+import { PromptMarkdownView } from "./prompt-markdown-view";
 import styles from "./prompt-crafter.module.css";
 
 const REFINEMENT_PROMPT = "请基于上一版结果继续优化，保留核心主题，强化镜头、构图、材质、光线和可读性。";
@@ -23,11 +24,12 @@ const PROMPT_STARTERS: readonly Readonly<{ label: string; value: string }>[] = [
 ];
 
 type PromptCrafterStatus = "idle" | "streaming" | "error";
+type PromptCrafterCopyStatus = "idle" | "success" | "error";
 
 type PromptCrafterController = Readonly<{
-  copied: boolean;
   draft: string;
   errorMessage: string;
+  copyStatus: PromptCrafterCopyStatus;
   generateHref: string;
   latestPrompt: string;
   messages: readonly PromptCrafterMessage[];
@@ -66,8 +68,8 @@ function usePromptCrafterController(): PromptCrafterController {
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<readonly PromptCrafterMessage[]>([]);
   const [status, setStatus] = useState<PromptCrafterStatus>("idle");
+  const [copyStatus, setCopyStatus] = useState<PromptCrafterCopyStatus>("idle");
   const [errorMessage, setErrorMessage] = useState("");
-  const [copied, setCopied] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const latestPrompt = useMemo(() => findLatestAssistantMessage(messages), [messages]);
   const generateHref = `/generate?prompt=${encodeURIComponent(latestPrompt)}`;
@@ -79,23 +81,23 @@ function usePromptCrafterController(): PromptCrafterController {
     }
     const nextMessages = [...messages, { role: "user", content: trimmed } satisfies PromptCrafterMessage];
     setDraft("");
-    setCopied(false);
+    setCopyStatus("idle");
     setErrorMessage("");
     setStatus("streaming");
     await runPromptCrafterStream({ abortRef, nextMessages, setErrorMessage, setMessages, setStatus });
   }
 
   return {
-    copied,
     draft,
     errorMessage,
+    copyStatus,
     generateHref,
     latestPrompt,
     messages,
     status,
     canContinue: Boolean(latestPrompt) && status !== "streaming",
     handleContinueOptimization: () => void submitPrompt(REFINEMENT_PROMPT),
-    handleCopy: () => copyLatestPrompt(latestPrompt, setCopied),
+    handleCopy: () => copyLatestPrompt(latestPrompt, setCopyStatus),
     handleStarterClick: setDraft,
     handleSubmit: async (event) => {
       event.preventDefault();
@@ -134,12 +136,23 @@ async function runPromptCrafterStream(input: Readonly<{
   }
 }
 
-async function copyLatestPrompt(latestPrompt: string, setCopied: (value: boolean) => void) {
+async function copyLatestPrompt(latestPrompt: string, setCopyStatus: (value: PromptCrafterCopyStatus) => void) {
   if (!latestPrompt) {
     return;
   }
-  await navigator.clipboard.writeText(latestPrompt);
-  setCopied(true);
+  try {
+    await copyPromptToClipboard(latestPrompt);
+    setCopyStatus("success");
+  } catch {
+    setCopyStatus("error");
+  }
+}
+
+async function copyPromptToClipboard(prompt: string) {
+  if (!navigator.clipboard) {
+    throw new Error("Clipboard API is unavailable.");
+  }
+  await navigator.clipboard.writeText(prompt.trim());
 }
 
 function findLatestAssistantMessage(messages: readonly PromptCrafterMessage[]) {
@@ -206,19 +219,19 @@ function PromptCrafterResultPanel(props: Readonly<{ controller: PromptCrafterCon
         <span className={styles.resultLabel}>{props.controller.status === "streaming" ? "Streaming" : "Prompt"}</span>
         <div className={styles.resultActions}>
           <button className={styles.textButton} disabled={!hasPrompt} type="button" onClick={props.controller.handleCopy}>
-            {props.controller.copied ? "已复制" : "复制"}
+            {props.controller.copyStatus === "success" ? "已复制" : props.controller.copyStatus === "error" ? "复制失败" : "复制"}
           </button>
           <Link className={hasPrompt ? styles.textButtonLink : styles.textButtonLinkDisabled} href={props.controller.generateHref}>
             发送到生图
           </Link>
         </div>
       </div>
-      <MessageList messages={props.controller.messages} />
+      <MessageList isStreaming={props.controller.status === "streaming"} messages={props.controller.messages} />
     </section>
   );
 }
 
-function MessageList(props: Readonly<{ messages: readonly PromptCrafterMessage[] }>) {
+function MessageList(props: Readonly<{ isStreaming: boolean; messages: readonly PromptCrafterMessage[] }>) {
   if (props.messages.length === 0) {
     return (
       <div className={styles.emptyState}>
@@ -230,20 +243,33 @@ function MessageList(props: Readonly<{ messages: readonly PromptCrafterMessage[]
   return (
     <div className={styles.messageList}>
       {props.messages.map((message, index) => (
-        <MessageBubble index={index} key={`${message.role}-${index}`} message={message} />
+        <MessageBubble
+          index={index}
+          isStreaming={props.isStreaming && index === props.messages.length - 1}
+          key={`${message.role}-${index}`}
+          message={message}
+        />
       ))}
     </div>
   );
 }
 
-function MessageBubble(props: Readonly<{ index: number; message: PromptCrafterMessage }>) {
+function MessageBubble(props: Readonly<{ index: number; isStreaming: boolean; message: PromptCrafterMessage }>) {
   const isAssistant = props.message.role === "assistant";
   const className = isAssistant ? `${styles.message} ${styles.assistantMessage}` : `${styles.message} ${styles.userMessage}`;
 
   return (
     <article className={className}>
       <span className={styles.messageMeta}>{isAssistant ? "Prompt Crafter" : `需求 ${props.index + 1}`}</span>
-      <p className={isAssistant ? styles.resultText : styles.userText}>{props.message.content || "..."}</p>
+      {isAssistant ? (
+        <PromptMarkdownView
+          markdown={props.message.content}
+          streaming={props.isStreaming}
+          onCopy={() => copyPromptToClipboard(props.message.content)}
+        />
+      ) : (
+        <p className={styles.userText}>{props.message.content || "..."}</p>
+      )}
     </article>
   );
 }
