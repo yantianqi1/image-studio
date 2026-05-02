@@ -1,13 +1,25 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from fastapi import Request
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.elements import ColumnElement
 
 from apps.api.app.core.config import get_settings
 from apps.api.app.core.errors import AppError
 from apps.api.app.core.security import hash_password, issue_session_token, sha256_hex, verify_password
 from apps.api.app.domains.auth.models import AdminSession, AdminUser, User, UserSession
+from apps.api.app.domains.auth.schemas import AdminUserListOptions
+
+
+@dataclass(frozen=True)
+class AdminUserListResult:
+    items: list[User]
+    total: int
+    page: int
+    page_size: int
 
 
 def create_user(session: Session, *, email: str, password: str) -> User:
@@ -114,12 +126,38 @@ def find_user_by_email(session: Session, email: str) -> User | None:
     return session.execute(select(User).where(User.email == email)).scalar_one_or_none()
 
 
-def list_users(session: Session) -> list[User]:
-    return list(session.execute(select(User).order_by(User.id.asc())).scalars())
+def list_users(session: Session, options: AdminUserListOptions) -> AdminUserListResult:
+    filters = build_user_filters(options)
+    total = count_users(session, filters)
+    offset = (options.page - 1) * options.page_size
+    statement = select(User).where(*filters).order_by(User.id.asc()).offset(offset).limit(options.page_size)
+    users = list(session.execute(statement).scalars())
+    return AdminUserListResult(items=users, total=total, page=options.page, page_size=options.page_size)
+
+
+def build_user_filters(options: AdminUserListOptions) -> tuple[ColumnElement[bool], ...]:
+    filters: list[ColumnElement[bool]] = []
+    if options.q is not None:
+        pattern = f"%{options.q}%"
+        filters.append(or_(User.email.ilike(pattern), User.display_name.ilike(pattern)))
+    if options.status is not None:
+        filters.append(User.status == options.status)
+    return tuple(filters)
+
+
+def count_users(session: Session, filters: tuple[ColumnElement[bool], ...]) -> int:
+    statement = select(func.count()).select_from(User).where(*filters)
+    return int(session.execute(statement).scalar_one())
 
 
 def user_payload(user: User) -> dict[str, object]:
-    return {"id": user.id, "email": user.email, "display_name": user.display_name, "status": user.status}
+    return {
+        "id": user.id,
+        "email": user.email,
+        "display_name": user.display_name,
+        "status": user.status,
+        "created_at": user.created_at.isoformat(),
+    }
 
 
 def admin_payload(admin: AdminUser) -> dict[str, object]:

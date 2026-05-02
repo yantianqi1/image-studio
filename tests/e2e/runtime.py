@@ -19,6 +19,11 @@ SERVER_START_TIMEOUT_SECONDS = 90
 SHUTDOWN_TIMEOUT_SECONDS = 5
 ADMIN_USERNAME = "e2e-admin"
 ADMIN_PASSWORD = "e2e-admin-pass"
+API_PYTHON = "python3.13"
+E2E_OPENAI_PROVIDER_NAME = "e2e-openai"
+E2E_OPENAI_PROVIDER_API_KEY_ENV = "E2E_OPENAI_PROVIDER_KEY"
+E2E_IMAGE_MODEL_CODE = "gpt-image-2"
+E2E_IMAGE_MODEL_DISPLAY_NAME = "GPT Image 2"
 
 
 @dataclass(frozen=True)
@@ -81,7 +86,7 @@ def build_services() -> list[Service]:
     return [
         Service(
             "api",
-            ["python3", "tests/e2e/api_server.py"],
+            [API_PYTHON, "tests/e2e/api_server.py"],
             API_PORT,
             f"http://127.0.0.1:{API_PORT}/health",
         ),
@@ -111,8 +116,17 @@ def build_env(root: Path, runtime_dir: Path) -> dict[str, str]:
             "DATABASE_URL": f"sqlite:///{runtime_dir / 'e2e.db'}",
             "DEFAULT_ADMIN_USERNAME": ADMIN_USERNAME,
             "DEFAULT_ADMIN_PASSWORD": ADMIN_PASSWORD,
+            "E2E_OPENAI_PROVIDER_KEY": "e2e-provider-key",
             "GENERATED_ASSETS_DIR": str(runtime_dir / "generated-assets"),
             "NEXT_TELEMETRY_DISABLED": "1",
+            "OPENAI_IMAGE_MODEL_CODE": E2E_IMAGE_MODEL_CODE,
+            "OPENAI_IMAGE_MODEL_DISPLAY_NAME": E2E_IMAGE_MODEL_DISPLAY_NAME,
+            "OPENAI_IMAGE_MODEL_PROVIDER_MODEL": E2E_IMAGE_MODEL_CODE,
+            "OPENAI_PROVIDER_API_KEY_ENV": E2E_OPENAI_PROVIDER_API_KEY_ENV,
+            "OPENAI_PROVIDER_BASE_URL": "https://example.invalid/v1",
+            "OPENAI_PROVIDER_DEFAULT_MODEL": "e2e-chat-model",
+            "OPENAI_PROVIDER_NAME": E2E_OPENAI_PROVIDER_NAME,
+            "OPENAI_PROVIDER_TYPE": "openai-chat-compatible",
             "PYTHONPATH": str(root),
             "SESSION_SECRET": "e2e-session-secret",
         }

@@ -34,3 +34,4 @@ class SellableModel(Base):
     public_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     member_price_cents: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
     anonymous_price_cents: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="active", nullable=False)

@@ -5,15 +5,19 @@ import { adminApi } from "@/lib/admin-api";
 export function AdminLogoutButton() {
   return (
     <button
-      className="admin-nav-link w-full text-left"
+      className="admin-nav-link admin-nav-logout w-full text-left"
       type="button"
       onClick={async () => {
         await adminApi.logout();
         window.location.replace("/admin/login");
       }}
     >
-      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
-      退出登录
+      <svg className="admin-nav-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M9.5 20H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3.5" />
+        <path d="m16 8 4 4-4 4" />
+        <path d="M20 12H9" />
+      </svg>
+      <span>退出登录</span>
     </button>
   );
 }

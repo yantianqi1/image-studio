@@ -1,0 +1,123 @@
+.image-job-results-panel {
+  max-height: calc(100vh - 7rem);
+  overflow-y: auto;
+}
+
+.image-job-results-header span,
+.image-job-results-header small {
+  color: var(--admin-muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.image-job-featured-result {
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  background: var(--admin-surface-muted);
+  overflow: hidden;
+}
+
+.image-job-featured-image {
+  aspect-ratio: 1 / 1;
+  background: #eef2f6;
+  display: block;
+  height: auto;
+  object-fit: contain;
+  width: 100%;
+}
+
+.image-job-featured-result figcaption {
+  color: var(--admin-muted);
+  display: grid;
+  font-size: 0.74rem;
+  gap: 0.3rem;
+  overflow-wrap: anywhere;
+  padding: 0.75rem;
+}
+
+.image-job-thumb-grid {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.image-job-thumb-grid a {
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  background: var(--admin-surface-muted);
+  color: var(--admin-muted);
+  font-size: 0.72rem;
+  overflow: hidden;
+  text-align: center;
+}
+
+.image-job-thumb-grid img {
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  width: 100%;
+}
+
+.image-job-thumb-grid span {
+  display: block;
+  padding: 0.35rem;
+}
+
+.image-job-empty-state {
+  border: 1px dashed var(--admin-border-strong);
+  border-radius: 8px;
+  background: var(--admin-surface-muted);
+  display: grid;
+  gap: 0.25rem;
+  min-height: 180px;
+  padding: 1rem;
+  place-content: center;
+  text-align: center;
+}
+
+.image-job-empty-state p {
+  color: var(--foreground);
+  font-size: 0.96rem;
+  font-weight: 750;
+}
+
+.image-job-empty-result {
+  min-height: 340px;
+}
+
+@media (max-width: 1500px) {
+  .image-jobs-workbench {
+    grid-template-columns: 340px minmax(0, 1fr);
+  }
+
+  .image-job-results-panel {
+    grid-column: 1 / -1;
+    position: static;
+  }
+}
+
+@media (max-width: 1100px) {
+  .image-jobs-workbench {
+    grid-template-columns: 1fr;
+  }
+
+  .image-jobs-sidebar,
+  .image-job-results-panel {
+    max-height: none;
+    position: static;
+  }
+
+  .image-job-task-list,
+  .image-job-prompt-block pre {
+    max-height: none;
+  }
+
+  .image-job-results-panel {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 720px) {
+  .image-job-meta-grid {
+    grid-template-columns: 1fr;
+  }
+}

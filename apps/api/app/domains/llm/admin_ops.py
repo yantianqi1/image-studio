@@ -5,15 +5,20 @@ from sqlalchemy.orm import Session
 
 from apps.api.app.core.errors import AppError
 from apps.api.app.domains.image.models import ImageJob
-from apps.api.app.domains.llm.catalog import DELETED_PROVIDER_STATUS
+from apps.api.app.domains.llm.catalog import DELETED_MODEL_STATUS, DELETED_PROVIDER_STATUS
 from apps.api.app.domains.llm.models import Provider, SellableModel
 
 
 def delete_sellable_model(session: Session, *, model_code: str) -> None:
-    model = session.execute(select(SellableModel).where(SellableModel.code == model_code)).scalar_one_or_none()
+    model = session.execute(
+        select(SellableModel).where(
+            SellableModel.code == model_code,
+            SellableModel.status != DELETED_MODEL_STATUS,
+        )
+    ).scalar_one_or_none()
     if model is None:
         raise AppError(code="model_not_found", message="model not found", status_code=404)
-    session.delete(model)
+    model.status = DELETED_MODEL_STATUS
     session.flush()
 
 

@@ -18,7 +18,7 @@ function loadGenerationModels() {
   return sandbox.module.exports;
 }
 
-test("filterImageModels keeps only real image models and removes local placeholder", () => {
+test("filterImageModels keeps local development and remote image models", () => {
   const { filterImageModels } = loadGenerationModels();
   const models = [
     { code: "local-dev-image", capability: "image" },
@@ -26,5 +26,5 @@ test("filterImageModels keeps only real image models and removes local placehold
     { code: "gpt-image-2", capability: "image" },
   ];
 
-  assert.deepEqual(filterImageModels(models).map((model) => model.code), ["gpt-image-2"]);
+  assert.deepEqual(filterImageModels(models).map((model) => model.code), ["local-dev-image", "gpt-image-2"]);
 });

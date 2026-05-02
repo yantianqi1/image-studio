@@ -70,7 +70,7 @@ def test_admin_can_fetch_upstream_models(monkeypatch) -> None:
         )
 
     monkeypatch.setenv("OPENAI_PROVIDER_KEY", "sk-test")
-    monkeypatch.setattr("apps.api.app.domains.llm.service.httpx.get", fake_get)
+    monkeypatch.setattr("apps.api.app.domains.llm.upstream_models.httpx.get", fake_get)
 
     response = client.post(
         "/api/admin/models/upstream",
@@ -100,7 +100,7 @@ def test_admin_can_import_upstream_model_into_catalog(monkeypatch) -> None:
         )
 
     monkeypatch.setenv("OPENAI_PROVIDER_KEY", "sk-test")
-    monkeypatch.setattr("apps.api.app.domains.llm.service.httpx.get", fake_get)
+    monkeypatch.setattr("apps.api.app.domains.llm.upstream_models.httpx.get", fake_get)
 
     response = client.post(
         "/api/admin/models/import-upstream",

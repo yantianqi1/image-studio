@@ -1,15 +1,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import os
 from pathlib import Path
-import httpx
-from sqlalchemy import select
+from sqlalchemy import case, select
 from sqlalchemy.orm import Session
 
 from apps.api.app.core.config import get_settings
 from apps.api.app.core.errors import AppError
-from apps.api.app.domains.llm.catalog import DELETED_PROVIDER_STATUS, DEFAULT_MODEL_CODE, DEFAULT_PROVIDER_NAME, ensure_provider_catalog
+from apps.api.app.domains.llm.catalog import (
+    ACTIVE_MODEL_STATUS,
+    DELETED_PROVIDER_STATUS,
+    DEFAULT_MODEL_CODE,
+    DEFAULT_PROVIDER_NAME,
+    ensure_provider_catalog,
+)
 from apps.api.app.domains.llm.client_provider import ClientProviderConfig, build_runtime_provider
 from apps.api.app.domains.llm.image_reference import extract_image_reference
 from apps.api.app.domains.llm.models import Provider, SellableModel
@@ -26,10 +30,7 @@ from apps.api.app.domains.llm.provider_validation import (
     validate_provider_type,
 )
 from apps.api.app.domains.llm.rendering import RenderedImage, render_local_image
-
-UPSTREAM_MODELS_TIMEOUT_SECONDS = 20.0
-
-
+from apps.api.app.domains.llm.upstream_models import fetch_upstream_models, resolve_selected_upstream_models
 
 
 @dataclass(frozen=True)
@@ -37,12 +38,6 @@ class ModelExecutionTarget:
     provider: Provider
     model: SellableModel
     provider_model: str
-
-
-@dataclass(frozen=True)
-class UpstreamModel:
-    id: str
-    display_name: str
 
 
 def list_public_models(session: Session) -> list[SellableModel]:
@@ -53,16 +48,25 @@ def list_public_models(session: Session) -> list[SellableModel]:
         .where(
             SellableModel.public_enabled.is_(True),
             SellableModel.capability == "image",
+            SellableModel.status == ACTIVE_MODEL_STATUS,
             Provider.status == "active",
         )
-        .order_by(SellableModel.id.asc())
+        .order_by(
+            case((SellableModel.code == DEFAULT_MODEL_CODE, 0), else_=1),
+            SellableModel.id.asc(),
+        )
     )
     return list(session.execute(statement).scalars())
 
 
 def list_admin_models(session: Session) -> list[SellableModel]:
     ensure_provider_catalog(session)
-    return list(session.execute(select(SellableModel).order_by(SellableModel.id.asc())).scalars())
+    statement = (
+        select(SellableModel)
+        .where(SellableModel.status == ACTIVE_MODEL_STATUS)
+        .order_by(SellableModel.id.asc())
+    )
+    return list(session.execute(statement).scalars())
 
 
 def list_providers(session: Session) -> list[Provider]:
@@ -141,6 +145,7 @@ def create_or_update_sellable_model(
             public_enabled=public_enabled,
             member_price_cents=member_price_cents,
             anonymous_price_cents=anonymous_price_cents,
+            status=ACTIVE_MODEL_STATUS,
         )
         session.add(model)
         created = True
@@ -152,19 +157,9 @@ def create_or_update_sellable_model(
         model.public_enabled = public_enabled
         model.member_price_cents = member_price_cents
         model.anonymous_price_cents = anonymous_price_cents
+        model.status = ACTIVE_MODEL_STATUS
     session.flush()
     return model, created
-
-
-def fetch_upstream_models(*, url: str, api_key_env: str | None) -> list[UpstreamModel]:
-    response = httpx.get(
-        normalize_upstream_url(url),
-        headers=build_upstream_headers(api_key_env),
-        timeout=UPSTREAM_MODELS_TIMEOUT_SECONDS,
-    )
-    if response.status_code >= 400:
-        raise AppError(code="upstream_models_failed", message=extract_upstream_error(response), status_code=502)
-    return parse_upstream_models(response.json())
 
 
 def import_upstream_models(
@@ -197,61 +192,6 @@ def import_upstream_models(
     ]
 
 
-def normalize_upstream_url(url: str) -> str:
-    normalized = url.strip()
-    if not normalized.startswith(("http://", "https://")):
-        raise AppError(code="upstream_url_invalid", message="upstream url invalid", status_code=422)
-    return normalized
-
-
-def build_upstream_headers(api_key_env: str | None) -> dict[str, str]:
-    env_name = normalize_optional_string(api_key_env)
-    if env_name is None:
-        return {}
-    value = os.environ.get(env_name)
-    if not value:
-        raise AppError(code="upstream_api_key_missing", message=f"upstream api key env {env_name} is not set", status_code=500)
-    return {"Authorization": f"Bearer {value}"}
-
-
-def parse_upstream_models(payload: object) -> list[UpstreamModel]:
-    if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
-        raise AppError(code="upstream_models_invalid", message="upstream models response invalid", status_code=502)
-    return [parse_upstream_model(item) for item in payload["data"]]
-
-
-def parse_upstream_model(item: object) -> UpstreamModel:
-    if not isinstance(item, dict) or not isinstance(item.get("id"), str):
-        raise AppError(code="upstream_models_invalid", message="upstream model item invalid", status_code=502)
-    model_id = item["id"].strip()
-    if not model_id:
-        raise AppError(code="upstream_models_invalid", message="upstream model id invalid", status_code=502)
-    return UpstreamModel(id=model_id, display_name=model_id)
-
-
-def resolve_selected_upstream_models(*, upstream_models: dict[str, UpstreamModel], model_ids: list[str]) -> list[UpstreamModel]:
-    selected_models: list[UpstreamModel] = []
-    for model_id in model_ids:
-        normalized_id = model_id.strip()
-        model = upstream_models.get(normalized_id)
-        if model is None:
-            raise AppError(code="upstream_model_not_found", message=f"upstream model {normalized_id} not found", status_code=404)
-        selected_models.append(model)
-    return selected_models
-
-
-def extract_upstream_error(response: httpx.Response | object) -> str:
-    try:
-        payload = response.json()
-    except Exception:
-        return getattr(response, "text", "upstream models request failed")
-    if isinstance(payload, dict) and isinstance(payload.get("error"), dict):
-        message = payload["error"].get("message")
-        if isinstance(message, str):
-            return message
-    return getattr(response, "text", "upstream models request failed")
-
-
 def get_provider(session: Session, *, provider_id: int) -> Provider:
     provider = session.get(Provider, provider_id)
     if provider is None or provider.status == DELETED_PROVIDER_STATUS:
@@ -264,7 +204,12 @@ def get_public_model(session: Session, *, code: str) -> SellableModel:
     statement = (
         select(SellableModel)
         .join(Provider, SellableModel.provider_id == Provider.id)
-        .where(SellableModel.code == code, SellableModel.public_enabled.is_(True), Provider.status == "active")
+        .where(
+            SellableModel.code == code,
+            SellableModel.public_enabled.is_(True),
+            SellableModel.status == ACTIVE_MODEL_STATUS,
+            Provider.status == "active",
+        )
     )
     model = session.execute(statement).scalar_one_or_none()
     if model is None:
