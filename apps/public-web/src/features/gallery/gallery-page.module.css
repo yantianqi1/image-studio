@@ -190,13 +190,12 @@
 .tileMetaRow {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 0.45rem;
   min-width: 0;
 }
 
-.visibilityPill,
-.timePill {
+.visibilityPill {
   display: inline-flex;
   align-items: center;
   min-height: 1.75rem;
@@ -211,14 +210,6 @@
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.18);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-}
-
-.timePill {
-  overflow: hidden;
-  max-width: min(58%, 12rem);
-  color: rgba(255, 255, 255, 0.9);
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .promptText {
@@ -249,8 +240,7 @@
   .column { gap: 0.78rem; }
   .tile { border-radius: 1rem; }
   .tileOverlay { right: 0.48rem; bottom: 0.48rem; left: 0.48rem; gap: 0.36rem; }
-  .visibilityPill,
-  .timePill { min-height: 1.45rem; font-size: 0.64rem; padding: 0 0.44rem; }
+  .visibilityPill { min-height: 1.45rem; font-size: 0.64rem; padding: 0 0.44rem; }
 }
 
 @media (max-width: 819px) {

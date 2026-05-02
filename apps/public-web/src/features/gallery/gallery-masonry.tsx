@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { ImagePreviewDialogImage } from "@/features/ui/image-preview-dialog";
-import { formatDateTime } from "@/lib/formatters";
 import type { ImageGalleryItem } from "@/lib/public-api";
 import actionStyles from "./gallery-actions.module.css";
 import styles from "./gallery-page.module.css";
@@ -197,7 +196,6 @@ function GalleryTile({
       <div className={styles.tileOverlay}>
         <div className={styles.tileMetaRow}>
           <span className={styles.visibilityPill}>{getVisibilityLabel(item)}</span>
-          <span className={styles.timePill}>{formatDateTime(item.created_at)}</span>
         </div>
         <p className={styles.promptText}>{item.prompt}</p>
       </div>
