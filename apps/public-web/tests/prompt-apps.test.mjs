@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
@@ -43,6 +43,7 @@ test("prompt app catalog exposes character poster app", () => {
   const { PROMPT_APPS } = loadPromptApps();
 
   assert.deepEqual(Array.from(PROMPT_APPS, (app) => app.id), [
+    "prompt-crafter",
     "character-poster",
     "encyclopedia-card",
     "silhouette-universe-poster",
@@ -51,10 +52,31 @@ test("prompt app catalog exposes character poster app", () => {
     "city-poster",
     "song-poem-scene",
   ]);
-  assert.equal(PROMPT_APPS[0].title, "角色海报");
-  assert.equal(PROMPT_APPS[0].href, "/apps/character-poster");
-  assert.equal(PROMPT_APPS[0].cover.label, "角色海报");
-  assert.equal(PROMPT_APPS[0].cover.imageSrc, "/app-covers/character-poster-hutao.png");
+  const app = PROMPT_APPS.find((item) => item.id === "character-poster");
+  assert.equal(app.title, "角色海报");
+  assert.equal(app.href, "/apps/character-poster");
+  assert.equal(app.cover.label, "角色海报");
+  assert.equal(app.cover.imageSrc, "/app-covers/character-poster-hutao.png");
+});
+
+test("prompt app catalog exposes prompt crafter app", () => {
+  const { PROMPT_APPS } = loadPromptApps();
+  const app = PROMPT_APPS.find((item) => item.id === "prompt-crafter");
+
+  assert.equal(app.title, "提示词工坊");
+  assert.equal(app.href, "/apps/prompt-crafter");
+  assert.equal(app.access, "public-prompt-crafter-api");
+  assert.equal(app.cover.badge, "Prompt");
+  assert.equal(app.cover.label, "提示词工坊");
+  assert.equal(app.cover.imageSrc, "/app-covers/prompt-crafter.svg");
+});
+
+test("prompt crafter app cover asset declares a stable SVG viewport", () => {
+  const coverFile = "apps/public-web/public/app-covers/prompt-crafter.svg";
+  assert.equal(existsSync(coverFile), true);
+  const source = readFileSync(coverFile, "utf8");
+
+  assert.match(source, /viewBox="0 0 1600 1000"/);
 });
 
 test("prompt app catalog exposes encyclopedia card app", () => {

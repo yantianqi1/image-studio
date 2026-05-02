@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" role="img" aria-label="提示词工坊封面">
+  <defs>
+    <linearGradient id="paper" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#fff8ec"/>
+      <stop offset="1" stop-color="#ece1d1"/>
+    </linearGradient>
+    <linearGradient id="ink" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#17473c"/>
+      <stop offset="1" stop-color="#0f2b26"/>
+    </linearGradient>
+    <pattern id="grid" width="56" height="56" patternUnits="userSpaceOnUse">
+      <path d="M56 0H0V56" fill="none" stroke="#17352f" stroke-opacity=".08" stroke-width="2"/>
+    </pattern>
+  </defs>
+  <rect width="1600" height="1000" fill="url(#paper)"/>
+  <rect width="1600" height="1000" fill="url(#grid)" opacity=".72"/>
+  <rect x="136" y="126" width="1328" height="748" rx="38" fill="#fffdf8" stroke="#17352f" stroke-opacity=".12" stroke-width="3"/>
+  <rect x="192" y="184" width="486" height="632" rx="28" fill="url(#ink)"/>
+  <rect x="244" y="246" width="188" height="34" rx="17" fill="#d89a58"/>
+  <rect x="244" y="328" width="342" height="26" rx="13" fill="#fff8ec" opacity=".9"/>
+  <rect x="244" y="382" width="278" height="24" rx="12" fill="#fff8ec" opacity=".62"/>
+  <rect x="244" y="460" width="340" height="118" rx="20" fill="#fff8ec" opacity=".12" stroke="#fff8ec" stroke-opacity=".16"/>
+  <rect x="276" y="494" width="260" height="18" rx="9" fill="#fff8ec" opacity=".84"/>
+  <rect x="276" y="536" width="196" height="18" rx="9" fill="#fff8ec" opacity=".48"/>
+  <rect x="244" y="634" width="184" height="58" rx="19" fill="#d89a58"/>
+  <rect x="756" y="184" width="618" height="632" rx="28" fill="#f8efe1" stroke="#17352f" stroke-opacity=".12" stroke-width="3"/>
+  <rect x="816" y="246" width="208" height="34" rx="17" fill="#17352f"/>
+  <rect x="816" y="330" width="420" height="24" rx="12" fill="#17352f" opacity=".68"/>
+  <rect x="816" y="388" width="360" height="24" rx="12" fill="#9a6238" opacity=".86"/>
+  <rect x="816" y="446" width="468" height="24" rx="12" fill="#17352f" opacity=".54"/>
+  <rect x="816" y="540" width="458" height="146" rx="22" fill="#fffdf8" stroke="#17352f" stroke-opacity=".12" stroke-width="3"/>
+  <path d="M858 594H1126M858 632H1226" stroke="#17352f" stroke-linecap="round" stroke-opacity=".55" stroke-width="18"/>
+  <path d="M678 500C710 500 720 462 750 462C780 462 790 500 822 500" fill="none" stroke="#d89a58" stroke-linecap="round" stroke-width="18"/>
+  <path d="M1088 732H1230" stroke="#d89a58" stroke-linecap="round" stroke-width="20"/>
+  <text x="244" y="760" fill="#fff8ec" font-family="Georgia, serif" font-size="54" font-weight="700">PROMPT</text>
+  <text x="816" y="760" fill="#17352f" font-family="Georgia, serif" font-size="54" font-weight="700">CRAFT</text>
+</svg>

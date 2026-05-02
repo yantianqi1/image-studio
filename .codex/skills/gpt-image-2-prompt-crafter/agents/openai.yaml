@@ -1,0 +1,6 @@
+interface:
+  display_name: "GPT Image Prompt Crafter"
+  short_description: "Create structured GPT-image-2 prompts"
+  default_prompt: "Use $gpt-image-2-prompt-crafter to create a structured image prompt for my idea. If the subject is a person, use the human-subject photography structure."
+policy:
+  allow_implicit_invocation: true
