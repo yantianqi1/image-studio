@@ -21,9 +21,9 @@ export function LoginPage({ redirectTo = "/admin" }: { redirectTo?: string }) {
             <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[0.875rem] border border-black/10 bg-white/85 shadow-sm">
               <BrandMark />
             </span>
-            <p className="text-xs uppercase tracking-[0.35em] text-amber-800/70">Admin Web</p>
+            <p className="text-xs font-semibold uppercase text-amber-800/70">Admin Web</p>
           </div>
-          <h1 className="text-4xl font-semibold tracking-tight lg:text-6xl">后台登录</h1>
+          <h1 className="text-4xl font-semibold lg:text-6xl">后台登录</h1>
           <p className="max-w-xl text-sm leading-6 text-gray-700/90">
             管理员登录采用独立 cookie，与用户端登录态完全分离。登录后进入受保护的后台控制台。
           </p>

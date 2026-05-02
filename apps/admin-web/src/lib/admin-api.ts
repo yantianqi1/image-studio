@@ -1,5 +1,8 @@
 import { apiFetch } from "@/lib/api-client";
 import type { AdminImageJob } from "@/lib/admin-image-job-types";
+import { buildUsersSearch, type AdminUserList, type AdminUsersQuery, type AdminWallet, type AdminWalletLedgerEntry } from "@/lib/admin-users";
+
+export type { AdminUser, AdminUserList, AdminUsersQuery, AdminWallet, AdminWalletLedgerEntry } from "@/lib/admin-users";
 
 export type WorkerSummary = Readonly<{
   image_jobs: {
@@ -34,28 +37,15 @@ export const adminApi = {
       method: "POST",
     });
   },
-  users() {
-    return apiFetch<readonly { id: number; email: string; display_name: string; status: string }[]>(
-      "/api/admin/auth/users",
-    );
+  users(query: AdminUsersQuery = {}) {
+    const search = buildUsersSearch(query);
+    return apiFetch<AdminUserList>(`/api/admin/users${search}`);
   },
   wallet(userId: number) {
-    return apiFetch<{ balance_cents: number; locked_cents: number; currency: string }>(
-      `/api/admin/billing/wallets/${userId}`,
-    );
+    return apiFetch<AdminWallet>(`/api/admin/billing/wallets/${userId}`);
   },
   walletLedger(userId: number) {
-    return apiFetch<
-      readonly {
-        id: number;
-        amount_cents: number;
-        balance_after_cents: number;
-        reason: string;
-        reference_type: string;
-        reference_id: string;
-        created_at: string;
-      }[]
-    >(`/api/admin/billing/wallets/${userId}/ledger`);
+    return apiFetch<readonly AdminWalletLedgerEntry[]>(`/api/admin/billing/wallets/${userId}/ledger`);
   },
   adjustWallet(userId: number, input: { amount_cents: number; reason: string }) {
     return apiFetch<{ balance_cents: number; locked_cents: number; currency: string }>(

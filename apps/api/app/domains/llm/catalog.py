@@ -17,7 +17,10 @@ from apps.api.app.domains.llm.provider_validation import (
 
 DEFAULT_PROVIDER_NAME = "local-dev"
 DEFAULT_MODEL_CODE = "local-dev-image"
+ACTIVE_MODEL_STATUS = "active"
+DELETED_MODEL_STATUS = "deleted"
 DELETED_PROVIDER_STATUS = "deleted"
+LOCAL_DEV_PUBLIC_ENVS = frozenset({"development", "test"})
 
 
 @dataclass(frozen=True)
@@ -72,12 +75,20 @@ def ensure_local_image_model(session: Session, *, provider: Provider) -> None:
             provider_model=DEFAULT_MODEL_CODE,
             member_price_cents=25,
             anonymous_price_cents=0,
+            status=ACTIVE_MODEL_STATUS,
         )
         session.add(model)
+    if model.status == DELETED_MODEL_STATUS:
+        return
     model.provider_id = provider.id
     model.provider_model = DEFAULT_MODEL_CODE
-    model.public_enabled = False
+    model.public_enabled = is_local_dev_public_enabled()
+    model.status = ACTIVE_MODEL_STATUS
     session.flush()
+
+
+def is_local_dev_public_enabled() -> bool:
+    return get_settings().app_env.strip().lower() in LOCAL_DEV_PUBLIC_ENVS
 
 
 def ensure_configured_openai_provider(session: Session) -> Provider | None:
@@ -142,6 +153,9 @@ def ensure_catalog_model(session: Session, *, provider: Provider, seed: CatalogM
             public_enabled=seed.public_enabled,
             member_price_cents=seed.member_price_cents,
             anonymous_price_cents=seed.anonymous_price_cents,
+            status=ACTIVE_MODEL_STATUS,
         )
         session.add(model)
+    elif model.status == DELETED_MODEL_STATUS:
+        return
     session.flush()

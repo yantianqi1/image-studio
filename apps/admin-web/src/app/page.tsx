@@ -1,7 +1,5 @@
-import { AdminOverviewPage } from "@/features/overview/admin-overview-page";
-import { requireAdminPage } from "@/lib/admin-auth";
+import { redirect } from "next/navigation";
 
 export default async function Home() {
-  await requireAdminPage();
-  return <AdminOverviewPage />;
+  redirect("/admin");
 }

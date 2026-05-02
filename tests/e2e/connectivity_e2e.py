@@ -7,12 +7,21 @@ from uuid import uuid4
 
 from playwright.sync_api import Page, expect, sync_playwright
 
-from runtime import ADMIN_PASSWORD, ADMIN_PORT, ADMIN_USERNAME, PUBLIC_PORT, ServiceManager
+from runtime import (
+    ADMIN_PASSWORD,
+    ADMIN_PORT,
+    ADMIN_USERNAME,
+    E2E_IMAGE_MODEL_CODE,
+    E2E_IMAGE_MODEL_DISPLAY_NAME,
+    PUBLIC_PORT,
+    ServiceManager,
+)
 
 UI_TIMEOUT_MS = 10_000
 PUBLIC_USER_PASSWORD = "e2e-user-pass"
 E2E_COMIC_SOURCE = "第一幕：角色进入工作室。"
 E2E_REDEEM_CODE = "E2E-REDEEM-CODE"
+ADMIN_SESSION_COOKIE_NAME = "studio_admin_session"
 
 
 def main() -> None:
@@ -59,6 +68,7 @@ def run_admin_suite(browser: Any, run_id: str) -> None:
     try:
         page = context.new_page()
         email = f"e2e-user-{run_id}@example.com"
+        verify_admin_login_page_with_stale_cookie(context, page)
         verify_admin_login(page)
         verify_admin_users(page, email)
         verify_admin_billing(page)
@@ -69,6 +79,22 @@ def run_admin_suite(browser: Any, run_id: str) -> None:
         verify_redeem_through_public_browser(browser, email, redeem_code)
     finally:
         context.close()
+
+
+def verify_admin_login_page_with_stale_cookie(context: Any, page: Page) -> None:
+    context.add_cookies([
+        {
+            "name": ADMIN_SESSION_COOKIE_NAME,
+            "value": "stale-session",
+            "domain": "127.0.0.1",
+            "path": "/",
+            "httpOnly": True,
+            "sameSite": "Lax",
+        }
+    ])
+    page.goto("/admin/login")
+    expect(page.get_by_role("heading", name="后台登录")).to_be_visible(timeout=UI_TIMEOUT_MS)
+    context.clear_cookies()
 
 
 def register_public_user(request: Any, email: str) -> None:
@@ -88,17 +114,20 @@ def verify_public_login(page: Page, email: str) -> None:
 
 
 def verify_public_generation(page: Page, run_id: str) -> None:
-    page.goto("/")
+    page.goto("/generate")
     page.wait_for_load_state("networkidle")
-    expect(page.get_by_text("Local Dev Image", exact=True)).to_be_visible(timeout=UI_TIMEOUT_MS)
+    model_select = page.locator("select[name='model_code']")
+    expect(model_select).to_be_enabled(timeout=UI_TIMEOUT_MS)
+    expect(model_select).to_have_value(E2E_IMAGE_MODEL_CODE, timeout=UI_TIMEOUT_MS)
+    expect(model_select.locator("option:checked")).to_contain_text(E2E_IMAGE_MODEL_DISPLAY_NAME, timeout=UI_TIMEOUT_MS)
     page.get_by_placeholder("黄昏港口，蒸汽列车穿过潮湿雾气，电影感光影").fill(f"E2E 联通测试生图任务 {run_id}")
     page.get_by_role("button", name="生成图像").click()
-    expect(page.get_by_text("任务已创建", exact=True)).to_be_visible(timeout=UI_TIMEOUT_MS)
+    expect(page.get_by_text("任务已提交，准备生成", exact=True)).to_be_visible(timeout=UI_TIMEOUT_MS)
 
 
 def verify_public_tasks(page: Page, run_id: str) -> None:
     page.goto("/tasks")
-    expect(page.get_by_text(f"E2E 联通测试生图任务 {run_id}", exact=True)).to_be_visible(timeout=UI_TIMEOUT_MS)
+    expect(page.get_by_text(f"E2E 联通测试生图任务 {run_id}")).to_be_visible(timeout=UI_TIMEOUT_MS)
 
 
 def verify_public_wallet(page: Page) -> None:
@@ -111,33 +140,41 @@ def verify_public_comic(page: Page, request: Any, run_id: str) -> None:
     title = f"E2E 漫画项目 {run_id}"
     page.goto("/comic")
     page.wait_for_load_state("networkidle")
-    expect(page.get_by_role("heading", name="漫画工作室").first).to_be_visible(timeout=UI_TIMEOUT_MS)
+    expect(page.get_by_text("漫画工作室", exact=True)).to_be_visible(timeout=UI_TIMEOUT_MS)
     response = request.post(
         "/api/public/comic/projects",
         data={"title": title, "sourceText": E2E_COMIC_SOURCE, "stylePrompt": ""},
     )
     assert response.ok, response.text()
+    assert response.json()["data"]["title"] == title
     page.goto("/comic")
     page.wait_for_load_state("networkidle")
-    expect(page.get_by_text(title, exact=True)).to_be_visible(timeout=UI_TIMEOUT_MS)
+    expect(page.get_by_text("项目已创建，尚未创建生成任务", exact=True)).to_be_visible(timeout=UI_TIMEOUT_MS)
 
 
 def verify_admin_login(page: Page) -> None:
-    page.goto("/login")
+    page.goto("/admin/login")
     page.wait_for_load_state("networkidle")
     page.get_by_placeholder("管理员用户名").fill(ADMIN_USERNAME)
     page.get_by_placeholder("管理员密码").fill(ADMIN_PASSWORD)
     page.get_by_role("button", name="登录").click()
-    expect(page.get_by_text(f"登录成功：{ADMIN_USERNAME}", exact=True)).to_be_visible(timeout=UI_TIMEOUT_MS)
+    expect(page.get_by_role("heading", name="后台概览")).to_be_visible(timeout=UI_TIMEOUT_MS)
 
 
 def verify_admin_users(page: Page, email: str) -> None:
-    page.goto("/users")
+    page.goto("/admin/users")
+    page.wait_for_load_state("networkidle")
+    page.get_by_placeholder("搜索邮箱或名称").fill(email)
+    page.get_by_role("button", name="搜索").click()
     expect(page.get_by_text(email)).to_be_visible(timeout=UI_TIMEOUT_MS)
+    expect(page.get_by_text("共 1 个用户", exact=True)).to_be_visible(timeout=UI_TIMEOUT_MS)
+    page.locator("tbody tr").filter(has_text=email).first.click()
+    expect(page.get_by_text("钱包", exact=True)).to_be_visible(timeout=UI_TIMEOUT_MS)
+    expect(page.get_by_text("账本", exact=True)).to_be_visible(timeout=UI_TIMEOUT_MS)
 
 
 def verify_admin_billing(page: Page) -> None:
-    page.goto("/billing")
+    page.goto("/admin/billing")
     page.get_by_placeholder("用户 ID").fill("1")
     page.get_by_role("button", name="查询钱包").click()
     expect(page.get_by_text("已读取用户 1 的钱包与账本", exact=True)).to_be_visible(timeout=UI_TIMEOUT_MS)
@@ -148,7 +185,7 @@ def verify_admin_billing(page: Page) -> None:
 
 
 def verify_admin_redeem(page: Page, run_id: str) -> str:
-    page.goto("/redeem")
+    page.goto("/admin/redeem")
     page.wait_for_load_state("networkidle")
     page.get_by_placeholder("批次名称").fill(f"E2E 批次 {run_id}")
     page.get_by_placeholder("额度（cents）").fill("50")
@@ -160,22 +197,22 @@ def verify_admin_redeem(page: Page, run_id: str) -> str:
 
 
 def verify_admin_providers(page: Page) -> None:
-    page.goto("/providers")
+    page.goto("/admin/providers")
     expect(page.locator("span").filter(has_text="local-dev").first).to_be_visible(timeout=UI_TIMEOUT_MS)
-    expect(page.locator("span").filter(has_text="local-dev-image").first).to_be_visible(timeout=UI_TIMEOUT_MS)
+    expect(page.locator("span").filter(has_text="gpt-image-2").first).to_be_visible(timeout=UI_TIMEOUT_MS)
 
 
 def verify_admin_settings(page: Page) -> None:
-    page.goto("/settings")
+    page.goto("/admin/settings")
     page.locator("input[name='site_title']").fill("image Studio E2E")
     page.get_by_role("button", name="保存设置").click()
     expect(page.get_by_text("设置已保存并立即影响新请求", exact=True)).to_be_visible(timeout=UI_TIMEOUT_MS)
 
 
 def verify_admin_jobs(page: Page, run_id: str) -> None:
-    page.goto("/image-jobs")
-    expect(page.get_by_text(f"E2E 联通测试生图任务 {run_id}", exact=True)).to_be_visible(timeout=UI_TIMEOUT_MS)
-    page.goto("/comic-jobs")
+    page.goto("/admin/image-jobs")
+    expect(page.locator(".image-job-detail-panel pre").filter(has_text=f"E2E 联通测试生图任务 {run_id}").first).to_be_visible(timeout=UI_TIMEOUT_MS)
+    page.goto("/admin/comic-jobs")
     expect(page.get_by_text("任务列表", exact=True)).to_be_visible(timeout=UI_TIMEOUT_MS)
 
 

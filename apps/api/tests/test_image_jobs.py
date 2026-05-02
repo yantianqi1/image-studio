@@ -174,6 +174,33 @@ def test_anonymous_image_job_uses_server_provider_when_enabled():
         assert stored_job.client_provider_config is None
 
 
+def test_local_dev_image_job_runs_without_openai_key(monkeypatch):
+    monkeypatch.delenv("OPENAI_PROVIDER_KEY", raising=False)
+    client = build_client()
+
+    create_response = client.post(
+        "/api/public/image/jobs",
+        json={
+            "prompt": "Local development render",
+            "model_code": "local-dev-image",
+            "requested_count": 1,
+        },
+    )
+    assert create_response.status_code == 201
+    job_id = create_response.json()["data"]["id"]
+
+    processed_job_id = worker_image_jobs.run_next_image_job()
+    job_response = client.get(f"/api/public/image/jobs/{job_id}")
+    results_response = client.get(f"/api/public/image/jobs/{job_id}/results")
+
+    assert processed_job_id == job_id
+    assert job_response.json()["data"]["status"] == "succeeded"
+    assert results_response.json()["data"][0]["provider_request_id"].startswith("local-dev:")
+    asset_response = client.get(results_response.json()["data"][0]["asset_url"])
+    assert asset_response.status_code == 200
+    assert "local-dev-image" in asset_response.text
+
+
 def test_client_provider_image_job_records_browser_context():
     client = build_client()
 

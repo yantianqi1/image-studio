@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
+from apps.api.app.core.config import get_settings
 from apps.api.app.domains.auth.service import create_admin_account
+from apps.api.app.domains.llm.catalog import DEFAULT_MODEL_CODE
+from apps.api.app.domains.llm.models import SellableModel
 from apps.api.app.domains.llm.service import extract_image_reference
 from apps.api.app.infra.db.session import initialize_database, session_scope
 from apps.api.app.main import create_app
@@ -61,7 +65,38 @@ def test_default_catalog_uses_env_configured_openai_provider(monkeypatch) -> Non
     )
 
 
-def test_public_models_exclude_placeholder_and_non_image_models() -> None:
+def test_public_models_include_local_dev_image_for_local_development() -> None:
+    client = build_client()
+
+    response = client.get("/api/public/models")
+
+    assert response.status_code == 200
+    model_codes = [item["code"] for item in response.json()["data"]]
+    assert model_codes[0] == DEFAULT_MODEL_CODE
+    assert "gemini-3-flash-preview-low-search" not in model_codes
+    assert "gpt-image-2" in model_codes
+
+
+def test_public_models_prioritize_local_dev_image_after_restore() -> None:
+    client = build_client()
+    client.get("/api/public/models")
+    with session_scope() as session:
+        local_model = session.execute(
+            select(SellableModel).where(SellableModel.code == DEFAULT_MODEL_CODE)
+        ).scalar_one()
+        local_model.id = 999
+        session.flush()
+
+    response = client.get("/api/public/models")
+
+    assert response.status_code == 200
+    model_codes = [item["code"] for item in response.json()["data"]]
+    assert model_codes[0] == DEFAULT_MODEL_CODE
+
+
+def test_production_public_models_exclude_local_dev_image(monkeypatch) -> None:
+    monkeypatch.setenv("APP_ENV", "production")
+    get_settings.cache_clear()
     client = build_client()
 
     response = client.get("/api/public/models")
@@ -69,7 +104,6 @@ def test_public_models_exclude_placeholder_and_non_image_models() -> None:
     assert response.status_code == 200
     model_codes = [item["code"] for item in response.json()["data"]]
     assert "local-dev-image" not in model_codes
-    assert "gemini-3-flash-preview-low-search" not in model_codes
     assert "gpt-image-2" in model_codes
 
 

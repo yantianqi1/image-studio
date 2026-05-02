@@ -9,7 +9,7 @@ from sqlalchemy import create_engine, inspect, text
 from apps.api.app.core.config import get_settings
 from apps.api.app.infra.db.session import get_engine, get_session_factory, initialize_database
 
-HEAD_REVISION = "20260501_000011"
+HEAD_REVISION = "20260502_000012"
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
@@ -41,6 +41,11 @@ def test_alembic_upgrade_creates_core_tables(tmp_path):
     assert inspector.has_table("image_job_reference_assets")
     assert inspector.has_table("anonymous_sessions")
     assert inspector.has_table("site_settings")
+
+    sellable_model_columns = {column["name"] for column in inspector.get_columns("sellable_models")}
+    assert "status" in sellable_model_columns
+    sellable_model_indexes = {index["name"] for index in inspector.get_indexes("sellable_models")}
+    assert "ix_sellable_models_status" in sellable_model_indexes
 
     image_job_columns = {column["name"] for column in inspector.get_columns("image_jobs")}
     assert {
@@ -108,6 +113,9 @@ def test_initialize_database_runs_alembic_to_head(tmp_path):
     assert inspector.has_table("image_job_reference_assets")
     assert inspector.has_table("anonymous_sessions")
     assert inspector.has_table("site_settings")
+
+    sellable_model_columns = {column["name"] for column in inspector.get_columns("sellable_models")}
+    assert "status" in sellable_model_columns
 
     with engine.begin() as connection:
         version_rows = connection.execute(text("SELECT version_num FROM alembic_version")).fetchall()

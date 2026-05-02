@@ -1,10 +1,12 @@
-from fastapi import APIRouter, Depends, Request, Response, status
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 from sqlalchemy.orm import Session
 
 from apps.api.app.core.config import get_settings
 from apps.api.app.core.deps import get_db_session
 from apps.api.app.core.response import api_ok
-from apps.api.app.domains.auth.schemas import AdminLoginRequest, LoginRequest, RegisterRequest
+from apps.api.app.domains.auth.schemas import AdminLoginRequest, AdminUserListOptions, LoginRequest, RegisterRequest
 from apps.api.app.domains.auth.anonymous_sessions import ensure_anonymous_session, get_anonymous_session_by_token
 from apps.api.app.domains.auth.ownership import delete_anonymous_session_cookie, set_anonymous_session_cookie
 from apps.api.app.domains.auth.ownership_migration import migrate_anonymous_owner_to_user
@@ -111,9 +113,21 @@ def admin_logout(request: Request, response: Response, session: Session = Depend
 
 @admin_router.get("/users")
 @admin_router.get("/auth/users")
-def admin_users(request: Request, session: Session = Depends(get_db_session)):
+def admin_users(
+    request: Request,
+    options: Annotated[AdminUserListOptions, Query()],
+    session: Session = Depends(get_db_session),
+):
     require_admin(request, session)
-    return api_ok([user_payload(user) for user in list_users(session)])
+    result = list_users(session, options)
+    return api_ok(
+        {
+            "items": [user_payload(user) for user in result.items],
+            "total": result.total,
+            "page": result.page,
+            "page_size": result.page_size,
+        }
+    )
 
 
 def set_admin_session_cookie(response: Response, token: str) -> None:

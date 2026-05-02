@@ -143,3 +143,19 @@ def test_deleted_seed_provider_is_not_recreated_by_admin_lists() -> None:
     assert delete_response.status_code == 200
     assert all(item["name"] != "local-dev" for item in providers_after_delete.json()["data"])
     assert all(item["code"] != "local-dev-image" for item in models_after_delete.json()["data"])
+
+
+def test_admin_can_delete_default_local_dev_model_without_recreation() -> None:
+    client = build_client()
+    seed_admin()
+    admin_login(client)
+
+    initial_models_response = client.get("/api/admin/models")
+    assert any(item["code"] == "local-dev-image" for item in initial_models_response.json()["data"])
+
+    delete_response = client.delete("/api/admin/models/local-dev-image")
+    models_after_delete = client.get("/api/admin/models")
+
+    assert delete_response.status_code == 200
+    assert delete_response.json()["data"] == {"deleted": True}
+    assert all(item["code"] != "local-dev-image" for item in models_after_delete.json()["data"])
