@@ -22,6 +22,9 @@ class AppSettings(BaseSettings):
     signup_bonus_cents: int = 100
     activation_code_length: int = 32
     generated_assets_dir: str = "./generated-assets"
+    asset_storage_backend: str = "local"
+    asset_storage_gcs_bucket: str = ""
+    asset_storage_gcs_prefix: str = "generated-assets"
     chat_image_timeout_seconds: float = 180.0
     chat_image_download_timeout_seconds: float = 60.0
     default_admin_username: str = ""
