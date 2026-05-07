@@ -4,7 +4,7 @@ import json
 from dataclasses import dataclass
 from datetime import datetime
 from io import BytesIO
-from pathlib import Path
+from pathlib import PurePosixPath
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from sqlalchemy.orm import Session
@@ -19,6 +19,8 @@ from apps.api.app.domains.comic.models import ComicCharacterCard, ComicTask
 from apps.api.app.domains.comic.ownership import require_task_for_owner
 from apps.api.app.domains.image.models import Asset
 from apps.api.app.domains.image.service import get_asset_for_owner
+from apps.api.app.infra.storage.asset_storage import AssetStorage
+from apps.api.app.infra.storage.factory import build_asset_storage
 
 PACK_SCHEMA_VERSION = 1
 MANIFEST_PATH = "characters.json"
@@ -34,12 +36,14 @@ class CharacterPackEntry:
     card: ComicCharacterCard
     asset: Asset
     image_file: str
+    content: bytes
 
 
 def export_character_reference_pack(session: Session, task_id: str, *, owner: OwnerContext) -> tuple[bytes, str]:
     task = require_task_for_owner(session, task_id, owner)
     cards = require_ready_character_cards(session, task_id=task_id, owner=owner)
-    entries = build_pack_entries(session, cards=cards, owner=owner)
+    storage = build_asset_storage()
+    entries = build_pack_entries(session, cards=cards, owner=owner, storage=storage)
     manifest = build_manifest(task=task, entries=entries)
     archive_name = build_archive_name(task)
     return write_archive(manifest=manifest, entries=entries), archive_name
@@ -66,18 +70,19 @@ def build_pack_entries(
     *,
     cards: list[ComicCharacterCard],
     owner: OwnerContext,
+    storage: AssetStorage,
 ) -> list[CharacterPackEntry]:
     seen: dict[str, int] = {}
     filenames_by_asset: dict[int, str] = {}
     entries: list[CharacterPackEntry] = []
     for card in cards:
         asset = get_asset_for_owner(session, int(card.reference_asset_id or 0), owner)
-        assert_exportable_asset_file(asset)
+        assert_exportable_asset_file(asset, storage=storage)
         image_file = filenames_by_asset.get(asset.id)
         if image_file is None:
             image_file = build_image_filename(card_name=card.name, asset=asset, seen=seen)
             filenames_by_asset[asset.id] = image_file
-        entries.append(CharacterPackEntry(card=card, asset=asset, image_file=image_file))
+        entries.append(CharacterPackEntry(card=card, asset=asset, image_file=image_file, content=storage.read_bytes(asset.storage_path)))
     return entries
 
 
@@ -99,9 +104,8 @@ def is_filename_char(char: str) -> bool:
     return char.isalnum() or char in {"_", "-"}
 
 
-def assert_exportable_asset_file(asset: Asset) -> None:
-    path = Path(asset.storage_path)
-    if not path.is_file():
+def assert_exportable_asset_file(asset: Asset, *, storage: AssetStorage) -> None:
+    if not storage.exists(asset.storage_path):
         raise AppError(code="comic_character_reference_asset_missing", message="reference asset file missing", status_code=409)
     resolve_asset_image_suffix(asset)
 
@@ -110,7 +114,7 @@ def resolve_asset_image_suffix(asset: Asset) -> str:
     mime_type = normalize_asset_mime_type(asset.mime_type)
     if mime_type in IMAGE_MIME_SUFFIXES:
         return IMAGE_MIME_SUFFIXES[mime_type]
-    suffix = Path(asset.storage_path).suffix.lower()
+    suffix = PurePosixPath(asset.storage_path).suffix.lower()
     if mime_type.startswith("image/") and suffix in ALLOWED_IMAGE_SUFFIXES:
         return suffix
     raise AppError(code="comic_character_reference_asset_type_invalid", message="reference asset type invalid", status_code=409)
@@ -155,7 +159,7 @@ def write_archive(*, manifest: dict, entries: list[CharacterPackEntry]) -> bytes
         for entry in entries:
             if entry.image_file in written_files:
                 continue
-            archive.write(entry.asset.storage_path, entry.image_file)
+            archive.writestr(entry.image_file, entry.content)
             written_files.add(entry.image_file)
     return buffer.getvalue()
 

@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import json
 from io import BytesIO
-from pathlib import Path
 from zipfile import ZipFile
 
-from apps.api.app.core.config import get_settings
 from apps.api.app.domains.comic.models import ComicCharacterCard, ComicTask
 from apps.api.app.domains.image.models import Asset
 from apps.api.app.infra.db.session import session_scope
+from apps.api.app.infra.storage.factory import build_asset_storage
 from apps.api.tests.test_comic_pipeline import create_comic_client, create_task
 
 
@@ -177,10 +176,8 @@ def test_import_character_reference_pack_rejects_unmatched_character() -> None:
 def seed_reference_cards(*, task_id: str, ready: bool) -> None:
     with session_scope() as session:
         task = session.get(ComicTask, task_id)
-        storage_dir = Path(get_settings().generated_assets_dir)
-        storage_dir.mkdir(parents=True, exist_ok=True)
-        hero_asset = add_asset(session, task=task, path=storage_dir / "hero.png", content=b"hero-reference") if ready else None
-        mentor_asset = add_asset(session, task=task, path=storage_dir / "mentor.png", content=b"mentor-reference") if ready else None
+        hero_asset = add_asset(session, task=task, key="references/hero.png", content=b"hero-reference") if ready else None
+        mentor_asset = add_asset(session, task=task, key="references/mentor.png", content=b"mentor-reference") if ready else None
         session.add_all([
             build_card(task=task, code="hero", asset_id=hero_asset.id if hero_asset else None),
             build_card(task=task, code="mentor", asset_id=mentor_asset.id if mentor_asset else None),
@@ -203,14 +200,12 @@ def seed_reference_card_with_asset(
 ) -> None:
     with session_scope() as session:
         task = session.get(ComicTask, task_id)
-        storage_dir = Path(get_settings().generated_assets_dir)
-        storage_dir.mkdir(parents=True, exist_ok=True)
-        asset_path = storage_dir / storage_name
-        asset_path.write_bytes(content)
+        key = f"references/{storage_name}"
+        build_asset_storage().write_bytes(key, content, mime_type)
         asset = Asset(
             owner_user_id=task.user_id,
             owner_anonymous_session_id=task.anonymous_session_id,
-            storage_path=str(asset_path),
+            storage_path=key,
             mime_type=mime_type,
         )
         session.add(asset)
@@ -218,12 +213,12 @@ def seed_reference_card_with_asset(
         session.add(build_card(task=task, code="hero", asset_id=asset.id))
 
 
-def add_asset(session, *, task: ComicTask, path: Path, content: bytes) -> Asset:
-    path.write_bytes(content)
+def add_asset(session, *, task: ComicTask, key: str, content: bytes) -> Asset:
+    build_asset_storage().write_bytes(key, content, "image/png")
     asset = Asset(
         owner_user_id=task.user_id,
         owner_anonymous_session_id=task.anonymous_session_id,
-        storage_path=str(path),
+        storage_path=key,
         mime_type="image/png",
     )
     session.add(asset)
@@ -279,5 +274,6 @@ def strip_content_field(item: dict) -> dict:
 def assert_imported_card_contents(*, task_id: str) -> None:
     with session_scope() as session:
         cards = session.query(ComicCharacterCard).filter_by(task_id=task_id).order_by(ComicCharacterCard.character_code).all()
-        contents = [Path(session.get(Asset, card.reference_asset_id).storage_path).read_bytes() for card in cards]
+        storage = build_asset_storage()
+        contents = [storage.read_bytes(session.get(Asset, card.reference_asset_id).storage_path) for card in cards]
     assert contents == [b"new-hero", b"new-mentor"]

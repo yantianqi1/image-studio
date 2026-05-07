@@ -23,7 +23,7 @@ from apps.api.app.domains.comic.repository import update_character_reference_ass
 from apps.api.app.domains.comic.ownership import require_task_for_owner
 from apps.api.app.domains.comic.payloads import character_reference_payload
 from apps.api.app.domains.image.assets import persist_uploaded_asset
-from apps.api.app.domains.llm.service import ensure_storage_dir
+from apps.api.app.infra.storage.factory import build_asset_storage
 
 
 @dataclass(frozen=True)
@@ -41,12 +41,13 @@ def import_character_reference_pack(session: Session, *, task_id: str, content: 
     records = parse_import_archive(content)
     matched_pairs = match_import_records(cards=cards, records=records)
     asset_ids_by_file: dict[str, int] = {}
+    storage = build_asset_storage()
     for card, record in matched_pairs:
         asset_id = asset_ids_by_file.get(record.image_file)
         if asset_id is None:
             asset = persist_uploaded_asset(
                 session,
-                storage_dir=ensure_storage_dir(),
+                storage=storage,
                 content=record.content,
                 filename=record.image_file,
                 mime_type=record.mime_type,

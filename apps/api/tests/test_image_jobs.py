@@ -328,8 +328,8 @@ def test_create_job_stores_reference_assets_in_order():
     build_client()
     with session_scope() as session:
         owner = create_anonymous_owner(session)
-        first_asset = create_asset(session, owner_user_id=None, owner_anonymous_session_id=owner.anonymous_session_id, storage_path="/tmp/ref-a.png")
-        second_asset = create_asset(session, owner_user_id=None, owner_anonymous_session_id=owner.anonymous_session_id, storage_path="/tmp/ref-b.png")
+        first_asset = create_asset(session, owner_user_id=None, owner_anonymous_session_id=owner.anonymous_session_id, storage_path="references/ref-a.png")
+        second_asset = create_asset(session, owner_user_id=None, owner_anonymous_session_id=owner.anonymous_session_id, storage_path="references/ref-b.png")
         job = image_service.create_job(
             session,
             owner=owner,
@@ -368,7 +368,7 @@ def test_create_job_rejects_missing_reference_asset():
 def test_create_job_rejects_forbidden_reference_asset():
     build_client()
     with session_scope() as session:
-        asset = create_asset(session, owner_user_id=321, storage_path="/tmp/private-ref.png")
+        asset = create_asset(session, owner_user_id=321, storage_path="references/private-ref.png")
         with pytest.raises(AppError) as error:
             image_service.create_job(
                 session,
@@ -395,8 +395,8 @@ def test_image_job_passes_reference_assets_to_renderer(monkeypatch):
     monkeypatch.setattr(image_service, "render_image", renderer, raising=False)
     with session_scope() as session:
         owner = create_anonymous_owner(session)
-        first_asset = create_asset(session, owner_user_id=None, owner_anonymous_session_id=owner.anonymous_session_id, storage_path="/tmp/ref-a.png")
-        second_asset = create_asset(session, owner_user_id=None, owner_anonymous_session_id=owner.anonymous_session_id, storage_path="/tmp/ref-b.png")
+        first_asset = create_asset(session, owner_user_id=None, owner_anonymous_session_id=owner.anonymous_session_id, storage_path="references/ref-a.png")
+        second_asset = create_asset(session, owner_user_id=None, owner_anonymous_session_id=owner.anonymous_session_id, storage_path="references/ref-b.png")
         job = image_service.create_job(
             session,
             owner=owner,

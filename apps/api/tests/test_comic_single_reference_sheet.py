@@ -8,6 +8,7 @@ from apps.api.app.domains.comic.models import ComicCharacterCard, ComicPanelProm
 from apps.api.app.domains.comic.storage import ASSET_FOLDER_NAME_OUTPUT_KEY, build_asset_folder_name
 from apps.api.app.domains.image.models import Asset, ImageJob, ImageJobReferenceAsset, ImageJobResult
 from apps.api.app.infra.db.session import session_scope
+from apps.api.app.infra.storage.factory import build_asset_storage
 from apps.api.tests.test_comic_pipeline import build_input_payload, create_comic_client, create_task
 
 
@@ -69,10 +70,12 @@ def create_page_task_with_shared_reference_asset() -> tuple:
     with session_scope() as session:
         task_model = session.get(ComicTask, task["id"])
         mark_completed(task_model)
+        key = "references/all-characters.png"
+        build_asset_storage().write_bytes(key, b"all-characters", "image/png")
         asset = Asset(
             owner_user_id=task_model.user_id,
             owner_anonymous_session_id=task_model.anonymous_session_id,
-            storage_path="/tmp/all-characters.png",
+            storage_path=key,
             mime_type="image/png",
         )
         session.add(asset)
@@ -144,10 +147,12 @@ def seed_job_result(job_id: int) -> int:
     with session_scope() as session:
         job = session.get(ImageJob, job_id)
         job.status = "succeeded"
+        key = f"references/ref-{job_id}.png"
+        build_asset_storage().write_bytes(key, b"single-reference", "image/png")
         asset = Asset(
             owner_user_id=job.user_id,
             owner_anonymous_session_id=job.anonymous_session_id,
-            storage_path=f"/tmp/ref-{job_id}.png",
+            storage_path=key,
             mime_type="image/png",
         )
         session.add(asset)

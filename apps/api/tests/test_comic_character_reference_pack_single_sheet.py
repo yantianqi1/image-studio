@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import json
 from io import BytesIO
-from pathlib import Path
 from zipfile import ZipFile
 
-from apps.api.app.core.config import get_settings
 from apps.api.app.domains.comic.models import ComicCharacterCard, ComicTask
 from apps.api.app.domains.image.models import Asset
 from apps.api.app.infra.db.session import session_scope
+from apps.api.app.infra.storage.factory import build_asset_storage
 from apps.api.tests.test_comic_pipeline import create_comic_client, create_task
 
 
@@ -30,14 +29,12 @@ def test_export_shared_single_sheet_asset_once_for_all_characters() -> None:
 def seed_cards_sharing_reference_asset(*, task_id: str) -> None:
     with session_scope() as session:
         task = session.get(ComicTask, task_id)
-        storage_dir = Path(get_settings().generated_assets_dir)
-        storage_dir.mkdir(parents=True, exist_ok=True)
-        asset_path = storage_dir / "single-sheet.png"
-        asset_path.write_bytes(b"single-sheet")
+        key = "references/single-sheet.png"
+        build_asset_storage().write_bytes(key, b"single-sheet", "image/png")
         asset = Asset(
             owner_user_id=task.user_id,
             owner_anonymous_session_id=task.anonymous_session_id,
-            storage_path=str(asset_path),
+            storage_path=key,
             mime_type="image/png",
         )
         session.add(asset)

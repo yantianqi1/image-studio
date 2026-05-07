@@ -14,6 +14,7 @@ from apps.api.app.domains.public_quota.constants import PUBLIC_QUOTA_MODE_PER_IP
 from apps.api.app.domains.public_quota.service import get_public_quota_status
 from apps.api.app.domains.settings.service import get_settings_record
 from apps.api.app.infra.db.session import initialize_database, session_scope
+from apps.api.app.infra.storage.factory import build_asset_storage
 from apps.api.app.main import create_app
 from apps.worker.worker.tasks import comic_orchestration as worker_comic_orchestration
 from apps.worker.worker.tasks import comic_tasks as worker_comic_tasks
@@ -289,10 +290,12 @@ def build_prompt(*, task_model: ComicTask, storyboard_id: int, index: int) -> Co
 def seed_character_card(session, *, task_model: ComicTask, reference_ready: bool) -> None:
     asset_id = None
     if reference_ready:
+        key = "references/hero-reference.png"
+        build_asset_storage().write_bytes(key, b"hero-reference", "image/png")
         asset = Asset(
             owner_user_id=task_model.user_id,
             owner_anonymous_session_id=task_model.anonymous_session_id,
-            storage_path="/tmp/hero-reference.png",
+            storage_path=key,
             mime_type="image/png",
         )
         session.add(asset)
@@ -416,10 +419,12 @@ def seed_job_states(prompt_ids: list[int]) -> None:
             job.status = status
             job.error_message = "provider rejected" if status == "failed" else None
             if status == "succeeded":
+                key = "comic-results/comic-result.svg"
+                build_asset_storage().write_bytes(key, b"<svg />", "image/svg+xml")
                 asset = Asset(
                     owner_user_id=job.user_id,
                     owner_anonymous_session_id=job.anonymous_session_id,
-                    storage_path="/tmp/comic-result.svg",
+                    storage_path=key,
                     mime_type="image/svg+xml",
                 )
                 session.add(asset)

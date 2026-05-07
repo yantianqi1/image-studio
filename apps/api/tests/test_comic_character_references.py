@@ -9,6 +9,7 @@ from apps.api.app.domains.public_quota.constants import PUBLIC_QUOTA_MODE_PER_IP
 from apps.api.app.domains.public_quota.service import get_public_quota_status
 from apps.api.app.domains.settings.service import get_settings_record
 from apps.api.app.infra.db.session import session_scope
+from apps.api.app.infra.storage.factory import build_asset_storage
 from apps.worker.worker.tasks import comic_tasks as worker_comic_tasks
 from apps.api.tests.test_comic_pipeline import create_comic_client, create_task, install_llm_outputs
 
@@ -170,10 +171,12 @@ def seed_image_job_result(*, job_id: int, status: str) -> int:
     with session_scope() as session:
         job = session.get(ImageJob, job_id)
         job.status = status
+        key = f"references/ref-{job_id}.png"
+        build_asset_storage().write_bytes(key, b"reference-result", "image/png")
         asset = Asset(
             owner_user_id=job.user_id,
             owner_anonymous_session_id=job.anonymous_session_id,
-            storage_path=f"/tmp/ref-{job_id}.png",
+            storage_path=key,
             mime_type="image/png",
         )
         session.add(asset)

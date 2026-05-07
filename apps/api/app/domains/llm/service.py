@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from sqlalchemy import case, select
 from sqlalchemy.orm import Session
 
-from apps.api.app.core.config import get_settings
 from apps.api.app.core.errors import AppError
 from apps.api.app.domains.llm.catalog import (
     ACTIVE_MODEL_STATUS,
@@ -294,9 +292,3 @@ def resolve_model_execution_target(session: Session, *, model_code: str) -> Mode
     if not provider_model:
         raise AppError(code="provider_model_missing", message="provider model missing", status_code=422)
     return ModelExecutionTarget(provider=provider, model=model, provider_model=provider_model)
-
-
-def ensure_storage_dir() -> Path:
-    path = Path(get_settings().generated_assets_dir)
-    path.mkdir(parents=True, exist_ok=True)
-    return path
