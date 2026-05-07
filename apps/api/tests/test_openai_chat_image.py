@@ -9,9 +9,10 @@ from apps.api.app.domains.auth.ownership import OwnerContext
 from apps.api.app.domains.image.models import Asset
 from apps.api.app.domains.image.service import create_job
 from apps.api.app.infra.db.session import initialize_database, session_scope
+from apps.api.app.infra.storage.factory import build_asset_storage
 from apps.api.app.main import create_app
 from apps.worker.worker.tasks import image_jobs as worker_image_jobs
-from apps.api.tests.test_provider_catalog import admin_login, register_user, seed_admin, write_reference_file
+from apps.api.tests.test_provider_catalog import admin_login, register_user, seed_admin
 
 
 @dataclass
@@ -95,12 +96,12 @@ def test_chat_compatible_image_job_sends_reference_assets(monkeypatch) -> None:
         asset = Asset(
             owner_user_id=None,
             owner_anonymous_session_id=owner.anonymous_session_id,
-            storage_path="/tmp/ref-chat.png",
+            storage_path="references/ref-chat.png",
             mime_type="image/png",
         )
         session.add(asset)
         session.flush()
-        asset.storage_path = write_reference_file("ref-chat.png", b"reference-bytes")
+        build_asset_storage().write_bytes(asset.storage_path, b"reference-bytes", asset.mime_type)
         job = create_job(
             session,
             owner=owner,

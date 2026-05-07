@@ -9,6 +9,7 @@ from apps.api.app.domains.auth.ownership import OwnerContext
 from apps.api.app.domains.auth.service import create_admin_account
 from apps.api.app.domains.llm.service import extract_image_reference
 from apps.api.app.infra.db.session import initialize_database, session_scope
+from apps.api.app.infra.storage.factory import build_asset_storage
 from apps.api.app.main import create_app
 from apps.worker.worker.tasks import image_jobs as worker_image_jobs
 
@@ -225,12 +226,13 @@ def test_openai_compatible_reference_assets_use_multipart_adapter(monkeypatch) -
         from apps.api.app.domains.image.service import create_job
 
         owner = OwnerContext(user_id=user["id"], anonymous_session_id=None)
-        first_asset = Asset(owner_user_id=user["id"], storage_path="/tmp/ref-a.png", mime_type="image/png")
-        second_asset = Asset(owner_user_id=user["id"], storage_path="/tmp/ref-b.png", mime_type="image/png")
+        first_asset = Asset(owner_user_id=user["id"], storage_path="references/ref-a.png", mime_type="image/png")
+        second_asset = Asset(owner_user_id=user["id"], storage_path="references/ref-b.png", mime_type="image/png")
         session.add_all([first_asset, second_asset])
         session.flush()
-        first_asset.storage_path = write_reference_file("ref-a.png", b"ref-a")
-        second_asset.storage_path = write_reference_file("ref-b.png", b"ref-b")
+        storage = build_asset_storage()
+        storage.write_bytes(first_asset.storage_path, b"ref-a", first_asset.mime_type)
+        storage.write_bytes(second_asset.storage_path, b"ref-b", second_asset.mime_type)
         job = create_job(
             session,
             owner=owner,

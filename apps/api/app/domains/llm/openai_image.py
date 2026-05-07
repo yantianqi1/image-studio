@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import base64
 import os
-from pathlib import Path
 from contextlib import ExitStack
+from io import BytesIO
+from pathlib import PurePosixPath
 
 import httpx
 from sqlalchemy.orm import Session
@@ -13,6 +14,8 @@ from apps.api.app.domains.image.models import Asset
 from apps.api.app.domains.llm.image_reference import ImageReference, extract_image_reference
 from apps.api.app.domains.llm.models import Provider
 from apps.api.app.domains.llm.rendering import RenderedImage
+from apps.api.app.infra.storage.asset_storage import AssetStorage
+from apps.api.app.infra.storage.factory import build_asset_storage
 
 OPENAI_GENERATION_ENDPOINT = "/images/generations"
 OPENAI_EDIT_ENDPOINT = "/images/edits"
@@ -77,12 +80,10 @@ def render_openai_compatible_reference_edit(
     provider_model: str,
     reference_asset_ids: tuple[int, ...],
 ) -> RenderedImage:
-    assets = [resolve_source_asset_file(session, source_asset_id=asset_id) for asset_id in reference_asset_ids]
+    storage = build_asset_storage()
+    assets = [resolve_source_asset(session, source_asset_id=asset_id, storage=storage) for asset_id in reference_asset_ids]
     with ExitStack() as stack:
-        image_files = [
-            ("image", (Path(asset.storage_path).name, stack.enter_context(Path(asset.storage_path).open("rb")), asset.mime_type))
-            for asset in assets
-        ]
+        image_files = [build_multipart_image_file(asset, storage=storage, stack=stack) for asset in assets]
         response = httpx.post(
             build_provider_url(provider.base_url, OPENAI_EDIT_ENDPOINT),
             headers={"Authorization": f"Bearer {read_provider_api_key(provider)}"},
@@ -101,13 +102,15 @@ def render_openai_compatible_edit(
     provider_model: str,
     source_asset_id: int,
 ) -> RenderedImage:
-    asset = resolve_source_asset_file(session, source_asset_id=source_asset_id)
-    with Path(asset.storage_path).open("rb") as image_file:
+    storage = build_asset_storage()
+    asset = resolve_source_asset(session, source_asset_id=source_asset_id, storage=storage)
+    with ExitStack() as stack:
+        image_file = build_multipart_image_file(asset, storage=storage, stack=stack)[1]
         response = httpx.post(
             build_provider_url(provider.base_url, OPENAI_EDIT_ENDPOINT),
             headers={"Authorization": f"Bearer {read_provider_api_key(provider)}"},
             data=build_edit_payload(prompt=prompt, provider_model=provider_model),
-            files={"image": (Path(asset.storage_path).name, image_file, asset.mime_type)},
+            files={"image": image_file},
             timeout=OPENAI_IMAGE_TIMEOUT_SECONDS,
         )
     return parse_provider_image_response(response=response, provider=provider, prompt=prompt)
@@ -139,13 +142,19 @@ def parse_provider_image_response(*, response: httpx.Response | object, provider
     )
 
 
-def resolve_source_asset_file(session: Session, *, source_asset_id: int) -> Asset:
+def build_multipart_image_file(asset: Asset, *, storage: AssetStorage, stack: ExitStack):
+    content = storage.read_bytes(asset.storage_path)
+    image_file = stack.enter_context(BytesIO(content))
+    return "image", (PurePosixPath(asset.storage_path).name, image_file, asset.mime_type)
+
+
+def resolve_source_asset(session: Session, *, source_asset_id: int, storage: AssetStorage) -> Asset:
     asset = session.get(Asset, source_asset_id)
     if asset is None:
         raise AppError(code="source_asset_not_found", message="source asset not found", status_code=404)
     if not asset.mime_type.startswith("image/"):
         raise AppError(code="source_asset_invalid", message="source asset is not an image", status_code=422)
-    if not asset.storage_path or not Path(asset.storage_path).is_file():
+    if not asset.storage_path or not storage.exists(asset.storage_path):
         raise AppError(code="source_asset_file_missing", message="source asset file missing", status_code=500)
     return asset
 

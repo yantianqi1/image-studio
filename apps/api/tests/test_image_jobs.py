@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from pathlib import Path
 
 from fastapi.testclient import TestClient
 import pytest
@@ -15,6 +14,7 @@ from apps.api.app.domains.image import service as image_service
 from apps.api.app.domains.image.models import Asset, ImageJob, ImageJobReferenceAsset, ImageJobResult
 from apps.api.app.domains.llm.service import RenderedImage
 from apps.api.app.infra.db.session import initialize_database, session_scope
+from apps.api.app.infra.storage.factory import build_asset_storage
 from apps.api.app.main import create_app
 from apps.worker.worker.tasks import image_jobs as worker_image_jobs
 
@@ -464,9 +464,8 @@ def test_worker_persists_rendered_assets_with_mime_extension(monkeypatch):
         asset = session.get(Asset, result.asset_id)
 
     assert asset is not None
-    path = Path(asset.storage_path)
-    assert path.suffix == ".png"
-    assert path.read_bytes() == b"png-bytes"
+    assert asset.storage_path == f"asset-{asset.id}.png"
+    assert build_asset_storage().read_bytes(asset.storage_path) == b"png-bytes"
 
 
 def test_user_can_delete_own_image_job_with_results(monkeypatch):

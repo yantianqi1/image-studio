@@ -3,7 +3,6 @@ from __future__ import annotations
 import base64
 import json
 import os
-from pathlib import Path
 
 import httpx
 from sqlalchemy.orm import Session
@@ -14,6 +13,8 @@ from apps.api.app.domains.image.models import Asset
 from apps.api.app.domains.llm.image_reference import ImageReference, extract_image_reference
 from apps.api.app.domains.llm.models import Provider
 from apps.api.app.domains.llm.rendering import RenderedImage
+from apps.api.app.infra.storage.asset_storage import AssetStorage
+from apps.api.app.infra.storage.factory import build_asset_storage
 
 OPENAI_CHAT_COMPLETIONS_ENDPOINT = "/chat/completions"
 CHAT_IMAGE_TEMPERATURE = 0.97
@@ -33,20 +34,27 @@ def render_openai_chat_compatible_image(
     asset_ids = tuple(reference_asset_ids or ())
     if source_asset_id is not None:
         asset_ids = (*asset_ids, source_asset_id)
-    assets = [resolve_image_asset(session, asset_id=asset_id) for asset_id in asset_ids]
+    storage = build_asset_storage()
+    assets = [resolve_image_asset(session, asset_id=asset_id, storage=storage) for asset_id in asset_ids]
     response = httpx.post(
         build_provider_url(provider.base_url),
         headers=build_auth_headers(provider),
-        json=build_chat_image_payload(prompt=prompt, provider_model=provider_model, assets=assets),
+        json=build_chat_image_payload(prompt=prompt, provider_model=provider_model, assets=assets, storage=storage),
         timeout=get_settings().chat_image_timeout_seconds,
     )
     return parse_chat_image_response(response=response, provider=provider, prompt=prompt)
 
 
-def build_chat_image_payload(*, prompt: str, provider_model: str, assets: list[Asset]) -> dict[str, object]:
+def build_chat_image_payload(
+    *,
+    prompt: str,
+    provider_model: str,
+    assets: list[Asset],
+    storage: AssetStorage,
+) -> dict[str, object]:
     return {
         "model": provider_model,
-        "messages": build_chat_image_messages(prompt=prompt, assets=assets),
+        "messages": build_chat_image_messages(prompt=prompt, assets=assets, storage=storage),
         "temperature": CHAT_IMAGE_TEMPERATURE,
         "max_tokens": CHAT_IMAGE_MAX_TOKENS,
         "stream": True,
@@ -55,19 +63,19 @@ def build_chat_image_payload(*, prompt: str, provider_model: str, assets: list[A
     }
 
 
-def build_chat_image_messages(*, prompt: str, assets: list[Asset]) -> list[dict[str, object]]:
+def build_chat_image_messages(*, prompt: str, assets: list[Asset], storage: AssetStorage) -> list[dict[str, object]]:
     if not assets:
         return [
             {"role": "system", "content": CHAT_IMAGE_SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
         ]
     content: list[dict[str, object]] = [{"type": "text", "text": prompt}]
-    content.extend(build_image_content(asset) for asset in assets)
+    content.extend(build_image_content(asset, storage=storage) for asset in assets)
     return [{"role": "system", "content": CHAT_IMAGE_SYSTEM_PROMPT}, {"role": "user", "content": content}]
 
 
-def build_image_content(asset: Asset) -> dict[str, object]:
-    encoded = base64.b64encode(Path(asset.storage_path).read_bytes()).decode("ascii")
+def build_image_content(asset: Asset, *, storage: AssetStorage) -> dict[str, object]:
+    encoded = base64.b64encode(storage.read_bytes(asset.storage_path)).decode("ascii")
     return {"type": "image_url", "image_url": {"url": f"data:{asset.mime_type};base64,{encoded}"}}
 
 
@@ -146,13 +154,13 @@ def resolve_image_reference(reference: ImageReference) -> tuple[bytes, str]:
     raise AppError(code="provider_response_invalid", message="provider image reference invalid", status_code=502)
 
 
-def resolve_image_asset(session: Session, *, asset_id: int) -> Asset:
+def resolve_image_asset(session: Session, *, asset_id: int, storage: AssetStorage) -> Asset:
     asset = session.get(Asset, asset_id)
     if asset is None:
         raise AppError(code="source_asset_not_found", message="source asset not found", status_code=404)
     if not asset.mime_type.startswith("image/"):
         raise AppError(code="source_asset_invalid", message="source asset is not an image", status_code=422)
-    if not asset.storage_path or not Path(asset.storage_path).is_file():
+    if not asset.storage_path or not storage.exists(asset.storage_path):
         raise AppError(code="source_asset_file_missing", message="source asset file missing", status_code=500)
     return asset
 
