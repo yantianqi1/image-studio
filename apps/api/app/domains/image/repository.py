@@ -10,8 +10,10 @@ from apps.api.app.core.errors import AppError
 from apps.api.app.domains.auth.ownership import OwnerContext
 from apps.api.app.domains.billing.models import WalletReservation
 from apps.api.app.domains.billing.service import commit_reservation, create_reservation, release_reservation
-from apps.api.app.domains.image.assets import delete_asset_file
+from apps.api.app.domains.image.assets import delete_asset_objects
 from apps.api.app.domains.image.models import Asset, ImageJob, ImageJobReferenceAsset, ImageJobResult
+from apps.api.app.infra.storage.asset_storage import AssetStorage
+from apps.api.app.infra.storage.factory import build_asset_storage
 
 IMAGE_JOB_FAILED_ERROR_CODE = "image_job_failed"
 
@@ -164,16 +166,17 @@ def clear_job_reference_rows(session: Session, *, job_id: int) -> None:
     session.flush()
 
 
-def clear_job_outputs(session: Session, *, job_id: int) -> None:
+def clear_job_outputs(session: Session, *, job_id: int, storage: AssetStorage | None = None) -> None:
     results = list(session.execute(select(ImageJobResult).where(ImageJobResult.job_id == job_id)).scalars())
     asset_ids = [item.asset_id for item in results]
     for result in results:
         session.delete(result)
     session.flush()
     if asset_ids:
+        asset_storage = storage or build_asset_storage()
         assets = list(session.execute(select(Asset).where(Asset.id.in_(asset_ids))).scalars())
         for asset in assets:
-            delete_asset_file(asset.storage_path)
+            delete_asset_objects(asset, asset_storage)
             session.delete(asset)
     session.flush()
 

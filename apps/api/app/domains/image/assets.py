@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import mimetypes
-from pathlib import Path
+from io import BytesIO
+from pathlib import Path, PurePosixPath
 
 from PIL import Image, UnidentifiedImageError
 from sqlalchemy.orm import Session
 
 from apps.api.app.core.errors import AppError
 from apps.api.app.domains.image.models import Asset
+from apps.api.app.infra.storage.asset_storage import AssetStorage
 
 DEFAULT_UPLOAD_EXTENSION = ".bin"
 DEFAULT_UPLOAD_MIME_TYPE = "application/octet-stream"
@@ -21,7 +23,7 @@ THUMBNAIL_SUFFIX = ".thumb.jpg"
 def persist_rendered_asset(
     session: Session,
     *,
-    storage_dir: Path,
+    storage: AssetStorage,
     rendered,
     user_id: int | None,
     anonymous_session_id: int | None = None,
@@ -35,22 +37,22 @@ def persist_rendered_asset(
         owner_anonymous_session_id=anonymous_session_id,
         owner_client_id=client_id,
     )
-    file_path = rendered_asset_path(
-        storage_dir=storage_dir,
+    key = rendered_asset_key(
         asset_id=asset.id,
         mime_type=rendered.mime_type,
         storage_subdir=storage_subdir,
     )
-    file_path.parent.mkdir(parents=True, exist_ok=True)
-    file_path.write_bytes(rendered.content)
-    asset.storage_path = str(file_path)
+    storage.write_bytes(key, rendered.content, rendered.mime_type)
+    asset.storage_path = key
     session.flush()
     return asset
 
 
-def rendered_asset_path(*, storage_dir: Path, asset_id: int, mime_type: str, storage_subdir: str | None) -> Path:
-    target_dir = storage_dir / storage_subdir if storage_subdir else storage_dir
-    return target_dir / f"asset-{asset_id}{resolve_rendered_suffix(mime_type)}"
+def rendered_asset_key(*, asset_id: int, mime_type: str, storage_subdir: str | None) -> str:
+    filename = f"asset-{asset_id}{resolve_rendered_suffix(mime_type)}"
+    if not storage_subdir:
+        return filename
+    return str(PurePosixPath(storage_subdir) / filename)
 
 
 def resolve_rendered_suffix(mime_type: str) -> str:
@@ -63,7 +65,7 @@ def resolve_rendered_suffix(mime_type: str) -> str:
 def persist_uploaded_asset(
     session: Session,
     *,
-    storage_dir: Path,
+    storage: AssetStorage,
     content: bytes,
     filename: str | None,
     mime_type: str | None,
@@ -79,10 +81,9 @@ def persist_uploaded_asset(
         owner_client_id=client_id,
     )
     suffix = resolve_upload_suffix(filename=filename, mime_type=asset.mime_type)
-    file_path = storage_dir / "uploads" / f"upload-{asset.id}{suffix}"
-    file_path.parent.mkdir(parents=True, exist_ok=True)
-    file_path.write_bytes(content)
-    asset.storage_path = str(file_path)
+    key = f"uploads/upload-{asset.id}{suffix}"
+    storage.write_bytes(key, content, asset.mime_type)
+    asset.storage_path = key
     session.flush()
     return asset
 
@@ -128,17 +129,21 @@ def is_safe_suffix(suffix: str | None) -> bool:
     return suffix[1:].isalnum()
 
 
-def resolve_thumbnail_file(asset: Asset) -> tuple[Path, str]:
-    source_path = resolve_existing_asset_path(asset.storage_path)
+def resolve_asset_content(asset: Asset, storage: AssetStorage) -> tuple[bytes, str]:
+    return storage.read_bytes(asset.storage_path), asset.mime_type
+
+
+def resolve_thumbnail_content(asset: Asset, storage: AssetStorage) -> tuple[bytes, str]:
+    source_content = storage.read_bytes(asset.storage_path)
     if asset.mime_type == SVG_MIME_TYPE:
-        return source_path, SVG_MIME_TYPE
+        return source_content, SVG_MIME_TYPE
     if not asset.mime_type.startswith("image/"):
         raise AppError(code="asset_thumbnail_unsupported", message="asset thumbnail unsupported", status_code=415)
 
-    target_path = thumbnail_asset_path(source_path)
-    if not target_path.exists():
-        write_thumbnail_file(source_path=source_path, target_path=target_path)
-    return target_path, RASTER_THUMBNAIL_MIME_TYPE
+    target_key = thumbnail_asset_key(asset.storage_path)
+    if not storage.exists(target_key):
+        storage.write_bytes(target_key, build_thumbnail_bytes(source_content), RASTER_THUMBNAIL_MIME_TYPE)
+    return storage.read_bytes(target_key), RASTER_THUMBNAIL_MIME_TYPE
 
 
 def resolve_existing_asset_path(storage_path: str) -> Path:
@@ -152,12 +157,18 @@ def thumbnail_asset_path(source_path: Path) -> Path:
     return source_path.with_name(f"{source_path.stem}{THUMBNAIL_SUFFIX}")
 
 
-def write_thumbnail_file(*, source_path: Path, target_path: Path) -> None:
+def thumbnail_asset_key(asset_key: str) -> str:
+    source_key = PurePosixPath(asset_key)
+    return str(source_key.with_name(f"{source_key.stem}{THUMBNAIL_SUFFIX}"))
+
+
+def build_thumbnail_bytes(source_content: bytes) -> bytes:
     try:
-        with Image.open(source_path) as image:
+        with Image.open(BytesIO(source_content)) as image:
             thumbnail = create_proportional_thumbnail(image)
-            target_path.parent.mkdir(parents=True, exist_ok=True)
-            thumbnail.save(target_path, format="JPEG", quality=82, optimize=True)
+            output = BytesIO()
+            thumbnail.save(output, format="JPEG", quality=82, optimize=True)
+            return output.getvalue()
     except UnidentifiedImageError as error:
         raise AppError(code="asset_thumbnail_invalid_image", message="asset thumbnail invalid image", status_code=422) from error
 
@@ -178,9 +189,8 @@ def convert_thumbnail_to_rgb(image: Image.Image) -> Image.Image:
     return image.convert("RGB")
 
 
-def delete_asset_file(storage_path: str) -> None:
-    if not storage_path:
-        return
-    file_path = Path(storage_path)
-    if file_path.exists():
-        file_path.unlink()
+def delete_asset_objects(asset: Asset, storage: AssetStorage) -> None:
+    storage.delete(asset.storage_path)
+    thumbnail_key = thumbnail_asset_key(asset.storage_path)
+    if storage.exists(thumbnail_key):
+        storage.delete(thumbnail_key)

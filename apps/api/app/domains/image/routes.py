@@ -1,7 +1,4 @@
-from pathlib import Path
-
 from fastapi import APIRouter, Depends, File, Query, Request, Response, UploadFile, status
-from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from apps.api.app.core.deps import get_db_session
@@ -9,7 +6,7 @@ from apps.api.app.core.response import api_ok
 from apps.api.app.domains.auth.ownership import ensure_anonymous_owner, resolve_request_owner
 from apps.api.app.domains.auth.service import require_admin
 from apps.api.app.domains.image.admin_service import list_admin_jobs_with_results
-from apps.api.app.domains.image.assets import persist_uploaded_asset, resolve_thumbnail_file
+from apps.api.app.domains.image.assets import persist_uploaded_asset, resolve_asset_content, resolve_thumbnail_content
 from apps.api.app.domains.image.gallery import (
     get_asset_for_read,
     list_gallery_items,
@@ -28,8 +25,8 @@ from apps.api.app.domains.image.service import (
 from apps.api.app.domains.llm.client_provider import CLIENT_PROVIDER_SOURCE, read_client_provider_config
 from apps.api.app.domains.public_quota.constants import PUBLIC_QUOTA_FEATURE_IMAGE
 from apps.api.app.domains.public_quota.service import consume_public_quota, resolve_request_ip
-from apps.api.app.domains.llm.service import ensure_storage_dir
 from apps.api.app.domains.settings.service import require_anonymous_image_enabled, require_uploads_enabled
+from apps.api.app.infra.storage.factory import build_asset_storage
 
 public_router = APIRouter(prefix="/image", tags=["image-public"])
 admin_router = APIRouter(tags=["image-admin"])
@@ -117,14 +114,15 @@ def delete_image_job(job_id: int, request: Request, session: Session = Depends(g
 @public_router.get("/assets/{asset_id}")
 def get_image_asset(asset_id: int, request: Request, session: Session = Depends(get_db_session)):
     asset = get_asset_for_read(session, asset_id, resolve_request_owner(request, session))
-    return FileResponse(Path(asset.storage_path), media_type=asset.mime_type)
+    content, media_type = resolve_asset_content(asset, build_asset_storage())
+    return Response(content=content, media_type=media_type)
 
 
 @public_router.get("/assets/{asset_id}/thumbnail")
 def get_image_asset_thumbnail(asset_id: int, request: Request, session: Session = Depends(get_db_session)):
     asset = get_asset_for_read(session, asset_id, resolve_request_owner(request, session))
-    thumbnail_path, media_type = resolve_thumbnail_file(asset)
-    return FileResponse(thumbnail_path, media_type=media_type)
+    content, media_type = resolve_thumbnail_content(asset, build_asset_storage())
+    return Response(content=content, media_type=media_type)
 
 
 @public_router.patch("/assets/{asset_id}/visibility")
@@ -151,7 +149,7 @@ async def upload_image_asset(
     client_config = read_client_provider_config(request)
     asset = persist_uploaded_asset(
         session,
-        storage_dir=ensure_storage_dir(),
+        storage=build_asset_storage(),
         content=await file.read(),
         filename=file.filename,
         mime_type=file.content_type,
@@ -195,7 +193,8 @@ def get_admin_jobs(request: Request, session: Session = Depends(get_db_session))
 def get_admin_image_asset(asset_id: int, request: Request, session: Session = Depends(get_db_session)):
     require_admin(request, session)
     asset = get_asset(session, asset_id)
-    return FileResponse(Path(asset.storage_path), media_type=asset.mime_type)
+    content, media_type = resolve_asset_content(asset, build_asset_storage())
+    return Response(content=content, media_type=media_type)
 
 
 def admin_job_payload(job, *, results) -> dict[str, object]:

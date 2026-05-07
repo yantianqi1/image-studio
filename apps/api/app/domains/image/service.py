@@ -37,11 +37,11 @@ from apps.api.app.domains.llm.client_provider import (
     serialize_client_provider_config,
 )
 from apps.api.app.domains.llm.service import (
-    ensure_storage_dir,
     render_image,
     render_image_with_client_provider,
     resolve_model_execution_target,
 )
+from apps.api.app.infra.storage.factory import build_asset_storage
 
 IMAGE_JOB_MAX_ATTEMPTS = 3
 IMAGE_JOB_RETRY_DELAY_SECONDS = 5
@@ -187,14 +187,14 @@ def process_claimed_job(session: Session, *, job_id: int) -> ImageJob:
 
 
 def process_render_results(session: Session, *, job: ImageJob) -> None:
-    storage_dir = ensure_storage_dir()
+    storage = build_asset_storage()
     reference_asset_ids = list_reference_asset_ids(session, job_id=job.id)
     client_config = resolve_job_client_provider_config(job)
     for result_index in range(1, job.requested_count + 1):
         rendered = render_job_image(session, job=job, reference_asset_ids=reference_asset_ids, client_config=client_config)
         asset = persist_rendered_asset(
             session,
-            storage_dir=storage_dir,
+            storage=storage,
             rendered=rendered,
             user_id=job.user_id,
             anonymous_session_id=job.anonymous_session_id,
@@ -279,4 +279,3 @@ def handle_job_failure(session: Session, *, job: ImageJob, exc: Exception) -> No
     job.available_at = retry_at
     job.finished_at = None
     session.flush()
-

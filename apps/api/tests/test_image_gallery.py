@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 from io import BytesIO
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 from PIL import Image
 
+from apps.api.app.core.config import get_settings
 from apps.api.app.domains.image import service as image_service
+from apps.api.app.domains.image.models import Asset
 from apps.api.app.domains.llm.service import RenderedImage
-from apps.api.app.infra.db.session import initialize_database
+from apps.api.app.infra.db.session import initialize_database, session_scope
 from apps.api.app.main import create_app
 from apps.worker.worker.tasks import image_jobs as worker_image_jobs
 
@@ -122,6 +125,31 @@ def test_thumbnail_endpoint_preserves_aspect_ratio(monkeypatch):
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/jpeg"
     assert image.size == (640, 320)
+
+
+def test_delete_job_removes_asset_and_thumbnail_files(monkeypatch):
+    monkeypatch.setattr(image_service, "render_image", png_renderer, raising=False)
+    client = build_client()
+    register_user(client, "delete-thumbnail@example.com")
+    result = complete_image_job(client, prompt="Delete image and thumbnail")
+
+    thumbnail_response = client.get(result["thumbnail_url"])
+    root = Path(get_settings().generated_assets_dir)
+    asset_path = root / f"asset-{result['asset_id']}.png"
+    thumbnail_path = root / f"asset-{result['asset_id']}.thumb.jpg"
+
+    assert thumbnail_response.status_code == 200
+    with session_scope() as session:
+        asset = session.get(Asset, result["asset_id"])
+        assert asset.storage_path == f"asset-{result['asset_id']}.png"
+    assert asset_path.exists()
+    assert thumbnail_path.exists()
+
+    delete_response = client.delete(f"/api/public/image/jobs/{result['job_id']}")
+
+    assert delete_response.status_code == 200
+    assert not asset_path.exists()
+    assert not thumbnail_path.exists()
 
 
 def test_gallery_mine_lists_only_owner_assets(monkeypatch):

@@ -4,6 +4,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from apps.api.app.core.config import get_settings
 from apps.api.app.domains.auth.service import create_admin_account
 from apps.api.app.infra.db.session import initialize_database, session_scope
 from apps.api.app.main import create_app
@@ -74,4 +75,5 @@ def test_upload_endpoint_persists_asset_when_enabled():
     asset = response.json()["data"]
     assert asset["mime_type"] == "text/plain"
     assert asset["asset_url"].startswith("/api/public/image/assets/")
-    assert Path(asset["storage_path"]).exists()
+    assert asset["storage_path"] == f"uploads/upload-{asset['id']}.txt"
+    assert (Path(get_settings().generated_assets_dir) / asset["storage_path"]).exists()
