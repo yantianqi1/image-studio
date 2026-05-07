@@ -25,6 +25,9 @@ services:
       APP_ENV: production
       ANONYMOUS_SESSION_COOKIE_SECURE: ${ANONYMOUS_SESSION_COOKIE_SECURE:-false}
       ADMIN_SESSION_COOKIE_SECURE: ${ADMIN_SESSION_COOKIE_SECURE:-false}
+      ASSET_STORAGE_BACKEND: ${ASSET_STORAGE_BACKEND:-local}
+      ASSET_STORAGE_GCS_BUCKET: ${ASSET_STORAGE_GCS_BUCKET:-}
+      ASSET_STORAGE_GCS_PREFIX: ${ASSET_STORAGE_GCS_PREFIX:-generated-assets}
       DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}
       GENERATED_ASSETS_DIR: /app/generated-assets
       SERVICE_NAME: api
@@ -47,6 +50,9 @@ services:
       - .env
     environment:
       APP_ENV: production
+      ASSET_STORAGE_BACKEND: ${ASSET_STORAGE_BACKEND:-local}
+      ASSET_STORAGE_GCS_BUCKET: ${ASSET_STORAGE_GCS_BUCKET:-}
+      ASSET_STORAGE_GCS_PREFIX: ${ASSET_STORAGE_GCS_PREFIX:-generated-assets}
       DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}
       GENERATED_ASSETS_DIR: /app/generated-assets
     volumes:

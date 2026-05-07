@@ -78,6 +78,9 @@ cp .env.example .env
 - `APP_ENV`：`development` 或 `production`
 - `APP_VERSION`：版本号
 - `GENERATED_ASSETS_DIR`：图片任务落盘目录
+- `ASSET_STORAGE_BACKEND`：资产存储后端，支持 `local` 或 `gcs`
+- `ASSET_STORAGE_GCS_BUCKET`：GCS 后端使用的 bucket 名称
+- `ASSET_STORAGE_GCS_PREFIX`：GCS 后端写入对象时使用的 key 前缀
 - `OPENAI_PROVIDER_KEY`：OpenAI-compatible provider 使用的 API Key，可按后台 provider 配置里的 `api_key_env` 名称扩展更多密钥
 - `DEFAULT_ADMIN_USERNAME`：默认管理员用户名
 - `DEFAULT_ADMIN_PASSWORD`：默认管理员密码
@@ -108,20 +111,29 @@ cp .env.example .env
 
 ## generated-assets 挂载说明
 
-`generated-assets` 是 API 与 worker 共享的文件落盘目录，不是前端静态构建目录。
+`generated-assets` 是 local 资产存储后端使用的文件落盘目录，不是前端静态构建目录。
 
-当前代码会将生成结果写入：
+local 后端会将生成结果写入：
 
 - `${GENERATED_ASSETS_DIR}/asset-{id}.svg`
 - `${GENERATED_ASSETS_DIR}/uploads/upload-{id}.<ext>`
 
+数据库中的 `assets.storage_path` 保存统一存储 key，例如：
+
+- `asset-{id}.svg`
+- `uploads/upload-{id}.<ext>`
+- `comics/<folder>/pages/asset-{id}.png`
+
 使用约定：
 
 - 本地裸机运行时，默认使用仓库根目录下的 `./generated-assets`
-- Docker 运行时，必须把该目录同时挂载到 `api` 与 `worker`
-- 生产环境应挂载到持久化卷；如果切换到对象存储，再调整对应实现
+- `ASSET_STORAGE_BACKEND=local` 时，Docker 运行必须把该目录同时挂载到 `api` 与 `worker`
+- `ASSET_STORAGE_BACKEND=gcs` 时，API 与 worker 都会读写同一个 GCS bucket，不再依赖共享资产卷
+- GCS 凭据使用 Google 官方认证链路提供，不写入代码仓库或 `.env.example`
 - 公开上传入口使用 `POST /api/public/image/uploads`
 - 生产 Nginx 入口显式允许最大 `50MB` 请求体；超过时返回统一 JSON 错误 `payload_too_large`，不返回 HTML 错误页。确需关闭该代理限制时，将 `infra/nginx/nginx.prod.conf` 中的 `client_max_body_size` 改为 `0` 并重载 Nginx。
+
+从本地文件迁移到 GCS 时，应先保持 `ASSET_STORAGE_BACKEND=local`，执行资产迁移 helper，把本地文件上传到目标 storage 并将 `assets.storage_path` 重写为统一 key；确认迁移完成后再显式切换到 `ASSET_STORAGE_BACKEND=gcs`。迁移遇到缺失文件会直接失败，不会静默跳过或回退。
 
 ## 数据库迁移
 

@@ -7,6 +7,11 @@ from pathlib import Path
 from sqlalchemy import create_engine, inspect, text
 
 from apps.api.app.core.config import get_settings
+from apps.api.app.domains.image.models import Asset
+from apps.api.app.domains.image.storage_migration import (
+    AssetStorageMigrationError,
+    migrate_local_assets_to_storage,
+)
 from apps.api.app.infra.db.session import get_engine, get_session_factory, initialize_database
 
 HEAD_REVISION = "20260502_000012"
@@ -121,3 +126,76 @@ def test_initialize_database_runs_alembic_to_head(tmp_path):
         version_rows = connection.execute(text("SELECT version_num FROM alembic_version")).fetchall()
 
     assert version_rows == [(HEAD_REVISION,)]
+
+
+class RecordingStorage:
+    def __init__(self) -> None:
+        self.objects: dict[str, tuple[bytes, str]] = {}
+
+    def write_bytes(self, key: str, content: bytes, mime_type: str) -> None:
+        self.objects[key] = (content, mime_type)
+
+    def read_bytes(self, key: str) -> bytes:
+        return self.objects[key][0]
+
+    def exists(self, key: str) -> bool:
+        return key in self.objects
+
+    def delete(self, key: str) -> None:
+        del self.objects[key]
+
+
+def test_asset_storage_migration_uploads_local_files_and_rewrites_keys(tmp_path):
+    initialize_database()
+    storage = RecordingStorage()
+    first_path = tmp_path / "generated-assets" / "asset-1.png"
+    second_path = tmp_path / "generated-assets" / "uploads" / "upload-2.jpg"
+    first_path.parent.mkdir(parents=True)
+    second_path.parent.mkdir(parents=True)
+    first_path.write_bytes(b"first-bytes")
+    second_path.write_bytes(b"second-bytes")
+
+    with get_session_factory()() as session:
+        first_asset = Asset(storage_path=str(first_path), mime_type="image/png")
+        second_asset = Asset(storage_path=str(second_path), mime_type="image/jpeg")
+        session.add_all([first_asset, second_asset])
+        session.commit()
+
+        result = migrate_local_assets_to_storage(
+            session,
+            source_root=tmp_path / "generated-assets",
+            target_storage=storage,
+        )
+        session.commit()
+
+        assert result.migrated_count == 2
+        assert first_asset.storage_path == "asset-1.png"
+        assert second_asset.storage_path == "uploads/upload-2.jpg"
+
+    assert storage.objects == {
+        "asset-1.png": (b"first-bytes", "image/png"),
+        "uploads/upload-2.jpg": (b"second-bytes", "image/jpeg"),
+    }
+
+
+def test_asset_storage_migration_fails_when_local_file_is_missing(tmp_path):
+    initialize_database()
+    storage = RecordingStorage()
+
+    with get_session_factory()() as session:
+        asset = Asset(storage_path=str(tmp_path / "missing.png"), mime_type="image/png")
+        session.add(asset)
+        session.commit()
+
+        try:
+            migrate_local_assets_to_storage(
+                session,
+                source_root=tmp_path,
+                target_storage=storage,
+            )
+        except AssetStorageMigrationError as exc:
+            assert str(exc) == f"asset file missing: {tmp_path / 'missing.png'}"
+        else:
+            raise AssertionError("expected missing file to fail")
+
+    assert storage.objects == {}
