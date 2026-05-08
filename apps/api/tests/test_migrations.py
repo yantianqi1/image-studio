@@ -178,6 +178,32 @@ def test_asset_storage_migration_uploads_local_files_and_rewrites_keys(tmp_path)
     }
 
 
+def test_asset_storage_migration_uploads_relative_keys_from_source_root(tmp_path):
+    initialize_database()
+    storage = RecordingStorage()
+    source_root = tmp_path / "generated-assets"
+    source_path = source_root / "asset-1.png"
+    source_path.parent.mkdir(parents=True)
+    source_path.write_bytes(b"image-bytes")
+
+    with get_session_factory()() as session:
+        asset = Asset(storage_path="asset-1.png", mime_type="image/png")
+        session.add(asset)
+        session.commit()
+
+        result = migrate_local_assets_to_storage(
+            session,
+            source_root=source_root,
+            target_storage=storage,
+        )
+        session.commit()
+
+        assert result.migrated_count == 1
+        assert asset.storage_path == "asset-1.png"
+
+    assert storage.objects == {"asset-1.png": (b"image-bytes", "image/png")}
+
+
 def test_asset_storage_migration_fails_when_local_file_is_missing(tmp_path):
     initialize_database()
     storage = RecordingStorage()

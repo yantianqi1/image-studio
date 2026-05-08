@@ -135,6 +135,15 @@ local 后端会将生成结果写入：
 
 从本地文件迁移到 GCS 时，应先保持 `ASSET_STORAGE_BACKEND=local`，执行资产迁移 helper，把本地文件上传到目标 storage 并将 `assets.storage_path` 重写为统一 key；确认迁移完成后再显式切换到 `ASSET_STORAGE_BACKEND=gcs`。迁移遇到缺失文件会直接失败，不会静默跳过或回退。
 
+迁移脚本在仓库根目录执行：
+
+```bash
+python3.13 scripts/migrate-assets-to-gcs.py
+python3.13 scripts/migrate-assets-to-gcs.py --execute
+```
+
+第一条是 dry-run，只检查本地文件并打印将迁移的资产数量；第二条会上传到 GCS 并更新数据库。执行前需要在 `.env` 设置 `ASSET_STORAGE_GCS_BUCKET`、`ASSET_STORAGE_GCS_PREFIX` 和 Google 凭据。脚本只迁移资产，不删除本地文件。
+
 ## 数据库迁移
 
 当前仓库已经接入 Alembic，基线版本为 `20260424_000001`。
