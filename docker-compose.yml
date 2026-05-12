@@ -28,11 +28,13 @@ services:
       ASSET_STORAGE_BACKEND: ${ASSET_STORAGE_BACKEND:-local}
       ASSET_STORAGE_GCS_BUCKET: ${ASSET_STORAGE_GCS_BUCKET:-}
       ASSET_STORAGE_GCS_PREFIX: ${ASSET_STORAGE_GCS_PREFIX:-generated-assets}
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
       DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}
       GENERATED_ASSETS_DIR: /app/generated-assets
       SERVICE_NAME: api
     volumes:
       - generated_assets_data:/app/generated-assets
+      - ${GCS_CREDENTIALS_FILE:-/dev/null}:/app/gcs-credentials.json:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:7800/health', timeout=5).read()"]
       interval: 10s
@@ -53,10 +55,12 @@ services:
       ASSET_STORAGE_BACKEND: ${ASSET_STORAGE_BACKEND:-local}
       ASSET_STORAGE_GCS_BUCKET: ${ASSET_STORAGE_GCS_BUCKET:-}
       ASSET_STORAGE_GCS_PREFIX: ${ASSET_STORAGE_GCS_PREFIX:-generated-assets}
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
       DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}
       GENERATED_ASSETS_DIR: /app/generated-assets
     volumes:
       - generated_assets_data:/app/generated-assets
+      - ${GCS_CREDENTIALS_FILE:-/dev/null}:/app/gcs-credentials.json:ro
     depends_on:
       api:
         condition: service_healthy
