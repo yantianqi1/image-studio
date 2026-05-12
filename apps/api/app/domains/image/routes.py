@@ -111,18 +111,21 @@ def delete_image_job(job_id: int, request: Request, session: Session = Depends(g
     return api_ok(result)
 
 
+ASSET_CACHE_HEADERS = {"Cache-Control": "public, max-age=86400, s-maxage=604800", "CDN-Cache-Control": "public, max-age=604800"}
+
+
 @public_router.get("/assets/{asset_id}")
 def get_image_asset(asset_id: int, request: Request, session: Session = Depends(get_db_session)):
     asset = get_asset_for_read(session, asset_id, resolve_request_owner(request, session))
     content, media_type = resolve_asset_content(asset, build_asset_storage())
-    return Response(content=content, media_type=media_type)
+    return Response(content=content, media_type=media_type, headers=ASSET_CACHE_HEADERS)
 
 
 @public_router.get("/assets/{asset_id}/thumbnail")
 def get_image_asset_thumbnail(asset_id: int, request: Request, session: Session = Depends(get_db_session)):
     asset = get_asset_for_read(session, asset_id, resolve_request_owner(request, session))
     content, media_type = resolve_thumbnail_content(asset, build_asset_storage())
-    return Response(content=content, media_type=media_type)
+    return Response(content=content, media_type=media_type, headers=ASSET_CACHE_HEADERS)
 
 
 @public_router.patch("/assets/{asset_id}/visibility")
