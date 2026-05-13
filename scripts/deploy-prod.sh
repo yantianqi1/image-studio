@@ -1,6 +1,51 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+assert_public_nginx_routes() {
+  docker compose exec -T public-web node -e '
+const BASE_URL = "http://nginx:80";
+
+async function fetchWithoutRedirect(path) {
+  return fetch(`${BASE_URL}${path}`, { redirect: "manual" });
+}
+
+function requireStatus(response, path) {
+  if (response.status !== 200) {
+    throw new Error(`${path} returned HTTP ${response.status}`);
+  }
+}
+
+function requireContentType(response, path, expected) {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes(expected)) {
+    throw new Error(`${path} returned ${contentType || "no content-type"}`);
+  }
+}
+
+(async () => {
+  const page = await fetchWithoutRedirect("/generate");
+  requireStatus(page, "/generate");
+
+  const html = await page.text();
+  const chunkMatch = html.match(/src="(\/_next\/static\/chunks\/[^"]+\.js)"/);
+  if (!chunkMatch) {
+    throw new Error("No /_next/static/chunks/ asset found in /generate HTML");
+  }
+
+  const chunk = await fetchWithoutRedirect(chunkMatch[1]);
+  requireStatus(chunk, chunkMatch[1]);
+  requireContentType(chunk, chunkMatch[1], "application/javascript");
+
+  const logo = await fetchWithoutRedirect("/brand/logo.png");
+  requireStatus(logo, "/brand/logo.png");
+  requireContentType(logo, "/brand/logo.png", "image/png");
+})().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
+'
+}
+
 echo "==> Pulling latest images..."
 docker compose pull
 
@@ -31,6 +76,9 @@ timeout 60 sh -c 'until docker compose exec admin-web node -e "require(\"http\")
 
 echo "==> Reloading nginx config..."
 docker compose exec nginx nginx -s reload
+
+echo "==> Verifying public nginx routes..."
+assert_public_nginx_routes
 
 echo "==> Deploy complete"
 docker compose ps
