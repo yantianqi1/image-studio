@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 
 import { buildAspectRatioPrompt } from "@/features/home/generation-aspect-ratio";
 import { GenerationControlPanel } from "@/features/home/generation-control-panel";
@@ -69,6 +69,8 @@ export function GenerationWorkbench() {
     setState({ status: "idle" });
   }, []);
 
+  const [, startTransition] = useTransition();
+
   useGenerationReusePrompt({
     activeHistory,
     createDraft: history.createDraft,
@@ -77,12 +79,25 @@ export function GenerationWorkbench() {
   });
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync active history into the editable draft
-    setForm(getFormFromHistory(history.activeHistory));
-    setReferenceImages(getReferenceImagesFromHistory(history.activeHistory));
-    setUploadState({ status: "idle" });
-    setState(getStateFromHistory(history.activeHistory));
-  }, [history.activeHistory]);
+    startTransition(() => {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sync active history into the editable draft
+      setForm(getFormFromHistory(history.activeHistory));
+      setReferenceImages(getReferenceImagesFromHistory(history.activeHistory));
+      setUploadState({ status: "idle" });
+      setState(getStateFromHistory(history.activeHistory));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only reset form when user switches history, not on polling updates
+  }, [history.activeHistoryId]);
+
+  useEffect(() => {
+    if (!history.activeHistory) return;
+    const historyState = getStateFromHistory(history.activeHistory);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- lightweight sync of generation progress
+    setState((current) => {
+      if (current.status === historyState.status) return current;
+      return historyState;
+    });
+  }, [history.activeHistory?.status, history.activeHistory?.taskStatus]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- restore user sidebar preference after mount
@@ -99,6 +114,7 @@ export function GenerationWorkbench() {
     }
 
     let active = true;
+    let lastKnownStatus = activeHistory?.taskStatus ?? null;
     const abortController = new AbortController();
     waitForImageJobResults(publicApi, activeTaskId, {
       signal: abortController.signal,
@@ -106,6 +122,10 @@ export function GenerationWorkbench() {
         if (!active || job.status === "succeeded") {
           return;
         }
+        if (job.status === lastKnownStatus) {
+          return;
+        }
+        lastKnownStatus = job.status;
         completeHistory(activeHistoryId, {
           status: "generating",
           taskId: job.id,
@@ -206,15 +226,15 @@ export function GenerationWorkbench() {
     }
   }
 
-  function handleNewGeneration() {
+  const handleNewGeneration = useCallback(() => {
     history.createDraft();
     setForm(INITIAL_FORM);
     setReferenceImages([]);
     setUploadState({ status: "idle" });
     setState({ status: "idle" });
-  }
+  }, [history.createDraft]);
 
-  async function handleReferenceUpload(files: readonly File[]) {
+  const handleReferenceUpload = useCallback(async (files: readonly File[]) => {
     setUploadState({ status: "uploading" });
     try {
       const uploadedImages = await uploadReferenceImages(files);
@@ -224,22 +244,22 @@ export function GenerationWorkbench() {
       const message = error instanceof Error ? error.message : "参考图上传失败";
       setUploadState({ status: "error", message });
     }
-  }
+  }, []);
 
-  function handleRemoveReferenceImage(index: number) {
+  const handleRemoveReferenceImage = useCallback((index: number) => {
     setReferenceImages((current) => current.filter((_, currentIndex) => currentIndex !== index));
-  }
+  }, []);
 
-  function handleUseResultAsSource(image: GenerationSourceImage) {
+  const handleUseResultAsSource = useCallback((image: GenerationSourceImage) => {
     setReferenceImages((current) => [...current, image]);
     setUploadState({ status: "idle" });
-  }
+  }, []);
 
-  function handleImageVisibilityChange(
+  const handleImageVisibilityChange = useCallback((
     assetId: number,
     visibility: ImageAssetVisibility,
     publishedAt: string | null,
-  ) {
+  ) => {
     if (!activeHistory) {
       return;
     }
@@ -249,7 +269,10 @@ export function GenerationWorkbench() {
         image.assetId === assetId ? { ...image, visibility, publishedAt } : image,
       ),
     });
-  }
+  }, [activeHistory, completeHistory]);
+
+  const handleClearReferenceImages = useCallback(() => setReferenceImages([]), []);
+  const handleToggleCollapsed = useCallback(() => setHistorySidebarCollapsed((current) => !current), []);
 
   return (
     <AppShell
@@ -269,7 +292,7 @@ export function GenerationWorkbench() {
           onRenameHistory={history.renameHistory}
           onSearchQueryChange={setHistorySearch}
           onSelectHistory={history.selectHistory}
-          onToggleCollapsed={() => setHistorySidebarCollapsed((current) => !current)}
+          onToggleCollapsed={handleToggleCollapsed}
         />
         <div className={styles.controlColumn}>
           <GenerationControlPanel
@@ -279,7 +302,7 @@ export function GenerationWorkbench() {
             state={state}
             referenceImages={referenceImages}
             uploadState={uploadState}
-            onClearReferenceImages={() => setReferenceImages([])}
+            onClearReferenceImages={handleClearReferenceImages}
             onRemoveReferenceImage={handleRemoveReferenceImage}
             onFormChange={setForm}
             onReferenceUpload={handleReferenceUpload}

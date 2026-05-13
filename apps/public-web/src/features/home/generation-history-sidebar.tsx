@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 
 import { GenerationHistoryItem } from "@/features/home/generation-history-item";
 import type { GenerationHistoryItem as GenerationHistoryRecord } from "@/features/home/generation-history.types";
@@ -21,7 +21,7 @@ type GenerationHistorySidebarProps = Readonly<{
   onToggleCollapsed?: () => void;
 }>;
 
-export function GenerationHistorySidebar({
+export const GenerationHistorySidebar = memo(function GenerationHistorySidebar({
   histories,
   activeHistoryId,
   searchQuery,
@@ -162,7 +162,7 @@ export function GenerationHistorySidebar({
       </footer>
     </aside>
   );
-}
+});
 
 function EmptyState({ title, description }: Readonly<{ title: string; description: string }>) {
   return (

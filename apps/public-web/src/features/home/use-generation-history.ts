@@ -34,7 +34,18 @@ export function useGenerationHistory() {
       return;
     }
 
-    saveGenerationHistories(histories);
+    const timer = setTimeout(() => saveGenerationHistories(histories), 400);
+    return () => clearTimeout(timer);
+  }, [histories, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated) {
+      return;
+    }
+
+    const flush = () => saveGenerationHistories(histories);
+    window.addEventListener("beforeunload", flush);
+    return () => window.removeEventListener("beforeunload", flush);
   }, [histories, hydrated]);
 
   const activeHistory = useMemo(

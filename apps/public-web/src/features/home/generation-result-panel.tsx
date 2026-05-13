@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { useState } from "react";
+import { memo, useState } from "react";
 
 import type { GenerationHistoryImage, GenerationHistoryItem } from "@/features/home/generation-history.types";
 import { ResultActionBar, type ImageVisibilityChangeHandler } from "@/features/home/generation-result-actions";
@@ -27,7 +27,7 @@ type ResultPanelProps = Readonly<{
   onUseAsSourceImage?: (image: GenerationSourceImage) => void;
 }>;
 
-export function GenerationResultPanel({
+export const GenerationResultPanel = memo(function GenerationResultPanel({
   historyItem,
   state,
   onImageVisibilityChange,
@@ -49,7 +49,7 @@ export function GenerationResultPanel({
       </div>
     </section>
   );
-}
+});
 
 function ResultHeader({ view }: Readonly<{ view: ResultView }>) {
   return (

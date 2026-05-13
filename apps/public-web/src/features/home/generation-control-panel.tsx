@@ -1,6 +1,6 @@
 "use client";
 
-import type { Dispatch, SetStateAction } from "react";
+import { memo, type Dispatch, type SetStateAction } from "react";
 
 import {
   MAX_REQUESTED_COUNT,
@@ -39,7 +39,7 @@ function getSubmitLabel(state: GenerationState) {
   return state.status === "submitting" ? "生成中..." : "生成图像";
 }
 
-export function GenerationControlPanel({
+export const GenerationControlPanel = memo(function GenerationControlPanel({
   form,
   modelsState,
   resolvedModelCode,
@@ -84,7 +84,7 @@ export function GenerationControlPanel({
       </form>
     </aside>
   );
-}
+});
 
 function PromptField({
   form,
