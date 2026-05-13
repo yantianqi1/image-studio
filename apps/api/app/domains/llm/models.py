@@ -35,3 +35,17 @@ class SellableModel(Base):
     member_price_cents: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
     anonymous_price_cents: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     status: Mapped[str] = mapped_column(String(32), default="active", nullable=False)
+
+
+class ModelVariant(Base):
+    __tablename__ = "model_variants"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    model_id: Mapped[int] = mapped_column(ForeignKey("sellable_models.id"), nullable=False, index=True)
+    size: Mapped[str] = mapped_column(String(64), nullable=False)
+    quality: Mapped[str] = mapped_column(String(32), nullable=False)
+    upstream_provider_model: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    member_price_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    anonymous_price_cents: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="active", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

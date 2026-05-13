@@ -40,6 +40,7 @@ from apps.api.app.domains.llm.service import (
     render_image,
     render_image_with_client_provider,
     resolve_model_execution_target,
+    resolve_variant,
 )
 from apps.api.app.infra.storage.factory import build_asset_storage
 
@@ -68,14 +69,15 @@ def create_job(
     quality: str | None = None,
 ) -> ImageJob:
     target = resolve_model_execution_target(session, model_code=model_code)
+    variant = resolve_variant(session, model_id=target.model.id, size=size, quality=quality)
     source_asset = resolve_source_asset(session, mode=mode, source_asset_id=source_asset_id, owner=owner)
     reference_assets = resolve_reference_assets(session, reference_asset_ids=reference_asset_ids, owner=owner)
     charge_cents = resolve_charge_cents(
         owner=owner,
         client_provider_config=client_provider_config,
         requested_count=requested_count,
-        member_price_cents=target.model.member_price_cents,
-        anonymous_price_cents=target.model.anonymous_price_cents,
+        member_price_cents=variant.member_price_cents if variant else target.model.member_price_cents,
+        anonymous_price_cents=variant.anonymous_price_cents if variant else target.model.anonymous_price_cents,
     )
     job = build_image_job(
         owner=owner,
@@ -86,7 +88,7 @@ def create_job(
         mode=mode,
         source_asset_id=source_asset.id if source_asset else None,
         provider_id=target.provider.id,
-        provider_model=target.provider_model,
+        provider_model=variant.upstream_provider_model if variant and variant.upstream_provider_model else target.provider_model,
         client_access_id=client_access_id,
         client_provider_config=serialize_client_provider_config(config=client_provider_config, provider_type=target.provider.type),
         storage_subdir=storage_subdir,

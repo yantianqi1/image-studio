@@ -1,6 +1,7 @@
 "use client";
 
 import { Panel } from "@/features/ui/panel";
+import { VariantPanel } from "@/features/providers/variant-panel";
 import { adminApi } from "@/lib/admin-api";
 
 type Provider = Awaited<ReturnType<typeof adminApi.providers>>[number];
@@ -97,55 +98,58 @@ function ModelCard({
   onError: (message: string) => void;
 }) {
   return (
-    <form
-      className="admin-card grid gap-2"
-      action={async (formData) => {
-        await adminApi.updateModel(model.code, {
-          display_name: String(formData.get("display_name") ?? ""),
-          capability: String(formData.get("capability") ?? ""),
-          provider_id: toNumber(formData.get("provider_id")),
-          provider_model: String(formData.get("provider_model") ?? ""),
-          public_enabled: formData.get("public_enabled") === "on",
-          member_price_cents: toNumber(formData.get("member_price_cents")),
-          anonymous_price_cents: toNumber(formData.get("anonymous_price_cents")),
-        });
-        await onUpdated(`模型 ${model.code} 已更新`);
-      }}
-    >
-      <ModelHeader model={model} />
-      <div className="grid grid-cols-2 gap-2">
-        <input className="admin-input" name="display_name" defaultValue={model.display_name} />
-        <select className="admin-input" name="capability" defaultValue={model.capability}>
-          <option value="chat">对话模型</option>
-          <option value="image">图像模型</option>
-          <option value="text">文本模型</option>
-        </select>
-      </div>
-      <ProviderSelect providers={providers} defaultValue={model.provider_id} />
-      <input className="admin-input" name="provider_model" defaultValue={model.provider_model} />
-      <PriceInputs model={model} />
-      <PublicEnabled defaultChecked={model.public_enabled} />
-      <div className="grid grid-cols-2 gap-2">
-        <button className="admin-button" type="submit">保存模型</button>
-        <button
-          className="admin-button border border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
-          type="button"
-          onClick={async () => {
-            if (!window.confirm(`确认删除模型 ${model.code}？`)) {
-              return;
-            }
-            try {
-              await adminApi.deleteModel(model.code);
-              await onUpdated(`模型 ${model.code} 已删除`);
-            } catch (error) {
-              onError(error instanceof Error ? error.message : "删除模型失败");
-            }
-          }}
-        >
-          删除模型
-        </button>
-      </div>
-    </form>
+    <div className="admin-card grid gap-2">
+      <form
+        className="grid gap-2"
+        action={async (formData) => {
+          await adminApi.updateModel(model.code, {
+            display_name: String(formData.get("display_name") ?? ""),
+            capability: String(formData.get("capability") ?? ""),
+            provider_id: toNumber(formData.get("provider_id")),
+            provider_model: String(formData.get("provider_model") ?? ""),
+            public_enabled: formData.get("public_enabled") === "on",
+            member_price_cents: toNumber(formData.get("member_price_cents")),
+            anonymous_price_cents: toNumber(formData.get("anonymous_price_cents")),
+          });
+          await onUpdated(`模型 ${model.code} 已更新`);
+        }}
+      >
+        <ModelHeader model={model} />
+        <div className="grid grid-cols-2 gap-2">
+          <input className="admin-input" name="display_name" defaultValue={model.display_name} />
+          <select className="admin-input" name="capability" defaultValue={model.capability}>
+            <option value="chat">对话模型</option>
+            <option value="image">图像模型</option>
+            <option value="text">文本模型</option>
+          </select>
+        </div>
+        <ProviderSelect providers={providers} defaultValue={model.provider_id} />
+        <input className="admin-input" name="provider_model" defaultValue={model.provider_model} />
+        <PriceInputs model={model} />
+        <PublicEnabled defaultChecked={model.public_enabled} />
+        <div className="grid grid-cols-2 gap-2">
+          <button className="admin-button" type="submit">保存模型</button>
+          <button
+            className="admin-button border border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+            type="button"
+            onClick={async () => {
+              if (!window.confirm(`确认删除模型 ${model.code}？`)) {
+                return;
+              }
+              try {
+                await adminApi.deleteModel(model.code);
+                await onUpdated(`模型 ${model.code} 已删除`);
+              } catch (error) {
+                onError(error instanceof Error ? error.message : "删除模型失败");
+              }
+            }}
+          >
+            删除模型
+          </button>
+        </div>
+      </form>
+      <VariantPanel model={model} onMessage={(msg) => onUpdated(msg)} onError={onError} />
+    </div>
   );
 }
 

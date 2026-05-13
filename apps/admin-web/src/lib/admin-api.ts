@@ -19,6 +19,18 @@ export type AdminGalleryItem = Readonly<{
   owner_anonymous_session_id: number | null;
 }>;
 
+export type ModelVariant = Readonly<{
+  id: number;
+  model_id: number;
+  size: string;
+  quality: string;
+  upstream_provider_model: string | null;
+  member_price_cents: number;
+  anonymous_price_cents: number;
+  status: string;
+  created_at: string | null;
+}>;
+
 export type WorkerSummary = Readonly<{
   image_jobs: {
     queued: number;
@@ -196,6 +208,37 @@ export const adminApi = {
   },
   deleteModel(modelCode: string) {
     return apiFetch<{ deleted: boolean }>(`/api/admin/models/${encodeURIComponent(modelCode)}`, {
+      method: "DELETE",
+    });
+  },
+  modelVariants(modelId: number) {
+    return apiFetch<readonly ModelVariant[]>(`/api/admin/models/${modelId}/variants`);
+  },
+  createModelVariant(modelId: number, input: {
+    size: string;
+    quality: string;
+    upstream_provider_model?: string;
+    member_price_cents: number;
+    anonymous_price_cents: number;
+  }) {
+    return apiFetch<ModelVariant>(`/api/admin/models/${modelId}/variants`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+  updateModelVariant(modelId: number, variantId: number, input: {
+    upstream_provider_model?: string | null;
+    member_price_cents: number;
+    anonymous_price_cents: number;
+    status: string;
+  }) {
+    return apiFetch<ModelVariant>(`/api/admin/models/${modelId}/variants/${variantId}`, {
+      method: "PUT",
+      body: JSON.stringify(input),
+    });
+  },
+  deleteModelVariant(modelId: number, variantId: number) {
+    return apiFetch<{ deleted: boolean }>(`/api/admin/models/${modelId}/variants/${variantId}`, {
       method: "DELETE",
     });
   },
