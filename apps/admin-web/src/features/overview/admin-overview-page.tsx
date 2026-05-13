@@ -44,6 +44,7 @@ const overviewSections = [
       { href: "/admin/providers", label: "Provider 与模型", detail: "供应商、上游模型导入和价格", token: "models" },
       { href: "/admin/image-jobs", label: "图片任务", detail: "图片生成队列、结果和 worker 告警", token: "image" },
       { href: "/admin/comic-jobs", label: "漫画任务", detail: "漫画任务状态和项目执行线索", token: "comic" },
+      { href: "/admin/gallery", label: "公开图库", detail: "浏览、下架或删除公开分享的图片", token: "gallery" },
     ],
   },
   {

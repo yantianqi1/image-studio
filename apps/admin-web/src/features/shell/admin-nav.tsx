@@ -33,6 +33,7 @@ const navGroups = [
       { href: "/admin/providers", label: "Provider", icon: "providers" },
       { href: "/admin/image-jobs", label: "图片任务", icon: "image", aliases: ["/admin/image-tasks"] },
       { href: "/admin/comic-jobs", label: "漫画任务", icon: "comic", aliases: ["/admin/comic-tasks"] },
+      { href: "/admin/gallery", label: "公开图库", icon: "gallery" },
     ],
   },
   {
@@ -149,6 +150,14 @@ const navIcons = {
     <svg className="admin-nav-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <circle cx="12" cy="12" r="3" />
       <path d="M18.75 13.4a7.3 7.3 0 0 0 0-2.8l2-1.55-2-3.45-2.45 1a7.2 7.2 0 0 0-2.4-1.4L13.5 2.5h-4l-.4 2.7a7.2 7.2 0 0 0-2.4 1.4l-2.45-1-2 3.45 2 1.55a7.3 7.3 0 0 0 0 2.8l-2 1.55 2 3.45 2.45-1a7.2 7.2 0 0 0 2.4 1.4l.4 2.7h4l.4-2.7a7.2 7.2 0 0 0 2.4-1.4l2.45 1 2-3.45z" />
+    </svg>
+  ),
+  gallery: (
+    <svg className="admin-nav-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="3" y="3" width="7" height="7" rx="1.5" />
+      <rect x="14" y="3" width="7" height="7" rx="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1.5" />
+      <rect x="14" y="14" width="7" height="7" rx="1.5" />
     </svg>
   ),
 } as const;

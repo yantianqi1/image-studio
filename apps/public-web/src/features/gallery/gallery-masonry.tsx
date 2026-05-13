@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { ImagePreviewDialogImage } from "@/features/ui/image-preview-dialog";
-import type { ImageGalleryItem } from "@/lib/public-api";
+import type { ImageGalleryItem, ImageGalleryScope } from "@/lib/public-api";
+import { publicApi } from "@/lib/public-api";
 import actionStyles from "./gallery-actions.module.css";
 import styles from "./gallery-page.module.css";
 
@@ -24,10 +25,14 @@ type CopyStatus = "idle" | "success" | "error";
 
 export function GalleryMasonry({
   items,
+  scope,
   onPreview,
+  onMutate,
 }: Readonly<{
   items: readonly ImageGalleryItem[];
+  scope: ImageGalleryScope;
   onPreview: (image: ImagePreviewDialogImage) => void;
+  onMutate: () => void;
 }>) {
   const [imageAspectRatios, setImageAspectRatios] = useState<ImageAspectRatios>({});
   const pendingAspectRatiosRef = useRef<Record<number, number>>({});
@@ -63,8 +68,10 @@ export function GalleryMasonry({
               key={`${item.job_id}-${item.result_index}-${item.asset_id}`}
               index={columnIndex + itemIndex * columns.length}
               item={item}
+              scope={scope}
               onImageMeasure={queueImageAspectRatio}
               onPreview={onPreview}
+              onMutate={onMutate}
             />
           ))}
         </div>
@@ -163,13 +170,17 @@ function getSafeAspectRatio(width: number, height: number) {
 function GalleryTile({
   index,
   item,
+  scope,
   onImageMeasure,
   onPreview,
+  onMutate,
 }: Readonly<{
   index: number;
   item: ImageGalleryItem;
+  scope: ImageGalleryScope;
   onImageMeasure: (assetId: number, width: number, height: number) => void;
   onPreview: (image: ImagePreviewDialogImage) => void;
+  onMutate: () => void;
 }>) {
   const title = getImageTitle(item);
 
@@ -198,7 +209,7 @@ function GalleryTile({
           }}
         />
       </button>
-      <GalleryTileActions item={item} />
+      <GalleryTileActions item={item} scope={scope} onMutate={onMutate} />
       <div className={styles.tileOverlay}>
         <div className={styles.tileMetaRow}>
           <span className={styles.visibilityPill}>{getVisibilityLabel(item)}</span>
@@ -209,8 +220,9 @@ function GalleryTile({
   );
 }
 
-function GalleryTileActions({ item }: Readonly<{ item: ImageGalleryItem }>) {
+function GalleryTileActions({ item, scope, onMutate }: Readonly<{ item: ImageGalleryItem; scope: ImageGalleryScope; onMutate: () => void }>) {
   const [copyStatus, setCopyStatus] = useState<CopyStatus>("idle");
+  const [actionPending, setActionPending] = useState(false);
 
   useEffect(() => {
     if (copyStatus === "idle") {
@@ -229,6 +241,32 @@ function GalleryTileActions({ item }: Readonly<{ item: ImageGalleryItem }>) {
     }
   }
 
+  async function handleToggleVisibility() {
+    if (actionPending) return;
+    setActionPending(true);
+    try {
+      const nextVisibility = item.visibility === "public" ? "private" : "public";
+      await publicApi.updateImageAssetVisibility(item.asset_id, nextVisibility);
+      onMutate();
+    } finally {
+      setActionPending(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (actionPending) return;
+    if (!window.confirm("确定删除这张图片？此操作不可撤销。")) return;
+    setActionPending(true);
+    try {
+      await publicApi.deleteImageAsset(item.asset_id);
+      onMutate();
+    } finally {
+      setActionPending(false);
+    }
+  }
+
+  const showOwnerActions = scope === "mine";
+
   return (
     <div className={actionStyles.actionBar} aria-label="图片操作">
       <button className={actionStyles.actionButton} type="button" onClick={() => void handleCopyPrompt()}>
@@ -240,6 +278,21 @@ function GalleryTileActions({ item }: Readonly<{ item: ImageGalleryItem }>) {
       <a className={actionStyles.actionButton} href={item.asset_url} download={buildDownloadName(item)}>
         下载
       </a>
+      {showOwnerActions && item.visibility === "public" && (
+        <button className={actionStyles.actionButton} type="button" disabled={actionPending} onClick={() => void handleToggleVisibility()}>
+          取消分享
+        </button>
+      )}
+      {showOwnerActions && item.visibility === "private" && (
+        <button className={actionStyles.actionButton} type="button" disabled={actionPending} onClick={() => void handleToggleVisibility()}>
+          公开
+        </button>
+      )}
+      {showOwnerActions && (
+        <button className={`${actionStyles.actionButton} ${actionStyles.actionButtonDanger}`} type="button" disabled={actionPending} onClick={() => void handleDelete()}>
+          删除
+        </button>
+      )}
       <CopyStatusNotice copyStatus={copyStatus} />
     </div>
   );

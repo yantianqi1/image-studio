@@ -64,6 +64,15 @@
   background: rgba(220, 38, 38, 0.92);
 }
 
+.actionButtonDanger {
+  background: rgba(254, 226, 226, 0.92);
+  color: #991b1b;
+}
+
+.actionButtonDanger:hover {
+  background: rgba(254, 202, 202, 1);
+}
+
 @media (hover: none) {
   .actionBar {
     pointer-events: auto;

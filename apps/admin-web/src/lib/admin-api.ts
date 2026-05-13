@@ -4,6 +4,21 @@ import { buildUsersSearch, type AdminUserList, type AdminUsersQuery, type AdminW
 
 export type { AdminUser, AdminUserList, AdminUsersQuery, AdminWallet, AdminWalletLedgerEntry } from "@/lib/admin-users";
 
+export type AdminGalleryItem = Readonly<{
+  asset_id: number;
+  asset_url: string;
+  thumbnail_url: string;
+  visibility: "private" | "public";
+  published_at: string | null;
+  created_at: string;
+  job_id: number;
+  result_index: number;
+  prompt: string;
+  revised_prompt: string | null;
+  owner_user_id: number | null;
+  owner_anonymous_session_id: number | null;
+}>;
+
 export type WorkerSummary = Readonly<{
   image_jobs: {
     queued: number;
@@ -230,6 +245,30 @@ export const adminApi = {
     return apiFetch<readonly { id: string; task_type: string; status: string; created_at: string }[]>(
       "/api/admin/comic/tasks",
     );
+  },
+  gallery(params: { page?: number; page_size?: number; q?: string } = {}) {
+    const search = new URLSearchParams();
+    if (params.page) search.set("page", String(params.page));
+    if (params.page_size) search.set("page_size", String(params.page_size));
+    if (params.q) search.set("q", params.q);
+    const qs = search.toString();
+    return apiFetch<{
+      items: readonly AdminGalleryItem[];
+      total: number;
+      page: number;
+      page_size: number;
+    }>(`/api/admin/gallery${qs ? `?${qs}` : ""}`);
+  },
+  adminUpdateAssetVisibility(assetId: number, visibility: "private" | "public") {
+    return apiFetch<{ asset_id: number; visibility: string }>(`/api/admin/image/assets/${assetId}/visibility`, {
+      method: "PATCH",
+      body: JSON.stringify({ visibility }),
+    });
+  },
+  adminDeleteAsset(assetId: number) {
+    return apiFetch<{ deleted: boolean; asset_id: number }>(`/api/admin/image/assets/${assetId}`, {
+      method: "DELETE",
+    });
   },
   settings() {
     return apiFetch<{

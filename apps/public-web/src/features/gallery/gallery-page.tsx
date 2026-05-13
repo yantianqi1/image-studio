@@ -38,39 +38,39 @@ export function GalleryPage({
 }: GalleryPageProps = {}) {
   const [scope, setScope] = useState<ImageGalleryScope>(initialScope);
   const [previewImage, setPreviewImage] = useState<ImagePreviewDialogImage | null>(null);
-  const galleryState = useGalleryData(scope);
+  const { galleryState, mutate } = useGalleryData(scope);
 
   return (
     <AppShell activeHref={activeHref} headerTitle="图库">
       <div className={styles.page}>
         <GalleryHeader scope={scope} state={galleryState} onScopeChange={setScope} />
-        <GalleryContent state={galleryState} scope={scope} onPreview={setPreviewImage} />
+        <GalleryContent state={galleryState} scope={scope} onPreview={setPreviewImage} onMutate={mutate} />
       </div>
       <ImagePreviewDialog image={previewImage} onClose={() => setPreviewImage(null)} />
     </AppShell>
   );
 }
 
-function useGalleryData(scope: ImageGalleryScope): GalleryState {
-  const { data, error, isLoading } = useSWR(
+function useGalleryData(scope: ImageGalleryScope): { galleryState: GalleryState; mutate: () => void } {
+  const { data, error, mutate } = useSWR(
     `image-gallery-${scope}`,
     () => publicApi.getImageGallery(scope),
   );
 
   if (data) {
-    return { status: "ready", data };
+    return { galleryState: { status: "ready", data }, mutate };
   }
   if (error) {
     return {
-      status: "error",
-      message: error instanceof Error ? error.message : "未知请求错误",
-      statusCode: error instanceof ApiError ? error.status : undefined,
+      galleryState: {
+        status: "error",
+        message: error instanceof Error ? error.message : "未知请求错误",
+        statusCode: error instanceof ApiError ? error.status : undefined,
+      },
+      mutate,
     };
   }
-  if (isLoading) {
-    return { status: "loading" };
-  }
-  return { status: "loading" };
+  return { galleryState: { status: "loading" }, mutate };
 }
 
 function GalleryHeader({
@@ -126,10 +126,12 @@ function GalleryContent({
   state,
   scope,
   onPreview,
+  onMutate,
 }: Readonly<{
   state: GalleryState;
   scope: ImageGalleryScope;
   onPreview: (image: ImagePreviewDialogImage) => void;
+  onMutate: () => void;
 }>) {
   if (state.status === "loading") {
     return <StatusCard title="加载中" description="正在读取图片图库..." tone="loading" />;
@@ -141,7 +143,7 @@ function GalleryContent({
     return <StatusCard title="暂无图片" description={getEmptyDescription(scope)} tone="empty" />;
   }
 
-  return <GalleryMasonry items={state.data} onPreview={onPreview} />;
+  return <GalleryMasonry items={state.data} scope={scope} onPreview={onPreview} onMutate={onMutate} />;
 }
 
 function GalleryError({

@@ -107,6 +107,9 @@ export const publicApi = {
   deleteImageJob(jobId: number) {
     return apiFetch<DeleteResult>(`/image/jobs/${jobId}`, { method: "DELETE" });
   },
+  deleteImageAsset(assetId: number) {
+    return apiFetch<DeleteResult>(`/image/assets/${assetId}`, { method: "DELETE" });
+  },
   uploadImageAsset(file: File) {
     const formData = new FormData();
     formData.append("file", file);

@@ -14,9 +14,13 @@ from apps.api.app.domains.image.assets import (
     resolve_thumbnail_content,
 )
 from apps.api.app.domains.image.gallery import (
+    delete_asset_by_admin,
+    delete_owned_asset,
     get_asset_for_read,
+    list_admin_gallery_items,
     list_gallery_items,
     load_assets_by_id,
+    set_asset_visibility,
     update_owned_asset_visibility,
 )
 from apps.api.app.domains.image.schemas import CreateImageJobRequest, UpdateAssetVisibilityRequest
@@ -155,6 +159,18 @@ def update_image_asset_visibility(
     return api_ok(asset_payload(asset, storage=build_asset_storage()))
 
 
+@public_router.delete("/assets/{asset_id}")
+def delete_image_asset(
+    asset_id: int,
+    request: Request,
+    session: Session = Depends(get_db_session),
+):
+    owner = resolve_request_owner(request, session)
+    delete_owned_asset(session, asset_id=asset_id, owner=owner)
+    session.commit()
+    return api_ok({"deleted": True, "asset_id": asset_id})
+
+
 @public_router.post("/uploads", status_code=status.HTTP_201_CREATED)
 async def upload_image_asset(
     request: Request,
@@ -213,6 +229,54 @@ def get_admin_image_asset(asset_id: int, request: Request, session: Session = De
     asset = get_asset(session, asset_id)
     content, media_type = resolve_asset_content(asset, build_asset_storage())
     return Response(content=content, media_type=media_type)
+
+
+@admin_router.get("/gallery")
+def get_admin_gallery(
+    request: Request,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=100),
+    q: str = Query(default=""),
+    session: Session = Depends(get_db_session),
+):
+    require_admin(request, session)
+    storage = build_asset_storage()
+    items, total = list_admin_gallery_items(session, page=page, page_size=page_size, query=q or None)
+    for _result, _job, asset in items:
+        ensure_thumbnail_exists(asset, storage)
+    return api_ok({
+        "items": [admin_gallery_item_payload(result, job=job, asset=asset, storage=storage) for result, job, asset in items],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    })
+
+
+@admin_router.patch("/image/assets/{asset_id}/visibility")
+def admin_update_asset_visibility(
+    asset_id: int,
+    payload: UpdateAssetVisibilityRequest,
+    request: Request,
+    session: Session = Depends(get_db_session),
+):
+    require_admin(request, session)
+    asset = get_asset(session, asset_id)
+    set_asset_visibility(asset, payload.visibility)
+    session.flush()
+    session.commit()
+    return api_ok(asset_payload(asset, storage=build_asset_storage()))
+
+
+@admin_router.delete("/image/assets/{asset_id}")
+def admin_delete_asset(
+    asset_id: int,
+    request: Request,
+    session: Session = Depends(get_db_session),
+):
+    require_admin(request, session)
+    delete_asset_by_admin(session, asset_id=asset_id)
+    session.commit()
+    return api_ok({"deleted": True, "asset_id": asset_id})
 
 
 def admin_job_payload(job, *, results) -> dict[str, object]:
@@ -301,5 +365,18 @@ def gallery_item_payload(result, *, job, asset, storage=None) -> dict[str, objec
         "result_index": result.result_index,
         "prompt": job.prompt,
         "revised_prompt": result.revised_prompt,
+    })
+    return payload
+
+
+def admin_gallery_item_payload(result, *, job, asset, storage=None) -> dict[str, object]:
+    payload = asset_payload(asset, storage=storage)
+    payload.update({
+        "job_id": job.id,
+        "result_index": result.result_index,
+        "prompt": job.prompt,
+        "revised_prompt": result.revised_prompt,
+        "owner_user_id": asset.owner_user_id,
+        "owner_anonymous_session_id": asset.owner_anonymous_session_id,
     })
     return payload
