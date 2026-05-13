@@ -23,6 +23,11 @@
   transform: translateY(-2px);
 }
 
+.appCard:active {
+  transform: translateY(0) scale(0.985);
+  transition-duration: 80ms;
+}
+
 .appCover {
   --cover-edge: rgba(255, 255, 255, 0.2);
   position: relative;
