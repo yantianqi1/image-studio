@@ -36,6 +36,7 @@ export function PromptCrafterDrawer({ onClose }: Readonly<{ onClose: () => void 
   const [status, setStatus] = useState<DrawerStatus>("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [copyLabel, setCopyLabel] = useState("复制");
+  const [closing, setClosing] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   const latestPrompt = useMemo(
@@ -72,13 +73,21 @@ export function PromptCrafterDrawer({ onClose }: Readonly<{ onClose: () => void 
     }
   }, [latestPrompt]);
 
+  const handleClose = useCallback(() => {
+    setClosing(true);
+    setTimeout(() => {
+      setClosing(false);
+      onClose();
+    }, 220);
+  }, [onClose]);
+
   return (
     <>
-      <div className={styles.overlay} onClick={onClose} />
-      <aside className={styles.drawer} aria-label="提示词工坊">
+      <div className={closing ? `${styles.overlay} ${styles.overlayClosing}` : styles.overlay} onClick={handleClose} />
+      <aside className={closing ? `${styles.drawer} ${styles.drawerClosing}` : styles.drawer} aria-label="提示词工坊">
         <div className={styles.drawerHeader}>
           <h2 className={styles.drawerTitle}>提示词工坊</h2>
-          <button aria-label="关闭" className={styles.closeButton} type="button" onClick={onClose}>
+          <button aria-label="关闭" className={styles.closeButton} type="button" onClick={handleClose}>
             ✕
           </button>
         </div>
@@ -127,7 +136,7 @@ export function PromptCrafterDrawer({ onClose }: Readonly<{ onClose: () => void 
                   className={styles.resultActionButton}
                   href={latestPrompt ? generateHref : "#"}
                   aria-disabled={!latestPrompt}
-                  onClick={latestPrompt ? onClose : undefined}
+                  onClick={latestPrompt ? handleClose : undefined}
                 >
                   发送到生图
                 </Link>

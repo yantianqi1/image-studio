@@ -303,6 +303,24 @@
   to { transform: translateX(0); }
 }
 
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes slideOut {
+  from { transform: translateX(0); }
+  to { transform: translateX(100%); }
+}
+
+.overlayClosing {
+  animation: fadeOut 150ms ease forwards;
+}
+
+.drawerClosing {
+  animation: slideOut 220ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+
 @media (max-width: 900px) {
   .fab {
     bottom: 5.5rem;
