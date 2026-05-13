@@ -1,0 +1,274 @@
+.viewport {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+}
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 300px;
+  color: #9ca3af;
+  text-align: center;
+  padding: 2rem;
+}
+
+.emptyIcon {
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+.emptyTitle {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #6b7280;
+  margin-bottom: 0.5rem;
+}
+
+.emptyHint {
+  font-size: 0.8125rem;
+  color: #9ca3af;
+  max-width: 20rem;
+}
+
+.turnCard {
+  margin-bottom: 1.25rem;
+  border: 1px solid #f3f4f6;
+  border-radius: 1rem;
+  padding: 1rem 1.25rem;
+  background: #ffffff;
+  transition: border-color 160ms ease;
+}
+
+.turnCard:hover {
+  border-color: #e5e7eb;
+}
+
+.turnHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.625rem;
+}
+
+.modeBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+.modeBadgeGenerate {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.modeBadgeEdit {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.modeBadgeChat {
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+.turnModel {
+  font-size: 0.6875rem;
+  color: #9ca3af;
+}
+
+.turnTime {
+  font-size: 0.6875rem;
+  color: #9ca3af;
+  margin-left: auto;
+}
+
+.turnPrompt {
+  font-size: 0.875rem;
+  color: #374151;
+  line-height: 1.5;
+  margin-bottom: 0.75rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.imageGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+
+.imageWrapper {
+  position: relative;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: #f9fafb;
+  aspect-ratio: 1;
+}
+
+.imageThumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  cursor: pointer;
+  transition: transform 200ms ease;
+}
+
+.imageThumb:hover {
+  transform: scale(1.03);
+}
+
+.imageActions {
+  position: absolute;
+  bottom: 0.5rem;
+  right: 0.5rem;
+  display: flex;
+  gap: 0.25rem;
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.imageWrapper:hover .imageActions {
+  opacity: 1;
+}
+
+.imageActionButton {
+  width: 1.75rem;
+  height: 1.75rem;
+  border: none;
+  border-radius: 0.375rem;
+  background: rgba(255, 255, 255, 0.9);
+  color: #374151;
+  font-size: 0.75rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+  transition: background 120ms ease;
+}
+
+.imageActionButton:hover {
+  background: #ffffff;
+}
+
+.statusRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.75rem;
+}
+
+.statusGenerating {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.statusError {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.statusQueued {
+  background: #f9fafb;
+  color: #6b7280;
+}
+
+.spinner {
+  display: inline-block;
+  width: 0.75rem;
+  height: 0.75rem;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 9999px;
+  animation: spin 800ms linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.turnActions {
+  display: flex;
+  gap: 0.375rem;
+  margin-top: 0.75rem;
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.turnCard:hover .turnActions {
+  opacity: 1;
+}
+
+.turnActionButton {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.375rem;
+  background: #ffffff;
+  color: #6b7280;
+  font-size: 0.6875rem;
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+
+.turnActionButton:hover {
+  border-color: #9ca3af;
+  color: #111827;
+}
+
+.turnActionButtonDanger:hover {
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
+
+.chatResponse {
+  font-size: 0.875rem;
+  color: #374151;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 0.75rem;
+  background: #f9fafb;
+  border-radius: 0.75rem;
+}
+
+.progressText {
+  font-size: 0.6875rem;
+  color: #6b7280;
+}
+
+.visibilityBadge {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.6);
+  color: #ffffff;
+  backdrop-filter: blur(4px);
+}
+
+@media (max-width: 640px) {
+  .viewport {
+    padding: 1rem;
+  }
+
+  .imageGrid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 0.5rem;
+  }
+}

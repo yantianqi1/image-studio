@@ -1,0 +1,247 @@
+.composerDock {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  border-top: 1px solid #e5e7eb;
+  background: #ffffff;
+  padding: 0.75rem 1rem 0.875rem;
+  box-shadow: 0 -2px 8px rgba(15, 23, 42, 0.04);
+}
+
+.composerInner {
+  display: grid;
+  gap: 0.625rem;
+  max-width: 56rem;
+  margin: 0 auto;
+}
+
+.promptRow {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+
+.promptTextarea {
+  flex: 1;
+  min-height: 2.75rem;
+  max-height: 12rem;
+  resize: none;
+  overflow-y: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 1rem;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  outline: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.promptTextarea:focus {
+  border-color: #9ca3af;
+  box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.05);
+}
+
+.settingsRow {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.settingSelect {
+  height: 2rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  padding: 0 0.5rem;
+  font-size: 0.75rem;
+  background: #ffffff;
+  outline: none;
+  transition: border-color 160ms ease;
+}
+
+.settingSelect:focus {
+  border-color: #9ca3af;
+}
+
+.modeToggle {
+  display: inline-flex;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.modeButton {
+  padding: 0.375rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.modeButton:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.modeButtonActive {
+  background: #111827;
+  color: #ffffff;
+}
+
+.modeButtonActive:hover {
+  background: #1f2937;
+  color: #ffffff;
+}
+
+.submitButton {
+  min-width: 4.5rem;
+  height: 2.75rem;
+  border-radius: 1rem;
+  border: none;
+  background: #111827;
+  color: #ffffff;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 160ms ease, opacity 160ms ease;
+}
+
+.submitButton:hover:not(:disabled) {
+  background: #374151;
+}
+
+.submitButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.referenceRow {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.25rem 0;
+  overflow-x: auto;
+}
+
+.referenceThumb {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.5rem;
+  object-fit: cover;
+  border: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.referenceRemove {
+  position: absolute;
+  top: -0.25rem;
+  right: -0.25rem;
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 9999px;
+  border: none;
+  background: #ef4444;
+  color: #ffffff;
+  font-size: 0.625rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.referenceWrapper {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.uploadButton {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.5rem;
+  border: 1px dashed #d1d5db;
+  background: transparent;
+  color: #9ca3af;
+  font-size: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color 160ms ease, color 160ms ease;
+  flex-shrink: 0;
+}
+
+.uploadButton:hover {
+  border-color: #9ca3af;
+  color: #6b7280;
+}
+
+.countControl {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  padding: 0 0.375rem;
+  height: 2rem;
+}
+
+.countButton {
+  width: 1.25rem;
+  height: 1.25rem;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  font-size: 0.875rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.25rem;
+}
+
+.countButton:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.countValue {
+  font-size: 0.75rem;
+  font-weight: 600;
+  min-width: 1rem;
+  text-align: center;
+}
+
+.marketButton {
+  height: 2rem;
+  padding: 0 0.5rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: #6b7280;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: border-color 160ms ease, color 160ms ease;
+}
+
+.marketButton:hover {
+  border-color: #9ca3af;
+  color: #111827;
+}
+
+.spinner {
+  display: inline-block;
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #ffffff;
+  border-radius: 9999px;
+  animation: spin 800ms linear infinite;
+  margin-right: 0.375rem;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
