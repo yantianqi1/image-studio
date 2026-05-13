@@ -58,9 +58,10 @@ export function GalleryMasonry({
     <div className={styles.galleryGrid} style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))` }}>
       {columns.map((column, columnIndex) => (
         <div key={columnIndex} className={styles.column}>
-          {column.map((item) => (
+          {column.map((item, itemIndex) => (
             <GalleryTile
               key={`${item.job_id}-${item.result_index}-${item.asset_id}`}
+              index={columnIndex + itemIndex * columns.length}
               item={item}
               onImageMeasure={queueImageAspectRatio}
               onPreview={onPreview}
@@ -160,10 +161,12 @@ function getSafeAspectRatio(width: number, height: number) {
 }
 
 function GalleryTile({
+  index,
   item,
   onImageMeasure,
   onPreview,
 }: Readonly<{
+  index: number;
   item: ImageGalleryItem;
   onImageMeasure: (assetId: number, width: number, height: number) => void;
   onPreview: (image: ImagePreviewDialogImage) => void;
@@ -171,7 +174,10 @@ function GalleryTile({
   const title = getImageTitle(item);
 
   return (
-    <article className={`${styles.tile} ${actionStyles.actionTile}`}>
+    <article
+      className={`${styles.tile} ${styles.tileAnimated} ${actionStyles.actionTile}`}
+      style={{ animationDelay: `${Math.min(index * 40, 600)}ms` }}
+    >
       <button
         className={styles.imageButton}
         type="button"
