@@ -429,19 +429,34 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
 
                 {/* Settings toggle (image modes only) */}
                 {mode !== "chat" && (
-                  <button
-                    type="button"
-                    className={cn(
-                      "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600 transition hover:bg-gray-50",
-                      isSettingsOpen && "border-blue-200 bg-blue-50 text-blue-600",
+                  <div className="relative shrink-0">
+                    <button
+                      type="button"
+                      className={cn(
+                        "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600 transition hover:bg-gray-50",
+                        isSettingsOpen && "border-blue-200 bg-blue-50 text-blue-600",
+                      )}
+                      onClick={() => setIsSettingsOpen((o) => !o)}
+                      aria-expanded={isSettingsOpen}
+                      title={isSettingsOpen ? "收起参数" : "更多参数"}
+                    >
+                      <SlidersHorizontal className="size-3.5" />
+                      <span className="hidden sm:inline">参数</span>
+                    </button>
+                    {isSettingsOpen && (
+                      <ImageSettingsPopover
+                        aspectRatio={aspectRatio}
+                        resolution={resolution}
+                        quality={quality}
+                        count={count}
+                        resolutions={resolutions}
+                        onAspectRatioChange={onAspectRatioChange}
+                        onResolutionChange={onResolutionChange}
+                        onQualityChange={onQualityChange}
+                        onCountChange={onCountChange}
+                      />
                     )}
-                    onClick={() => setIsSettingsOpen((o) => !o)}
-                    aria-expanded={isSettingsOpen}
-                    title={isSettingsOpen ? "收起参数" : "更多参数"}
-                  >
-                    <SlidersHorizontal className="size-3.5" />
-                    <span className="hidden sm:inline">参数</span>
-                  </button>
+                  </div>
                 )}
               </div>
 
@@ -475,84 +490,174 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
               </div>
             </div>
 
-            {/* Expandable settings panel */}
-            {mode !== "chat" && isSettingsOpen && (
-              <div className="mt-2 grid grid-cols-2 gap-2 border-t border-gray-100 pt-2 sm:grid-cols-4">
-                {/* Aspect ratio */}
-                <div className="flex h-9 items-center justify-between gap-1.5 rounded-full border border-gray-200 bg-white px-2.5">
-                  <span className="shrink-0 text-[11px] font-medium text-gray-500">比例</span>
-                  <select
-                    className="h-7 min-w-0 flex-1 border-0 bg-transparent text-right text-xs font-semibold text-gray-900 outline-none"
-                    value={aspectRatio}
-                    onChange={(e) => onAspectRatioChange(e.target.value)}
-                  >
-                    {ASPECT_RATIO_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Resolution */}
-                {resolutions.length > 0 && (
-                  <div className="flex h-9 items-center justify-between gap-1.5 rounded-full border border-gray-200 bg-white px-2.5">
-                    <span className="shrink-0 text-[11px] font-medium text-gray-500">分辨率</span>
-                    <select
-                      className="h-7 min-w-0 flex-1 border-0 bg-transparent text-right text-xs font-semibold text-gray-900 outline-none"
-                      value={resolution}
-                      onChange={(e) => onResolutionChange(e.target.value)}
-                    >
-                      {resolutions.map((r) => (
-                        <option key={r.value} value={r.value}>{r.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {/* Quality */}
-                <div className="flex h-9 items-center justify-between gap-1.5 rounded-full border border-gray-200 bg-white px-2.5">
-                  <span className="shrink-0 text-[11px] font-medium text-gray-500">质量</span>
-                  <select
-                    className="h-7 min-w-0 flex-1 border-0 bg-transparent text-right text-xs font-semibold text-gray-900 outline-none"
-                    value={quality}
-                    onChange={(e) => onQualityChange(e.target.value)}
-                  >
-                    {QUALITY_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Count */}
-                <div className="flex h-9 items-center justify-between gap-1.5 rounded-full border border-gray-200 bg-white px-2.5">
-                  <span className="shrink-0 text-[11px] font-medium text-gray-500">张数</span>
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      className="inline-flex size-5 items-center justify-center rounded text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 disabled:opacity-40"
-                      onClick={() => onCountChange(Math.max(MIN_COUNT, count - 1))}
-                      disabled={count <= MIN_COUNT}
-                    >
-                      -
-                    </button>
-                    <span className="min-w-[1rem] text-center text-xs font-semibold text-gray-900">{count}</span>
-                    <button
-                      type="button"
-                      className="inline-flex size-5 items-center justify-center rounded text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 disabled:opacity-40"
-                      onClick={() => onCountChange(Math.min(MAX_COUNT, count + 1))}
-                      disabled={count >= MAX_COUNT}
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>
     </div>
   );
 });
+
+type ImageSettingsPopoverProps = Readonly<{
+  aspectRatio: string;
+  resolution: string;
+  quality: string;
+  count: number;
+  resolutions: readonly { value: string; label: string; pixels: string }[];
+  onAspectRatioChange: (value: string) => void;
+  onResolutionChange: (value: string) => void;
+  onQualityChange: (value: string) => void;
+  onCountChange: (value: number) => void;
+}>;
+
+function ImageSettingsPopover({
+  aspectRatio,
+  resolution,
+  quality,
+  count,
+  resolutions,
+  onAspectRatioChange,
+  onResolutionChange,
+  onQualityChange,
+  onCountChange,
+}: ImageSettingsPopoverProps) {
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (!popoverRef.current?.contains(e.target as Node)) {
+        setOpenMenu(null);
+      }
+    };
+    window.addEventListener("mousedown", handler);
+    return () => window.removeEventListener("mousedown", handler);
+  }, []);
+
+  const aspectRatioLabel = ASPECT_RATIO_OPTIONS.find((o) => o.value === aspectRatio)?.label ?? aspectRatio;
+  const resolutionLabel = resolutions.find((r) => r.value === resolution)?.label ?? resolution;
+  const qualityLabel = QUALITY_OPTIONS.find((o) => o.value === quality)?.label ?? quality;
+
+  return (
+    <div
+      ref={popoverRef}
+      className="absolute bottom-[calc(100%+8px)] left-0 z-[70] w-[min(calc(100vw-2rem),22rem)] rounded-[20px] border border-gray-200 bg-white p-2.5 shadow-[0_24px_80px_-32px_rgba(15,23,42,0.35)]"
+    >
+      <div className="grid grid-cols-2 gap-2">
+        {/* Count */}
+        <div className="flex h-9 items-center justify-between gap-1.5 rounded-full border border-gray-200 bg-white px-2.5">
+          <span className="shrink-0 text-[11px] font-medium text-gray-500">张数</span>
+          <div className="flex items-center gap-0.5">
+            <button
+              type="button"
+              className="inline-flex size-5 items-center justify-center rounded text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 disabled:opacity-40"
+              onClick={() => onCountChange(Math.max(MIN_COUNT, count - 1))}
+              disabled={count <= MIN_COUNT}
+            >
+              -
+            </button>
+            <span className="min-w-[1.25rem] text-center text-xs font-semibold text-gray-900">{count}</span>
+            <button
+              type="button"
+              className="inline-flex size-5 items-center justify-center rounded text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 disabled:opacity-40"
+              onClick={() => onCountChange(Math.min(MAX_COUNT, count + 1))}
+              disabled={count >= MAX_COUNT}
+            >
+              +
+            </button>
+          </div>
+        </div>
+
+        {/* Aspect Ratio */}
+        <SettingDropdown
+          label="比例"
+          value={aspectRatioLabel}
+          isOpen={openMenu === "ratio"}
+          onToggle={() => setOpenMenu(openMenu === "ratio" ? null : "ratio")}
+          options={ASPECT_RATIO_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+          activeValue={aspectRatio}
+          onSelect={(v) => { onAspectRatioChange(v); setOpenMenu(null); }}
+        />
+
+        {/* Resolution */}
+        {resolutions.length > 0 && (
+          <SettingDropdown
+            label="分辨率"
+            value={resolutionLabel}
+            isOpen={openMenu === "resolution"}
+            onToggle={() => setOpenMenu(openMenu === "resolution" ? null : "resolution")}
+            options={resolutions.map((r) => ({ value: r.value, label: r.label }))}
+            activeValue={resolution}
+            onSelect={(v) => { onResolutionChange(v); setOpenMenu(null); }}
+          />
+        )}
+
+        {/* Quality */}
+        <SettingDropdown
+          label="质量"
+          value={qualityLabel}
+          isOpen={openMenu === "quality"}
+          onToggle={() => setOpenMenu(openMenu === "quality" ? null : "quality")}
+          options={QUALITY_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+          activeValue={quality}
+          onSelect={(v) => { onQualityChange(v); setOpenMenu(null); }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function SettingDropdown({
+  label,
+  value,
+  isOpen,
+  onToggle,
+  options,
+  activeValue,
+  onSelect,
+}: Readonly<{
+  label: string;
+  value: string;
+  isOpen: boolean;
+  onToggle: () => void;
+  options: readonly { value: string; label: string }[];
+  activeValue: string;
+  onSelect: (value: string) => void;
+}>) {
+  return (
+    <div className="relative flex h-9 min-w-0 items-center justify-between gap-1.5 rounded-full border border-gray-200 bg-white px-2.5 text-[11px]">
+      <span className="shrink-0 font-medium text-gray-500">{label}</span>
+      <button
+        type="button"
+        className="flex h-7 min-w-0 flex-1 items-center justify-end gap-1 bg-transparent text-right text-xs font-semibold text-gray-900"
+        onClick={onToggle}
+      >
+        <span className="truncate">{value}</span>
+        <ChevronDown className={cn("size-3.5 shrink-0 opacity-60 transition", isOpen && "rotate-180")} />
+      </button>
+      {isOpen && (
+        <div className="absolute bottom-[calc(100%+0.5rem)] right-0 z-[90] max-h-[14rem] w-[min(17rem,calc(100vw-3rem))] overflow-y-auto rounded-[16px] border border-gray-200 bg-white p-1.5 shadow-[0_18px_46px_-26px_rgba(15,23,42,0.35)]">
+          {options.map((option) => {
+            const active = option.value === activeValue;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                className={cn(
+                  "flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-gray-600 transition hover:bg-gray-100",
+                  active && "bg-gray-100 font-medium text-gray-900",
+                )}
+                onClick={() => onSelect(option.value)}
+              >
+                <span className="min-w-0 truncate">{option.label}</span>
+                {active && <Check className="size-4 shrink-0" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
