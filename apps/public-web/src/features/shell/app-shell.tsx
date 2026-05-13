@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ViewTransition } from "react";
 import type { ReactNode } from "react";
 
 import { BrandMark } from "@/features/shell/brand-mark";
@@ -43,10 +44,12 @@ export function AppShell({
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
       <AppHeader activeHref={activeHref} brandLabel={brandLabel} headerTitle={resolvedHeaderTitle} leadingAction={leadingAction} navAside={navAside} />
 
-      <main className={workspaceMode ? "min-h-[calc(100dvh-7rem)] w-full overflow-visible px-3 py-3 sm:px-4 md:h-[calc(100dvh-4rem)] md:min-h-0 md:overflow-hidden lg:px-5" : "mx-auto w-full max-w-[1440px] px-4 pb-10 pt-5 sm:px-6 lg:px-8 lg:pt-6"}>
-        {hasHero ? <HeroSection description={description} eyebrow={eyebrow} title={title} /> : null}
-        <section className={workspaceMode ? "min-h-full md:h-full" : hasHero ? "mt-5" : ""}>{children}</section>
-      </main>
+      <ViewTransition name="main-content">
+        <main className={workspaceMode ? "min-h-[calc(100dvh-7rem)] w-full overflow-visible px-3 py-3 sm:px-4 md:h-[calc(100dvh-4rem)] md:min-h-0 md:overflow-hidden lg:px-5" : "mx-auto w-full max-w-[1440px] px-4 pb-10 pt-5 sm:px-6 lg:px-8 lg:pt-6"}>
+          {hasHero ? <HeroSection description={description} eyebrow={eyebrow} title={title} /> : null}
+          <section className={workspaceMode ? "min-h-full md:h-full" : hasHero ? "mt-5" : ""}>{children}</section>
+        </main>
+      </ViewTransition>
 
       <GlobalPromptCrafter />
     </div>

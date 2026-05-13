@@ -41,11 +41,14 @@ import {
 } from "@/features/home/generation-workbench-helpers";
 import styles from "./generation-workbench.module.css";
 
+const IDLE_STATE: GenerationState = { status: "idle" };
+const IDLE_UPLOAD: SourceUploadState = { status: "idle" };
+
 export function GenerationWorkbench() {
   const [form, setForm] = useState<ImageFormState>(INITIAL_FORM);
-  const [state, setState] = useState<GenerationState>({ status: "idle" });
+  const [state, setState] = useState<GenerationState>(IDLE_STATE);
   const [referenceImages, setReferenceImages] = useState<readonly GenerationSourceImage[]>([]);
-  const [uploadState, setUploadState] = useState<SourceUploadState>({ status: "idle" });
+  const [uploadState, setUploadState] = useState<SourceUploadState>(IDLE_UPLOAD);
   const [historySearch, setHistorySearch] = useState("");
   const [historySidebarCollapsed, setHistorySidebarCollapsed] = useState(false);
   const history = useGenerationHistory();
@@ -65,8 +68,8 @@ export function GenerationWorkbench() {
   const applyReusePrompt = useCallback((pendingReusePrompt: string) => {
     setForm(buildReusePromptForm(pendingReusePrompt));
     setReferenceImages([]);
-    setUploadState({ status: "idle" });
-    setState({ status: "idle" });
+    setUploadState(IDLE_UPLOAD);
+    setState(IDLE_STATE);
   }, []);
 
   const [, startTransition] = useTransition();
@@ -83,7 +86,7 @@ export function GenerationWorkbench() {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- sync active history into the editable draft
       setForm(getFormFromHistory(history.activeHistory));
       setReferenceImages(getReferenceImagesFromHistory(history.activeHistory));
-      setUploadState({ status: "idle" });
+      setUploadState(IDLE_UPLOAD);
       setState(getStateFromHistory(history.activeHistory));
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only reset form when user switches history, not on polling updates
@@ -230,8 +233,8 @@ export function GenerationWorkbench() {
     history.createDraft();
     setForm(INITIAL_FORM);
     setReferenceImages([]);
-    setUploadState({ status: "idle" });
-    setState({ status: "idle" });
+    setUploadState(IDLE_UPLOAD);
+    setState(IDLE_STATE);
   }, [history.createDraft]);
 
   const handleReferenceUpload = useCallback(async (files: readonly File[]) => {
@@ -239,7 +242,7 @@ export function GenerationWorkbench() {
     try {
       const uploadedImages = await uploadReferenceImages(files);
       setReferenceImages((current) => [...current, ...uploadedImages]);
-      setUploadState({ status: "idle" });
+      setUploadState(IDLE_UPLOAD);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "参考图上传失败";
       setUploadState({ status: "error", message });
@@ -252,7 +255,7 @@ export function GenerationWorkbench() {
 
   const handleUseResultAsSource = useCallback((image: GenerationSourceImage) => {
     setReferenceImages((current) => [...current, image]);
-    setUploadState({ status: "idle" });
+    setUploadState(IDLE_UPLOAD);
   }, []);
 
   const handleImageVisibilityChange = useCallback((

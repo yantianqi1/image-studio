@@ -119,8 +119,8 @@ export const GenerationHistorySidebar = memo(function GenerationHistorySidebar({
             <BrandMark />
           </div>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-400">History</p>
-            <h2 className="mt-1 text-base font-semibold tracking-[-0.02em] text-gray-950">历史记录</h2>
+            <p className="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-white/40">History</p>
+            <h2 className="mt-0.5 text-sm font-semibold tracking-[-0.02em] text-white/90">历史记录</h2>
           </div>
         </div>
         <button className={styles.menuButton} type="button" onClick={onToggleCollapsed} aria-label="折叠历史记录">
@@ -128,7 +128,7 @@ export const GenerationHistorySidebar = memo(function GenerationHistorySidebar({
         </button>
       </div>
 
-      <div className="mt-4 flex gap-2">
+      <div className="mt-3 flex gap-2">
         <button className={styles.newButton} type="button" onClick={onNewGeneration}>
           新建生成
         </button>
@@ -143,19 +143,19 @@ export const GenerationHistorySidebar = memo(function GenerationHistorySidebar({
         />
       </div>
 
-      <div className="mt-4 min-h-0 flex-1 overflow-hidden">
+      <div className="mt-3 min-h-0 flex-1 overflow-hidden">
         <div className={styles.sidebarList}>{historyList}</div>
       </div>
 
       <footer className={styles.sidebarFooter}>
-        <div className="grid gap-2 text-sm text-gray-600">
-          <div className="flex items-center justify-between gap-2">
+        <div className="grid gap-1.5 text-xs">
+          <div className="flex items-center justify-between gap-2 text-white/45">
             <span>钱包</span>
-            <a className="font-medium text-gray-900 hover:underline" href="/wallet">
+            <a className="font-medium text-white/80 hover:text-white" href="/wallet">
               {walletLabel}
             </a>
           </div>
-          <a className="text-sm text-gray-600 hover:text-gray-900" href="/login">
+          <a className="text-white/40 hover:text-white/70" href="/login">
             账号入口
           </a>
         </div>
@@ -174,8 +174,8 @@ function EmptyState({ title, description }: Readonly<{ title: string; descriptio
           </svg>
         </div>
         <div className="grid gap-1">
-          <p className="text-sm font-semibold text-gray-900">{title}</p>
-          <p className="max-w-[15rem] text-xs leading-5 text-gray-500">{description}</p>
+          <p className="text-xs font-semibold text-white/70">{title}</p>
+          <p className="max-w-[15rem] text-[0.7rem] leading-5 text-white/40">{description}</p>
         </div>
       </div>
     </div>

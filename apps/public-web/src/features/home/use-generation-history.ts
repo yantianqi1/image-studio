@@ -34,8 +34,18 @@ export function useGenerationHistory() {
       return;
     }
 
-    const timer = setTimeout(() => saveGenerationHistories(histories), 400);
-    return () => clearTimeout(timer);
+    const scheduleSave = typeof requestIdleCallback === "function"
+      ? (fn: () => void) => {
+          const id = requestIdleCallback(fn, { timeout: 2000 });
+          return () => cancelIdleCallback(id);
+        }
+      : (fn: () => void) => {
+          const id = setTimeout(fn, 600);
+          return () => clearTimeout(id);
+        };
+
+    const cancel = scheduleSave(() => saveGenerationHistories(histories));
+    return cancel;
   }, [histories, hydrated]);
 
   useEffect(() => {

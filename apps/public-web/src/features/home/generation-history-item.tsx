@@ -108,7 +108,7 @@ function HistoryMeta({ item }: Readonly<{ item: GenerationHistoryRecord }>) {
       <span>{item.count} 张</span>
       <span>·</span>
       <span>{item.aspectRatio}</span>
-      <span className={getBadgeClass(item.status)}>{getStatusLabel(item.status)}</span>
+      <span className={getBadgeClass(item.status)} title={getStatusLabel(item.status)} />
     </div>
   );
 }
