@@ -19,6 +19,84 @@ SVG_MIME_TYPE = "image/svg+xml"
 THUMBNAIL_MAX_DIMENSION_PX = 640
 THUMBNAIL_SUFFIX = ".thumb.jpg"
 
+MAGIC_BYTES_MAP: list[tuple[bytes, int, str]] = [
+    (b"\x89PNG\r\n\x1a\n", 0, "image/png"),
+    (b"\xff\xd8\xff", 0, "image/jpeg"),
+    (b"GIF87a", 0, "image/gif"),
+    (b"GIF89a", 0, "image/gif"),
+    (b"RIFF", 0, "image/webp"),
+    (b"BM", 0, "image/bmp"),
+    (b"\x00\x00\x01\x00", 0, "image/x-icon"),
+]
+
+COMPATIBLE_MIME_TYPES = frozenset({
+    "image/png",
+    "image/jpeg",
+    "image/gif",
+    "image/webp",
+})
+
+MIME_TO_EXTENSION: dict[str, str] = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/gif": ".gif",
+    "image/webp": ".webp",
+    "image/bmp": ".bmp",
+    "image/tiff": ".tiff",
+    "image/avif": ".avif",
+    "image/heic": ".heic",
+    "image/heif": ".heif",
+    "image/svg+xml": ".svg",
+}
+
+
+def detect_image_mime_type(content: bytes) -> str | None:
+    for magic, offset, mime_type in MAGIC_BYTES_MAP:
+        if content[offset:offset + len(magic)] == magic:
+            if mime_type == "image/webp":
+                if content[8:12] == b"WEBP":
+                    return mime_type
+                return None
+            return mime_type
+    if _is_avif(content):
+        return "image/avif"
+    if _is_heic(content):
+        return "image/heic"
+    if content[:4] in (b"II\x2a\x00", b"MM\x00\x2a"):
+        return "image/tiff"
+    return None
+
+
+def _is_avif(content: bytes) -> bool:
+    if len(content) < 12:
+        return False
+    return content[4:8] == b"ftyp" and content[8:12] in (b"avif", b"avis")
+
+
+def _is_heic(content: bytes) -> bool:
+    if len(content) < 12:
+        return False
+    return content[4:8] == b"ftyp" and content[8:12] in (b"heic", b"heix", b"mif1")
+
+
+def normalize_upload_image(content: bytes, declared_mime: str) -> tuple[bytes, str]:
+    detected_mime = detect_image_mime_type(content)
+    if detected_mime is None:
+        return content, declared_mime
+    if detected_mime in COMPATIBLE_MIME_TYPES:
+        return content, detected_mime
+    try:
+        with Image.open(BytesIO(content)) as img:
+            output = BytesIO()
+            img = img.convert("RGBA") if img.mode in ("RGBA", "LA", "PA") else img.convert("RGB")
+            if img.mode == "RGBA":
+                img.save(output, format="PNG", optimize=True)
+                return output.getvalue(), "image/png"
+            img.save(output, format="PNG", optimize=True)
+            return output.getvalue(), "image/png"
+    except (UnidentifiedImageError, OSError):
+        return content, detected_mime
+
 
 def persist_rendered_asset(
     session: Session,
@@ -73,9 +151,12 @@ def persist_uploaded_asset(
     anonymous_session_id: int | None = None,
     client_id: str | None = None,
 ) -> Asset:
+    declared_mime = normalize_mime_type(mime_type)
+    if declared_mime.startswith("image/") and declared_mime != SVG_MIME_TYPE:
+        content, declared_mime = normalize_upload_image(content, declared_mime)
     asset = create_pending_asset(
         session,
-        mime_type=normalize_mime_type(mime_type),
+        mime_type=declared_mime,
         owner_user_id=user_id,
         owner_anonymous_session_id=anonymous_session_id,
         owner_client_id=client_id,
@@ -114,6 +195,9 @@ def normalize_mime_type(mime_type: str | None) -> str:
 
 
 def resolve_upload_suffix(*, filename: str | None, mime_type: str) -> str:
+    known = MIME_TO_EXTENSION.get(mime_type)
+    if known:
+        return known
     suffix = Path(filename or "").suffix.lower()
     if is_safe_suffix(suffix):
         return suffix
