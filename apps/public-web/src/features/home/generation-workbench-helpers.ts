@@ -3,6 +3,7 @@ import { filterImageModels } from "@/features/home/generation-models";
 import {
   DEFAULT_ASPECT_RATIO,
   DEFAULT_QUALITY,
+  DEFAULT_RESOLUTION,
   MIN_REQUESTED_COUNT,
   type GenerationSourceImage,
   type GenerationState,
@@ -22,6 +23,7 @@ export const INITIAL_FORM: ImageFormState = {
   prompt: "",
   requested_count: MIN_REQUESTED_COUNT,
   aspect_ratio: DEFAULT_ASPECT_RATIO,
+  resolution: DEFAULT_RESOLUTION,
   quality: DEFAULT_QUALITY,
 };
 
@@ -125,6 +127,7 @@ export function getFormFromHistory(history: GenerationHistoryItem | null): Image
     prompt: history.prompt,
     requested_count: history.count,
     aspect_ratio: history.aspectRatio,
+    resolution: history.resolution ?? DEFAULT_RESOLUTION,
     quality: (history.quality as ImageQuality) ?? DEFAULT_QUALITY,
   };
 }

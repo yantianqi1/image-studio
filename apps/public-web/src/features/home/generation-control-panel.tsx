@@ -11,7 +11,7 @@ import {
   type ImageQuality,
   type SourceUploadState,
 } from "@/features/home/generation-workbench.types";
-import { ASPECT_RATIO_OPTIONS } from "@/features/home/generation-aspect-ratio";
+import { ASPECT_RATIO_OPTIONS, type ResolutionOption } from "@/features/home/generation-aspect-ratio";
 import { RequestStatus } from "@/features/home/generation-control-extras";
 import { GenerationPromptImageUpload } from "@/features/home/generation-prompt-image-upload";
 import type { PublicModelSummary } from "@/lib/public-api";
@@ -203,6 +203,9 @@ function AspectRatioPicker({
   form: ImageFormState;
   onFormChange: Dispatch<SetStateAction<ImageFormState>>;
 }>) {
+  const activeRatio = ASPECT_RATIO_OPTIONS.find((o) => o.value === form.aspect_ratio);
+  const resolutions: readonly ResolutionOption[] = activeRatio?.resolutions ?? [];
+
   return (
     <div className="grid gap-2">
       <p className="text-sm font-medium text-gray-900">尺寸</p>
@@ -216,6 +219,7 @@ function AspectRatioPicker({
               onFormChange((current) => ({
                 ...current,
                 aspect_ratio: option.value,
+                resolution: ASPECT_RATIO_OPTIONS.find((o) => o.value === option.value)?.resolutions[0]?.value ?? current.resolution,
               }))
             }
           >
@@ -224,7 +228,26 @@ function AspectRatioPicker({
           </button>
         ))}
       </div>
-
+      {resolutions.length > 0 && (
+        <div className="grid gap-1.5 pt-1">
+          <p className="text-xs font-medium text-gray-500">分辨率</p>
+          <div className="grid grid-cols-4 gap-1.5">
+            {resolutions.map((res) => (
+              <button
+                key={res.value}
+                className={form.resolution === res.value ? `${styles.aspectOption} ${styles.aspectOptionActive}` : styles.aspectOption}
+                type="button"
+                onClick={() =>
+                  onFormChange((current) => ({ ...current, resolution: res.value }))
+                }
+              >
+                <span className="text-xs font-semibold">{res.label}</span>
+                <span className="text-[10px] text-gray-400">{res.pixels}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
