@@ -4,13 +4,17 @@
   min-height: 0;
   overflow: hidden;
   flex-direction: column;
-  border-radius: 1.25rem;
-  background: #0f1f1b;
+  border-radius: 1.5rem;
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
   padding: 0.9rem;
   transition: width 180ms ease, padding 180ms ease;
+  border: 1px solid rgba(255, 255, 255, 0.7);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
-    0 4px 24px rgba(0, 0, 0, 0.2);
+    0 8px 32px rgba(0, 0, 0, 0.06),
+    0 1px 3px rgba(0, 0, 0, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 .desktopSidebar {
@@ -30,10 +34,10 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 0.75rem;
-  background: rgba(255, 255, 255, 0.06);
-  color: #e2e8f0;
+  background: rgba(255, 255, 255, 0.6);
+  color: #374151;
   font-size: 0.75rem;
   font-weight: 700;
   cursor: pointer;
@@ -41,32 +45,32 @@
 }
 
 .sidebarBrand:hover {
-  border-color: rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(0, 0, 0, 0.14);
+  background: rgba(255, 255, 255, 0.8);
 }
 
 /* PLACEHOLDER_PART2 */
 
 .sidebarSearch {
   width: 100%;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 0.75rem;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.5);
   padding: 0.65rem 0.875rem;
   font-size: 0.84rem;
-  color: #e2e8f0;
+  color: #111827;
   outline: none;
   transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
 }
 
 .sidebarSearch::placeholder {
-  color: rgba(255, 255, 255, 0.35);
+  color: #9ca3af;
 }
 
 .sidebarSearch:focus {
-  border-color: rgba(74, 222, 180, 0.4);
-  background: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 0 0 3px rgba(74, 222, 180, 0.08);
+  border-color: rgba(0, 0, 0, 0.18);
+  background: rgba(255, 255, 255, 0.75);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.04);
 }
 
 .sidebarList {
@@ -78,15 +82,15 @@
   align-content: start;
   padding-right: 0.25rem;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+  scrollbar-color: rgba(0, 0, 0, 0.12) transparent;
 }
 
 .sidebarList::-webkit-scrollbar { width: 4px; }
 .sidebarList::-webkit-scrollbar-track { background: transparent; }
-.sidebarList::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 4px; }
+.sidebarList::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.12); border-radius: 4px; }
 
 .sidebarFooter {
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
   padding-top: 0.75rem;
 }
 
@@ -96,18 +100,18 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
-  color: #cbd5e1;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.5);
+  color: #4b5563;
   transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease;
 }
 
 .actionButton:hover,
 .newButton:hover,
 .menuButton:hover {
-  border-color: rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.1);
-  color: #f1f5f9;
+  border-color: rgba(0, 0, 0, 0.14);
+  background: rgba(255, 255, 255, 0.75);
+  color: #111827;
 }
 
 .newButton {
@@ -149,18 +153,18 @@
   width: 2.5rem;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 0.75rem;
-  background: rgba(255, 255, 255, 0.04);
-  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.5);
+  color: #6b7280;
   font-size: 1rem;
   transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
 }
 
 .collapsedIconButton:hover {
-  border-color: rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.08);
-  color: #e2e8f0;
+  border-color: rgba(0, 0, 0, 0.14);
+  background: rgba(255, 255, 255, 0.75);
+  color: #111827;
 }
 
 .collapsedBadge {
@@ -169,9 +173,9 @@
   top: -0.2rem;
   min-width: 1rem;
   border-radius: 9999px;
-  background: #4ade80;
+  background: #10b981;
   padding: 0.1rem 0.25rem;
-  color: #0f1f1b;
+  color: #ffffff;
   font-size: 0.6rem;
   font-weight: 800;
 }
@@ -179,24 +183,24 @@
 .historyItem {
   overflow: hidden;
   max-width: 100%;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 0.875rem;
-  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.4);
   transition: border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease;
 }
 
 .historyItem:hover {
-  border-color: rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.06);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  border-color: rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.65);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
 }
 
 .historyItemActive {
-  border-color: rgba(74, 222, 180, 0.3);
-  background: rgba(74, 222, 180, 0.06);
+  border-color: rgba(17, 24, 39, 0.2);
+  background: rgba(255, 255, 255, 0.7);
   box-shadow:
-    0 0 0 1px rgba(74, 222, 180, 0.12),
-    0 4px 20px rgba(74, 222, 180, 0.08);
+    0 0 0 1px rgba(17, 24, 39, 0.06),
+    0 4px 20px rgba(0, 0, 0, 0.06);
 }
 
 .historyItemBody {
@@ -232,7 +236,7 @@
   font-size: 0.82rem;
   font-weight: 650;
   letter-spacing: -0.01em;
-  color: #f1f5f9;
+  color: #111827;
 }
 
 .historyMeta {
@@ -242,12 +246,12 @@
   align-items: center;
   gap: 0.3rem 0.4rem;
   font-size: 0.7rem;
-  color: rgba(255, 255, 255, 0.45);
+  color: #6b7280;
 }
 
 .historyTime {
   font-size: 0.65rem;
-  color: rgba(255, 255, 255, 0.3);
+  color: #9ca3af;
 }
 
 .historyActions {
@@ -298,7 +302,7 @@
 }
 
 .historyBadgeIdle {
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(0, 0, 0, 0.15);
 }
 
 @keyframes pulse-dot {
@@ -311,9 +315,9 @@
   display: grid;
   place-items: center;
   min-height: 10rem;
-  border: 1px dashed rgba(255, 255, 255, 0.1);
-  border-radius: 0.875rem;
-  background: rgba(255, 255, 255, 0.02);
+  border: 1px dashed rgba(0, 0, 0, 0.1);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.3);
   padding: 1rem;
   text-align: center;
 }
@@ -325,25 +329,25 @@
   align-items: center;
   justify-content: center;
   border-radius: 0.75rem;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  color: #9ca3af;
 }
 
 .titleInput {
   width: 100%;
-  border: 1px solid rgba(74, 222, 180, 0.3);
+  border: 1px solid rgba(0, 0, 0, 0.12);
   border-radius: 0.625rem;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.7);
   padding: 0.45rem 0.65rem;
   font-size: 0.82rem;
-  color: #f1f5f9;
+  color: #111827;
   outline: none;
 }
 
 .titleInput:focus {
-  border-color: rgba(74, 222, 180, 0.5);
-  box-shadow: 0 0 0 3px rgba(74, 222, 180, 0.1);
+  border-color: rgba(0, 0, 0, 0.2);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.05);
 }
 
 .previewText {
@@ -352,15 +356,15 @@
   width: 100%;
   min-width: 0;
   max-width: 100%;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.05);
   border-radius: 0.5rem;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.35);
   padding: 0.35rem 0.5rem;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.72rem;
   line-height: 1.4;
-  color: rgba(255, 255, 255, 0.55);
+  color: #6b7280;
 }
 
 @media (min-width: 1024px) {
