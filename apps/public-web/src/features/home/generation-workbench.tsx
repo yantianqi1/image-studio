@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { GenerationControlPanel } from "@/features/home/generation-control-panel";
 import { GenerationHistorySidebar } from "@/features/home/generation-history-sidebar";
@@ -71,8 +71,6 @@ export function GenerationWorkbench() {
     setState(IDLE_STATE);
   }, []);
 
-  const [, startTransition] = useTransition();
-
   useGenerationReusePrompt({
     activeHistory,
     createDraft: history.createDraft,
@@ -81,13 +79,11 @@ export function GenerationWorkbench() {
   });
 
   useEffect(() => {
-    startTransition(() => {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- sync active history into the editable draft
-      setForm(getFormFromHistory(history.activeHistory));
-      setReferenceImages(getReferenceImagesFromHistory(history.activeHistory));
-      setUploadState(IDLE_UPLOAD);
-      setState(getStateFromHistory(history.activeHistory));
-    });
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync active history into the editable draft
+    setForm(getFormFromHistory(history.activeHistory));
+    setReferenceImages(getReferenceImagesFromHistory(history.activeHistory));
+    setUploadState(IDLE_UPLOAD);
+    setState(getStateFromHistory(history.activeHistory));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only reset form when user switches history, not on polling updates
   }, [history.activeHistoryId]);
 
