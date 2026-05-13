@@ -58,3 +58,8 @@ test("product header uses Image Studio as the public brand", () => {
   assert.match(appShellSource, /brandLabel = "Image Studio"/);
   assert.doesNotMatch(generationWorkbenchSource, /brandLabel=\{getSiteTitle/);
 });
+
+test("app shell avoids unavailable React ViewTransition runtime export", () => {
+  assert.doesNotMatch(appShellSource, /import \{ ViewTransition \} from "react"/);
+  assert.doesNotMatch(appShellSource, /<ViewTransition/);
+});
