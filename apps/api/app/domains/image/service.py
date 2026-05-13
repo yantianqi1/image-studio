@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from apps.api.app.core.errors import AppError
 from apps.api.app.domains.auth.ownership import OwnerContext
-from apps.api.app.domains.image.assets import persist_rendered_asset
+from apps.api.app.domains.image.assets import ensure_thumbnail_exists, persist_rendered_asset
 from apps.api.app.domains.image.gallery import normalize_asset_visibility, set_asset_visibility
 from apps.api.app.domains.image.job_recovery import IMAGE_JOB_RETRY_ERROR_CODE, recover_stale_running_jobs
 from apps.api.app.domains.image.models import ImageJob
@@ -201,6 +201,7 @@ def process_render_results(session: Session, *, job: ImageJob) -> None:
             client_id=job.client_access_id,
             storage_subdir=job.storage_subdir,
         )
+        ensure_thumbnail_exists(asset, storage)
         set_asset_visibility(asset, job.visibility)
         add_job_result(session, job=job, result_index=result_index, asset_id=asset.id, rendered=rendered)
 

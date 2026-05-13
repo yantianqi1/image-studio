@@ -6,7 +6,13 @@ from apps.api.app.core.response import api_ok
 from apps.api.app.domains.auth.ownership import ensure_anonymous_owner, resolve_request_owner
 from apps.api.app.domains.auth.service import require_admin
 from apps.api.app.domains.image.admin_service import list_admin_jobs_with_results
-from apps.api.app.domains.image.assets import persist_uploaded_asset, resolve_asset_content, resolve_thumbnail_content
+from apps.api.app.domains.image.assets import (
+    ensure_thumbnail_exists,
+    persist_uploaded_asset,
+    resolve_asset_content,
+    resolve_asset_public_urls,
+    resolve_thumbnail_content,
+)
 from apps.api.app.domains.image.gallery import (
     get_asset_for_read,
     list_gallery_items,
@@ -79,7 +85,11 @@ def get_image_gallery(
     session: Session = Depends(get_db_session),
 ):
     owner = resolve_gallery_owner(request=request, response=response, session=session, scope=scope)
-    return api_ok([gallery_item_payload(result, job=job, asset=asset) for result, job, asset in list_gallery_items(session, owner=owner, scope=scope)])
+    storage = build_asset_storage()
+    items = list_gallery_items(session, owner=owner, scope=scope)
+    for _result, _job, asset in items:
+        ensure_thumbnail_exists(asset, storage)
+    return api_ok([gallery_item_payload(result, job=job, asset=asset, storage=storage) for result, job, asset in items])
 
 
 @public_router.get("/jobs")
@@ -100,7 +110,10 @@ def get_image_job(job_id: int, request: Request, session: Session = Depends(get_
 def get_image_results(job_id: int, request: Request, session: Session = Depends(get_db_session)):
     results = list_job_results_for_owner(session, job_id, resolve_request_owner(request, session))
     assets_by_id = load_assets_by_id(session, [item.asset_id for item in results])
-    return api_ok([result_payload(item, asset=assets_by_id.get(item.asset_id)) for item in results])
+    storage = build_asset_storage()
+    for asset in assets_by_id.values():
+        ensure_thumbnail_exists(asset, storage)
+    return api_ok([result_payload(item, asset=assets_by_id.get(item.asset_id), storage=storage) for item in results])
 
 
 @public_router.delete("/jobs/{job_id}")
@@ -137,7 +150,7 @@ def update_image_asset_visibility(
 ):
     asset = update_owned_asset_visibility(session, asset_id=asset_id, owner=resolve_request_owner(request, session), visibility=payload.visibility)
     session.commit()
-    return api_ok(asset_payload(asset))
+    return api_ok(asset_payload(asset, storage=build_asset_storage()))
 
 
 @public_router.post("/uploads", status_code=status.HTTP_201_CREATED)
@@ -232,7 +245,7 @@ def job_payload(job) -> dict[str, object]:
     }
 
 
-def result_payload(result, *, asset=None) -> dict[str, object]:
+def result_payload(result, *, asset=None, storage=None) -> dict[str, object]:
     payload = {
         "id": result.id,
         "job_id": result.job_id,
@@ -243,7 +256,7 @@ def result_payload(result, *, asset=None) -> dict[str, object]:
         "provider_request_id": result.provider_request_id,
     }
     if asset is not None:
-        payload.update(asset_payload(asset))
+        payload.update(asset_payload(asset, storage=storage))
     return payload
 
 
@@ -263,19 +276,24 @@ def upload_payload(asset) -> dict[str, object]:
     }
 
 
-def asset_payload(asset) -> dict[str, object]:
+def asset_payload(asset, *, storage=None) -> dict[str, object]:
+    if storage is not None:
+        asset_url, thumbnail_url = resolve_asset_public_urls(asset, storage)
+    else:
+        asset_url = f"/api/public/image/assets/{asset.id}"
+        thumbnail_url = f"/api/public/image/assets/{asset.id}/thumbnail"
     return {
         "asset_id": asset.id,
-        "asset_url": f"/api/public/image/assets/{asset.id}",
-        "thumbnail_url": f"/api/public/image/assets/{asset.id}/thumbnail",
+        "asset_url": asset_url,
+        "thumbnail_url": thumbnail_url,
         "visibility": asset.visibility,
         "published_at": asset.published_at.isoformat() if asset.published_at else None,
         "created_at": asset.created_at.isoformat(),
     }
 
 
-def gallery_item_payload(result, *, job, asset) -> dict[str, object]:
-    payload = asset_payload(asset)
+def gallery_item_payload(result, *, job, asset, storage=None) -> dict[str, object]:
+    payload = asset_payload(asset, storage=storage)
     payload.update({
         "job_id": job.id,
         "result_index": result.result_index,

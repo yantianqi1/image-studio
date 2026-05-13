@@ -27,6 +27,9 @@ class LocalAssetStorage:
     def delete(self, key: str) -> None:
         self.resolve_path(key).unlink()
 
+    def public_url(self, key: str) -> str | None:
+        return None
+
     def resolve_path(self, key: str) -> Path:
         validate_storage_key(key)
         return self.root / key

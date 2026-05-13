@@ -18,6 +18,11 @@ const adminRedirects = [
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1", "localhost"],
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "storage.googleapis.com" },
+    ],
+  },
   transpilePackages: ["@commercial-studio/ui"],
   async redirects() {
     return adminRedirects.map((item) => ({

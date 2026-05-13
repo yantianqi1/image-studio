@@ -9,6 +9,11 @@ const nextConfig: NextConfig = {
   experimental: {
     proxyClientMaxBodySize: API_PROXY_BODY_LIMIT,
   },
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "storage.googleapis.com" },
+    ],
+  },
   transpilePackages: ["@commercial-studio/ui"],
   async rewrites() {
     return [

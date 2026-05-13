@@ -146,6 +146,27 @@ def resolve_thumbnail_content(asset: Asset, storage: AssetStorage) -> tuple[byte
     return storage.read_bytes(target_key), RASTER_THUMBNAIL_MIME_TYPE
 
 
+def ensure_thumbnail_exists(asset: Asset, storage: AssetStorage) -> None:
+    if asset.mime_type == SVG_MIME_TYPE or not asset.mime_type.startswith("image/"):
+        return
+    target_key = thumbnail_asset_key(asset.storage_path)
+    if not storage.exists(target_key):
+        source_content = storage.read_bytes(asset.storage_path)
+        storage.write_bytes(target_key, build_thumbnail_bytes(source_content), RASTER_THUMBNAIL_MIME_TYPE)
+
+
+def resolve_asset_public_urls(asset: Asset, storage: AssetStorage) -> tuple[str, str]:
+    direct_url = storage.public_url(asset.storage_path)
+    if direct_url is None:
+        asset_url = f"/api/public/image/assets/{asset.id}"
+        thumb_url = f"/api/public/image/assets/{asset.id}/thumbnail"
+    else:
+        asset_url = direct_url
+        thumb_key = thumbnail_asset_key(asset.storage_path)
+        thumb_url = storage.public_url(thumb_key) or f"/api/public/image/assets/{asset.id}/thumbnail"
+    return asset_url, thumb_url
+
+
 def resolve_existing_asset_path(storage_path: str) -> Path:
     source_path = Path(storage_path)
     if not source_path.is_file():

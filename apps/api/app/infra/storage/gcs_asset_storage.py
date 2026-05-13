@@ -32,6 +32,10 @@ class GcsAssetStorage:
     def blob(self, key: str):
         return self.client.bucket(self.bucket_name).blob(self.object_key(key))
 
+    def public_url(self, key: str) -> str | None:
+        object_name = self.object_key(key)
+        return f"https://storage.googleapis.com/{self.bucket_name}/{object_name}"
+
     def object_key(self, key: str) -> str:
         validate_storage_key(key)
         return f"{self.prefix}/{key}" if self.prefix else key

@@ -18,3 +18,6 @@ class AssetStorage(Protocol):
 
     def delete(self, key: str) -> None:
         raise NotImplementedError
+
+    def public_url(self, key: str) -> str | None:
+        raise NotImplementedError
