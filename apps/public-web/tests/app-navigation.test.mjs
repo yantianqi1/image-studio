@@ -5,8 +5,8 @@ import vm from "node:vm";
 import ts from "typescript";
 
 const appShellSource = readFileSync(new URL("../src/features/shell/app-shell.tsx", import.meta.url), "utf8");
-const generationWorkbenchSource = readFileSync(
-  new URL("../src/features/home/generation-workbench.tsx", import.meta.url),
+const studioPageSource = readFileSync(
+  new URL("../src/features/studio/studio-page.tsx", import.meta.url),
   "utf8",
 );
 
@@ -24,19 +24,19 @@ function loadAppNavigation() {
   return sandbox.module.exports;
 }
 
-test("app navigation features 图库 before 生图", () => {
+test("app navigation features 图库 before 创作台", () => {
   const { APP_MOBILE_NAV_ITEMS, APP_NAV_ITEMS } = loadAppNavigation();
 
   assert.equal(APP_NAV_ITEMS.length, 4);
   assert.equal(APP_NAV_ITEMS[0].label, "图库");
   assert.equal(APP_NAV_ITEMS[0].href, "/");
-  assert.equal(APP_NAV_ITEMS[1].label, "生成");
+  assert.equal(APP_NAV_ITEMS[1].label, "创作台");
   assert.equal(APP_NAV_ITEMS[1].href, "/generate");
   assert.equal(APP_NAV_ITEMS[2].label, "漫画");
   assert.equal(APP_NAV_ITEMS[3].label, "应用");
   assert.equal(
     APP_MOBILE_NAV_ITEMS.map((item) => item.label).join(","),
-    "图库,生成,漫画,我的",
+    "图库,创作台,漫画,我的",
   );
   assert.doesNotMatch(
     APP_MOBILE_NAV_ITEMS.map((item) => item.label).join(","),
@@ -56,7 +56,7 @@ test("app shell renders a mobile module switch below the header row", () => {
 
 test("product header uses Image Studio as the public brand", () => {
   assert.match(appShellSource, /brandLabel = "Image Studio"/);
-  assert.doesNotMatch(generationWorkbenchSource, /brandLabel=\{getSiteTitle/);
+  assert.doesNotMatch(studioPageSource, /brandLabel=\{getSiteTitle/);
 });
 
 test("app shell avoids unavailable React ViewTransition runtime export", () => {

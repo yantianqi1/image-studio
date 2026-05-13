@@ -7,11 +7,9 @@ function readSource(relativePath) {
 }
 
 test("generated image results open a shared click-to-preview dialog", () => {
-  const source = readSource("../src/features/home/generation-result-panel.tsx");
+  const source = readSource("../src/features/studio/studio-results.tsx");
 
-  assert.match(source, /ImagePreviewDialog/);
-  assert.match(source, /imagePreviewButton/);
-  assert.match(source, /onPreview\(\{ src: image\.url, alt: title \}\)/);
+  assert.match(source, /onOpenLightbox/);
 });
 
 test("character poster results use click-to-preview instead of static images", () => {

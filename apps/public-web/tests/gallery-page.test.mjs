@@ -54,7 +54,7 @@ test("site home opens the public image stream", () => {
   assert.match(homePageSource, /GalleryPage/);
   assert.match(homePageSource, /initialScope="public"/);
   assert.match(homePageSource, /activeHref="\/"/);
-  assert.match(generatePageSource, /GenerationWorkbench/);
+  assert.match(generatePageSource, /StudioPage/);
 });
 
 test("gallery page loads mine and public image scopes", () => {
