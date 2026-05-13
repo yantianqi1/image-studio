@@ -93,8 +93,6 @@ def get_image_gallery(
     owner = resolve_gallery_owner(request=request, response=response, session=session, scope=scope)
     storage = build_asset_storage()
     items = list_gallery_items(session, owner=owner, scope=scope)
-    for _result, _job, asset in items:
-        ensure_thumbnail_exists(asset, storage)
     return api_ok([gallery_item_payload(result, job=job, asset=asset, storage=storage) for result, job, asset in items])
 
 
@@ -117,8 +115,6 @@ def get_image_results(job_id: int, request: Request, session: Session = Depends(
     results = list_job_results_for_owner(session, job_id, resolve_request_owner(request, session))
     assets_by_id = load_assets_by_id(session, [item.asset_id for item in results])
     storage = build_asset_storage()
-    for asset in assets_by_id.values():
-        ensure_thumbnail_exists(asset, storage)
     return api_ok([result_payload(item, asset=assets_by_id.get(item.asset_id), storage=storage) for item in results])
 
 

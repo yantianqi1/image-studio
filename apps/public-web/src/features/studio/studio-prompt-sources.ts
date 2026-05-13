@@ -166,7 +166,7 @@ function normalizeAwesomePromptSection(
   section: string,
   category: string,
   language: PromptMarketLanguage,
-  index: number,
+  _index: number,
 ): AwesomePromptDraft | null {
   const heading = section.match(MARKDOWN_CASE_HEADING_PATTERN);
   const image = section.match(MARKDOWN_IMAGE_PATTERN);
