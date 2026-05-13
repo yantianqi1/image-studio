@@ -1,6 +1,6 @@
-export type { AspectRatioOption, ResolutionOption } from "@/features/home/generation-aspect-ratio";
-import { ASPECT_RATIO_OPTIONS as BASE_ASPECT_RATIO_OPTIONS } from "@/features/home/generation-aspect-ratio";
-import type { AspectRatioOption } from "@/features/home/generation-aspect-ratio";
+export type { AspectRatioOption, ResolutionOption } from "@/features/studio/studio-aspect-ratio";
+import { ASPECT_RATIO_OPTIONS as BASE_ASPECT_RATIO_OPTIONS } from "@/features/studio/studio-aspect-ratio";
+import type { AspectRatioOption } from "@/features/studio/studio-aspect-ratio";
 
 const AUTO_OPTION: AspectRatioOption = {
   value: "auto",

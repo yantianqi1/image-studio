@@ -5,8 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   imageJobResultsToHistoryImages,
   waitForImageJobResults,
-} from "@/features/home/generation-job-polling";
-import { resolveImageModel } from "@/features/home/generation-models";
+} from "@/features/studio/studio-job-polling";
+import { resolveImageModel } from "@/features/studio/studio-models";
 import { AppShell } from "@/features/shell/app-shell";
 import { StudioComposer } from "@/features/studio/studio-composer";
 import { StudioPromptMarket } from "@/features/studio/studio-prompt-market";
