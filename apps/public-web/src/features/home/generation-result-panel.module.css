@@ -94,6 +94,7 @@
 .canvasText {
   margin-top: 0.55rem;
   max-width: 34rem;
+  overflow-wrap: anywhere;
   color: #6b7280;
   font-size: 0.92rem;
   line-height: 1.7;

@@ -20,7 +20,10 @@
   scrollbar-width: thin;
 }
 
-.controlColumn { overflow-y: auto; }
+.controlColumn {
+  overflow-y: auto;
+  min-width: 0;
+}
 .resultColumn { overflow: hidden; }
 
 .resultPanel {
