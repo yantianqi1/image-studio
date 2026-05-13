@@ -34,7 +34,7 @@ import {
 import { useStudioConversations } from "@/features/studio/use-studio-conversations";
 import { publicApi, type ImageAssetVisibility } from "@/lib/public-api";
 import { useApiResource } from "@/lib/use-api-resource";
-import styles from "./studio-page.module.css";
+import { cn } from "@/lib/cn";
 
 const SIDEBAR_COLLAPSED_KEY = "commercial_studio_sidebar_collapsed";
 
@@ -251,14 +251,16 @@ export function StudioPage() {
     // Lightbox implementation deferred to a separate component
   }, []);
 
-  // --- Layout class ---
-  const layoutClass = sidebarCollapsed
-    ? `${styles.studioLayout} ${styles.studioLayoutCollapsed}`
-    : styles.studioLayout;
-
   return (
     <AppShell activeHref="/studio" workspaceMode>
-      <div className={layoutClass}>
+      <div
+        className={cn(
+          "grid h-full overflow-hidden transition-[grid-template-columns] duration-200 ease-in-out",
+          sidebarCollapsed
+            ? "grid-cols-[56px_minmax(0,1fr)] max-lg:grid-cols-1"
+            : "grid-cols-[240px_minmax(0,1fr)] max-lg:grid-cols-1",
+        )}
+      >
         <StudioSidebar
           conversations={conversations.conversations}
           activeId={conversations.activeId}
@@ -269,7 +271,7 @@ export function StudioPage() {
           onClearAll={conversations.clearAll}
           onToggleCollapse={handleToggleSidebar}
         />
-        <main className={styles.mainArea}>
+        <main className="flex h-full min-h-0 flex-col overflow-hidden">
           <StudioResults
             conversation={conversations.activeConversation}
             progressByTurnKey={progressMap}
