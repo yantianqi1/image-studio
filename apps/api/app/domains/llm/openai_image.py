@@ -19,7 +19,7 @@ from apps.api.app.infra.storage.factory import build_asset_storage
 
 OPENAI_GENERATION_ENDPOINT = "/images/generations"
 OPENAI_EDIT_ENDPOINT = "/images/edits"
-OPENAI_IMAGE_TIMEOUT_SECONDS = 60.0
+OPENAI_IMAGE_TIMEOUT_SECONDS = 300.0
 OPENAI_IMAGE_DOWNLOAD_TIMEOUT_SECONDS = 60.0
 
 
