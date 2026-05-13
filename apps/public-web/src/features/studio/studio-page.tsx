@@ -10,7 +10,7 @@ import { resolveImageModel } from "@/features/studio/studio-models";
 import { AppShell } from "@/features/shell/app-shell";
 import { StudioComposer } from "@/features/studio/studio-composer";
 import { StudioPromptMarket } from "@/features/studio/studio-prompt-market";
-import type { StudioPreset } from "@/features/studio/studio-presets";
+import type { BananaPrompt } from "@/features/studio/studio-prompt-sources";
 import { StudioResults } from "@/features/studio/studio-results";
 import { StudioSidebar } from "@/features/studio/studio-sidebar";
 import {
@@ -234,12 +234,22 @@ export function StudioPage() {
     }
   }, [conversations]);
 
-  const handleApplyPreset = useCallback((preset: StudioPreset) => {
-    setPrompt(preset.prompt);
-    setAspectRatio(preset.aspectRatio);
-    setResolution(preset.resolution);
-    setQuality(preset.quality);
-    setCount(preset.count);
+  const handleApplyPrompt = useCallback((prompt: BananaPrompt) => {
+    setPrompt(prompt.prompt);
+    if (prompt.mode === "edit") {
+      setMode("edit");
+    } else {
+      setMode("generate");
+    }
+    // If the prompt has reference images, fetch them and set as reference images
+    if (prompt.referenceImageUrls.length > 0) {
+      const refs: StoredReferenceImage[] = prompt.referenceImageUrls.map((url, i) => ({
+        name: `ref-${i + 1}`,
+        assetUrl: url,
+        thumbnailUrl: url,
+      }));
+      setReferenceImages(refs);
+    }
     setPromptMarketOpen(false);
   }, []);
 
@@ -307,8 +317,8 @@ export function StudioPage() {
       </div>
       <StudioPromptMarket
         open={promptMarketOpen}
-        onClose={() => setPromptMarketOpen(false)}
-        onApply={handleApplyPreset}
+        onOpenChange={setPromptMarketOpen}
+        onApplyPrompt={handleApplyPrompt}
       />
     </AppShell>
   );
