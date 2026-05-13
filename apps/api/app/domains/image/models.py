@@ -47,6 +47,8 @@ class ImageJob(Base):
     client_access_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     client_provider_config: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     storage_subdir: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    size: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    quality: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
     visibility: Mapped[str] = mapped_column(String(16), default="private", nullable=False)
     status: Mapped[str] = mapped_column(String(32), default="queued", nullable=False)
     requested_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)

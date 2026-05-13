@@ -1,7 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState, useTransition } from "react";
 
-import { buildAspectRatioPrompt } from "@/features/home/generation-aspect-ratio";
 import { GenerationControlPanel } from "@/features/home/generation-control-panel";
 import { GenerationHistorySidebar } from "@/features/home/generation-history-sidebar";
 import {
@@ -179,6 +178,7 @@ export function GenerationWorkbench() {
       modelName: submissionModel.model.display_name,
       count: form.requested_count,
       aspectRatio: form.aspect_ratio,
+      quality: form.quality,
       visibility: "private",
       status: "pending",
       images: [],
@@ -190,10 +190,12 @@ export function GenerationWorkbench() {
     try {
       const referenceAssetIds = referenceImages.map((image) => image.assetId);
       const result = await publicApi.generateImage({
-        prompt: buildAspectRatioPrompt(form.prompt, form.aspect_ratio),
+        prompt: form.prompt.trim(),
         model_code: resolvedModelCode,
         requested_count: form.requested_count,
         mode: "generate",
+        size: form.aspect_ratio,
+        quality: form.quality,
         reference_asset_ids: referenceAssetIds,
         visibility: "private",
       });

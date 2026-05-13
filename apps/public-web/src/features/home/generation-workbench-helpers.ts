@@ -2,10 +2,12 @@ import type { GenerationHistoryItem } from "@/features/home/generation-history.t
 import { filterImageModels } from "@/features/home/generation-models";
 import {
   DEFAULT_ASPECT_RATIO,
+  DEFAULT_QUALITY,
   MIN_REQUESTED_COUNT,
   type GenerationSourceImage,
   type GenerationState,
   type ImageFormState,
+  type ImageQuality,
 } from "@/features/home/generation-workbench.types";
 import { formatCurrency } from "@/lib/formatters";
 import type { PublicModelSummary, WalletSummary } from "@/lib/public-api";
@@ -20,6 +22,7 @@ export const INITIAL_FORM: ImageFormState = {
   prompt: "",
   requested_count: MIN_REQUESTED_COUNT,
   aspect_ratio: DEFAULT_ASPECT_RATIO,
+  quality: DEFAULT_QUALITY,
 };
 
 export type SubmissionModelResult =
@@ -122,6 +125,7 @@ export function getFormFromHistory(history: GenerationHistoryItem | null): Image
     prompt: history.prompt,
     requested_count: history.count,
     aspect_ratio: history.aspectRatio,
+    quality: (history.quality as ImageQuality) ?? DEFAULT_QUALITY,
   };
 }
 

@@ -8,6 +8,7 @@ import {
   type GenerationSourceImage,
   type GenerationState,
   type ImageFormState,
+  type ImageQuality,
   type SourceUploadState,
 } from "@/features/home/generation-workbench.types";
 import { ASPECT_RATIO_OPTIONS } from "@/features/home/generation-aspect-ratio";
@@ -79,6 +80,7 @@ export const GenerationControlPanel = memo(function GenerationControlPanel({
           onFormChange={onFormChange}
         />
         <AspectRatioPicker form={form} onFormChange={onFormChange} />
+        <QualityPicker form={form} onFormChange={onFormChange} />
         <QuantityControl form={form} onFormChange={onFormChange} />
         <RequestStatus modelsState={modelsState} state={state} />
       </form>
@@ -204,7 +206,7 @@ function AspectRatioPicker({
   return (
     <div className="grid gap-2">
       <p className="text-sm font-medium text-gray-900">尺寸</p>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5 lg:grid-cols-2 xl:grid-cols-5">
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4">
         {ASPECT_RATIO_OPTIONS.map((option) => (
           <button
             key={option.value}
@@ -223,6 +225,43 @@ function AspectRatioPicker({
         ))}
       </div>
 
+    </div>
+  );
+}
+
+const QUALITY_OPTIONS: readonly { value: ImageQuality; label: string }[] = [
+  { value: "low", label: "低" },
+  { value: "medium", label: "中" },
+  { value: "high", label: "高" },
+];
+
+function QualityPicker({
+  form,
+  onFormChange,
+}: Readonly<{
+  form: ImageFormState;
+  onFormChange: Dispatch<SetStateAction<ImageFormState>>;
+}>) {
+  return (
+    <div className="grid gap-2">
+      <p className="text-sm font-medium text-gray-900">画质</p>
+      <div className="grid grid-cols-3 gap-2">
+        {QUALITY_OPTIONS.map((option) => (
+          <button
+            key={option.value}
+            className={form.quality === option.value ? `${styles.aspectOption} ${styles.aspectOptionActive}` : styles.aspectOption}
+            type="button"
+            onClick={() =>
+              onFormChange((current) => ({
+                ...current,
+                quality: option.value,
+              }))
+            }
+          >
+            <span className="font-semibold">{option.label}</span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

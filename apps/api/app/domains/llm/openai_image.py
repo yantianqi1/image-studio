@@ -21,8 +21,6 @@ OPENAI_GENERATION_ENDPOINT = "/images/generations"
 OPENAI_EDIT_ENDPOINT = "/images/edits"
 OPENAI_IMAGE_TIMEOUT_SECONDS = 60.0
 OPENAI_IMAGE_DOWNLOAD_TIMEOUT_SECONDS = 60.0
-OPENAI_IMAGE_OUTPUT_FORMAT = "png"
-OPENAI_IMAGE_SIZE = "1024x1024"
 
 
 def render_openai_compatible_image(
@@ -33,6 +31,8 @@ def render_openai_compatible_image(
     provider_model: str,
     source_asset_id: int | None = None,
     reference_asset_ids: tuple[int, ...] = (),
+    size: str | None = None,
+    quality: str | None = None,
 ) -> RenderedImage:
     if reference_asset_ids:
         return render_openai_compatible_reference_edit(
@@ -41,6 +41,8 @@ def render_openai_compatible_image(
             prompt=prompt,
             provider_model=provider_model,
             reference_asset_ids=reference_asset_ids,
+            size=size,
+            quality=quality,
         )
     if source_asset_id is not None:
         return render_openai_compatible_edit(
@@ -49,11 +51,15 @@ def render_openai_compatible_image(
             prompt=prompt,
             provider_model=provider_model,
             source_asset_id=source_asset_id,
+            size=size,
+            quality=quality,
         )
     return render_openai_compatible_generation(
         provider=provider,
         prompt=prompt,
         provider_model=provider_model,
+        size=size,
+        quality=quality,
     )
 
 
@@ -62,11 +68,13 @@ def render_openai_compatible_generation(
     provider: Provider,
     prompt: str,
     provider_model: str,
+    size: str | None = None,
+    quality: str | None = None,
 ) -> RenderedImage:
     response = httpx.post(
         build_provider_url(provider.base_url, OPENAI_GENERATION_ENDPOINT),
         headers=build_auth_headers(provider),
-        json=build_generation_payload(prompt=prompt, provider_model=provider_model),
+        json=build_generation_payload(prompt=prompt, provider_model=provider_model, size=size, quality=quality),
         timeout=OPENAI_IMAGE_TIMEOUT_SECONDS,
     )
     return parse_provider_image_response(response=response, provider=provider, prompt=prompt)
@@ -79,6 +87,8 @@ def render_openai_compatible_reference_edit(
     prompt: str,
     provider_model: str,
     reference_asset_ids: tuple[int, ...],
+    size: str | None = None,
+    quality: str | None = None,
 ) -> RenderedImage:
     storage = build_asset_storage()
     assets = [resolve_source_asset(session, source_asset_id=asset_id, storage=storage) for asset_id in reference_asset_ids]
@@ -87,7 +97,7 @@ def render_openai_compatible_reference_edit(
         response = httpx.post(
             build_provider_url(provider.base_url, OPENAI_EDIT_ENDPOINT),
             headers={"Authorization": f"Bearer {read_provider_api_key(provider)}"},
-            data=build_edit_payload(prompt=prompt, provider_model=provider_model),
+            data=build_edit_payload(prompt=prompt, provider_model=provider_model, size=size, quality=quality),
             files=image_files,
             timeout=OPENAI_IMAGE_TIMEOUT_SECONDS,
         )
@@ -101,6 +111,8 @@ def render_openai_compatible_edit(
     prompt: str,
     provider_model: str,
     source_asset_id: int,
+    size: str | None = None,
+    quality: str | None = None,
 ) -> RenderedImage:
     storage = build_asset_storage()
     asset = resolve_source_asset(session, source_asset_id=source_asset_id, storage=storage)
@@ -109,24 +121,27 @@ def render_openai_compatible_edit(
         response = httpx.post(
             build_provider_url(provider.base_url, OPENAI_EDIT_ENDPOINT),
             headers={"Authorization": f"Bearer {read_provider_api_key(provider)}"},
-            data=build_edit_payload(prompt=prompt, provider_model=provider_model),
+            data=build_edit_payload(prompt=prompt, provider_model=provider_model, size=size, quality=quality),
             files={"image": image_file},
             timeout=OPENAI_IMAGE_TIMEOUT_SECONDS,
         )
     return parse_provider_image_response(response=response, provider=provider, prompt=prompt)
 
 
-def build_generation_payload(*, prompt: str, provider_model: str) -> dict[str, str]:
-    return {
+def build_generation_payload(*, prompt: str, provider_model: str, size: str | None = None, quality: str | None = None) -> dict[str, str]:
+    payload: dict[str, str] = {
         "model": provider_model,
         "prompt": prompt,
-        "size": OPENAI_IMAGE_SIZE,
-        "output_format": OPENAI_IMAGE_OUTPUT_FORMAT,
     }
+    if size:
+        payload["size"] = size
+    if quality:
+        payload["quality"] = quality
+    return payload
 
 
-def build_edit_payload(*, prompt: str, provider_model: str) -> dict[str, str]:
-    return build_generation_payload(prompt=prompt, provider_model=provider_model)
+def build_edit_payload(*, prompt: str, provider_model: str, size: str | None = None, quality: str | None = None) -> dict[str, str]:
+    return build_generation_payload(prompt=prompt, provider_model=provider_model, size=size, quality=quality)
 
 
 def parse_provider_image_response(*, response: httpx.Response | object, provider: Provider, prompt: str) -> RenderedImage:

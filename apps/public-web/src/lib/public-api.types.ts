@@ -19,6 +19,8 @@ export type ImageGenerationRequest = Readonly<{
   model_code: string;
   requested_count: number;
   mode?: "generate" | "edit";
+  size?: string;
+  quality?: string;
   source_asset_id?: number;
   reference_asset_ids?: readonly number[];
   visibility?: ImageAssetVisibility;

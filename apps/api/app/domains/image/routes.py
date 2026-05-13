@@ -64,6 +64,8 @@ def create_image_job(
         client_access_id=client_config.client_id if owner.user_id is None and client_config else None,
         client_provider_config=client_config if owner.user_id is None else None,
         visibility=payload.visibility,
+        size=payload.size,
+        quality=payload.quality,
     )
     if should_consume_public_quota(owner=owner, has_client_provider=client_config is not None):
         consume_public_quota(

@@ -64,6 +64,8 @@ def create_job(
     client_provider_config: ClientProviderConfig | None = None,
     storage_subdir: str | None = None,
     visibility: str = "private",
+    size: str | None = None,
+    quality: str | None = None,
 ) -> ImageJob:
     target = resolve_model_execution_target(session, model_code=model_code)
     source_asset = resolve_source_asset(session, mode=mode, source_asset_id=source_asset_id, owner=owner)
@@ -89,6 +91,8 @@ def create_job(
         client_provider_config=serialize_client_provider_config(config=client_provider_config, provider_type=target.provider.type),
         storage_subdir=storage_subdir,
         visibility=visibility,
+        size=size,
+        quality=quality,
         charge_cents=charge_cents,
         reservation_id=build_reservation(session, owner=owner, charge_cents=charge_cents),
     )
@@ -113,6 +117,8 @@ def build_image_job(
     client_provider_config: dict[str, str] | None,
     storage_subdir: str | None,
     visibility: str,
+    size: str | None,
+    quality: str | None,
     charge_cents: int,
     reservation_id: int | None,
 ) -> ImageJob:
@@ -131,6 +137,8 @@ def build_image_job(
         visibility=normalize_asset_visibility(visibility),
         requested_count=requested_count,
         mode=mode,
+        size=size,
+        quality=quality,
         charge_cents=charge_cents,
         reservation_id=reservation_id,
         max_attempts=IMAGE_JOB_MAX_ATTEMPTS,
@@ -230,6 +238,8 @@ def render_with_client_provider(session: Session, *, config: ClientProviderConfi
         provider_model=str(options.get("provider_model") or ""),
         source_asset_id=source_asset_id if isinstance(source_asset_id, int) else None,
         reference_asset_ids=reference_asset_ids if isinstance(reference_asset_ids, list) else [],
+        size=str(options["size"]) if options.get("size") else None,
+        quality=str(options["quality"]) if options.get("quality") else None,
     )
 
 
@@ -239,6 +249,8 @@ def build_render_options(*, job: ImageJob, reference_asset_ids: list[int]) -> di
         "model_code": job.model_code,
         "provider_id": job.provider_id or 0,
         "provider_model": job.provider_model or "",
+        "size": job.size,
+        "quality": job.quality,
     }
     if job.source_asset_id is not None:
         options["source_asset_id"] = job.source_asset_id

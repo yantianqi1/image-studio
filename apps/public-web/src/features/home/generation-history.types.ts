@@ -30,6 +30,7 @@ export type GenerationHistoryItem = Readonly<{
   modelName: string;
   count: number;
   aspectRatio: string;
+  quality?: string;
   visibility?: ImageAssetVisibility;
   status: GenerationHistoryStatus;
   images: readonly GenerationHistoryImage[];
@@ -50,6 +51,7 @@ export type GenerationHistoryDraft = Readonly<{
   modelName: string;
   count: number;
   aspectRatio: string;
+  quality?: string;
   visibility?: ImageAssetVisibility;
   status?: GenerationHistoryStatus;
   images?: readonly GenerationHistoryImage[];

@@ -10,6 +10,8 @@ class CreateImageJobRequest(BaseModel):
     model_code: str = Field(min_length=1)
     requested_count: int = Field(default=1, ge=1, le=4)
     mode: str = Field(default="generate", pattern="^(generate|edit)$")
+    size: str | None = Field(default=None)
+    quality: str | None = Field(default=None, pattern="^(low|medium|high)$")
     source_asset_id: int | None = Field(default=None, ge=1)
     reference_asset_ids: list[ReferenceAssetId] = Field(default_factory=list)
     visibility: str = Field(default="private", pattern="^(private|public)$")

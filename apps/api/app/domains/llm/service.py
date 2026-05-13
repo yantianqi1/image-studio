@@ -224,6 +224,8 @@ def render_image(
     provider_model: str,
     source_asset_id: int | None = None,
     reference_asset_ids: list[int] | None = None,
+    size: str | None = None,
+    quality: str | None = None,
 ) -> RenderedImage:
     provider = get_provider(session, provider_id=provider_id)
     reference_ids = tuple(reference_asset_ids or [])
@@ -239,6 +241,8 @@ def render_image(
             provider_model=provider_model,
             source_asset_id=source_asset_id,
             reference_asset_ids=reference_ids,
+            size=size,
+            quality=quality,
         )
     if provider.type == OPENAI_CHAT_COMPATIBLE_PROVIDER_TYPE:
         return render_openai_chat_compatible_image(
@@ -261,6 +265,8 @@ def render_image_with_client_provider(
     provider_model: str,
     source_asset_id: int | None = None,
     reference_asset_ids: list[int] | None = None,
+    size: str | None = None,
+    quality: str | None = None,
 ) -> RenderedImage:
     provider = build_runtime_provider(config)
     reference_ids = tuple(reference_asset_ids or [])
@@ -272,6 +278,8 @@ def render_image_with_client_provider(
             provider_model=provider_model,
             source_asset_id=source_asset_id,
             reference_asset_ids=reference_ids,
+            size=size,
+            quality=quality,
         )
     if provider.type == OPENAI_CHAT_COMPATIBLE_PROVIDER_TYPE:
         return render_openai_chat_compatible_image(
