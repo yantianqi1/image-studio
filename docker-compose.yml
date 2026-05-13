@@ -105,6 +105,11 @@ services:
       - "${ADMIN_HTTP_PORT:-7701}:81"
     volumes:
       - ./infra/nginx/nginx.prod.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:80/health || (nginx -s reload && exit 1)"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
     depends_on:
       public-web:
         condition: service_healthy
