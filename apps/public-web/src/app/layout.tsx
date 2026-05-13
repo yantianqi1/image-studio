@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { connection } from "next/server";
 import "./globals.css";
 import { buildPublicMetadata } from "@/lib/site-metadata";
+import { SwrProvider } from "@/lib/swr-provider";
 
 export async function generateMetadata(): Promise<Metadata> {
   return buildPublicMetadata();
@@ -19,7 +20,9 @@ export default async function RootLayout({
       className="h-full antialiased"
       suppressHydrationWarning
     >
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full">
+        <SwrProvider>{children}</SwrProvider>
+      </body>
     </html>
   );
 }

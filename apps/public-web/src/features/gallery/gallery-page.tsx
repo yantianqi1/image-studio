@@ -1,14 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import useSWR from "swr";
 
 import { GalleryMasonry } from "@/features/gallery/gallery-masonry";
 import { AppShell } from "@/features/shell/app-shell";
 import { ErrorMessage } from "@/features/ui/error-message";
 import { ImagePreviewDialog, type ImagePreviewDialogImage } from "@/features/ui/image-preview-dialog";
 import { StatusCard } from "@/features/ui/status-card";
+import { ApiError } from "@/lib/api-client";
 import { publicApi, type ImageGalleryItem, type ImageGalleryScope } from "@/lib/public-api";
-import { useApiResource, type ResourceState } from "@/lib/use-api-resource";
 import styles from "./gallery-page.module.css";
 
 const UNAUTHORIZED_STATUS = 401;
@@ -21,6 +22,11 @@ const GALLERY_SCOPES: readonly Readonly<{
   { value: "mine", label: "个人图库" },
 ];
 
+type GalleryState =
+  | Readonly<{ status: "loading" }>
+  | Readonly<{ status: "error"; message: string; statusCode?: number }>
+  | Readonly<{ status: "ready"; data: readonly ImageGalleryItem[] }>;
+
 type GalleryPageProps = Readonly<{
   activeHref?: string;
   initialScope?: ImageGalleryScope;
@@ -32,10 +38,7 @@ export function GalleryPage({
 }: GalleryPageProps = {}) {
   const [scope, setScope] = useState<ImageGalleryScope>(initialScope);
   const [previewImage, setPreviewImage] = useState<ImagePreviewDialogImage | null>(null);
-  const galleryState = useApiResource(
-    () => publicApi.getImageGallery(scope),
-    getScopeRefreshKey(scope),
-  );
+  const galleryState = useGalleryData(scope);
 
   return (
     <AppShell activeHref={activeHref} headerTitle="图库">
@@ -48,13 +51,35 @@ export function GalleryPage({
   );
 }
 
+function useGalleryData(scope: ImageGalleryScope): GalleryState {
+  const { data, error, isLoading } = useSWR(
+    `image-gallery-${scope}`,
+    () => publicApi.getImageGallery(scope),
+  );
+
+  if (data) {
+    return { status: "ready", data };
+  }
+  if (error) {
+    return {
+      status: "error",
+      message: error instanceof Error ? error.message : "未知请求错误",
+      statusCode: error instanceof ApiError ? error.status : undefined,
+    };
+  }
+  if (isLoading) {
+    return { status: "loading" };
+  }
+  return { status: "loading" };
+}
+
 function GalleryHeader({
   scope,
   state,
   onScopeChange,
 }: Readonly<{
   scope: ImageGalleryScope;
-  state: ResourceState<readonly ImageGalleryItem[]>;
+  state: GalleryState;
   onScopeChange: (scope: ImageGalleryScope) => void;
 }>) {
   return (
@@ -102,7 +127,7 @@ function GalleryContent({
   scope,
   onPreview,
 }: Readonly<{
-  state: ResourceState<readonly ImageGalleryItem[]>;
+  state: GalleryState;
   scope: ImageGalleryScope;
   onPreview: (image: ImagePreviewDialogImage) => void;
 }>) {
@@ -123,7 +148,7 @@ function GalleryError({
   state,
   scope,
 }: Readonly<{
-  state: Extract<ResourceState<readonly ImageGalleryItem[]>, { status: "error" }>;
+  state: Extract<GalleryState, { status: "error" }>;
   scope: ImageGalleryScope;
 }>) {
   if (scope === "mine" && state.statusCode === UNAUTHORIZED_STATUS) {
@@ -132,7 +157,7 @@ function GalleryError({
   return <ErrorMessage message={state.message} title="图库读取失败" />;
 }
 
-function getGalleryCountLabel(state: ResourceState<readonly ImageGalleryItem[]>) {
+function getGalleryCountLabel(state: GalleryState) {
   if (state.status === "loading") {
     return "同步中";
   }
@@ -144,7 +169,7 @@ function getGalleryCountLabel(state: ResourceState<readonly ImageGalleryItem[]>)
 
 function getGallerySummary(
   scope: ImageGalleryScope,
-  state: ResourceState<readonly ImageGalleryItem[]>,
+  state: GalleryState,
 ) {
   return `${getScopeLabel(scope)} · ${getGalleryCountLabel(state)}`;
 }
@@ -157,8 +182,4 @@ function getEmptyDescription(scope: ImageGalleryScope) {
 
 function getScopeLabel(scope: ImageGalleryScope) {
   return scope === "public" ? "公开图库" : "个人图库";
-}
-
-function getScopeRefreshKey(scope: ImageGalleryScope) {
-  return scope === "mine" ? 0 : 1;
 }
