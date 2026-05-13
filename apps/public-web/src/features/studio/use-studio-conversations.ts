@@ -14,6 +14,7 @@ import {
   updateTurnInConversation,
 } from "@/features/studio/studio-conversations";
 import type { StudioConversation, TurnDraft, TurnUpdate } from "@/features/studio/studio-types";
+import { migrateHistoryIfNeeded } from "@/features/studio/studio-migrate-history";
 
 export function useStudioConversations() {
   const [conversations, setConversations] = useState<readonly StudioConversation[]>([]);
@@ -23,9 +24,11 @@ export function useStudioConversations() {
   // Load from IndexedDB on mount
   useEffect(() => {
     listConversations().then((loaded) => {
-      setConversations(loaded);
+      const migrated = migrateHistoryIfNeeded();
+      const merged = migrated.length > 0 ? [...migrated, ...loaded] : loaded;
+      setConversations(merged);
       const savedActiveId = getActiveConversationId();
-      const resolvedId = loaded.find((c) => c.id === savedActiveId)?.id ?? loaded[0]?.id ?? null;
+      const resolvedId = merged.find((c) => c.id === savedActiveId)?.id ?? merged[0]?.id ?? null;
       setActiveId(resolvedId);
       setHydrated(true);
     });
