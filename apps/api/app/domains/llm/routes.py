@@ -1,12 +1,14 @@
 from fastapi import APIRouter, Depends, Request, status
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from apps.api.app.core.deps import get_db_session
+from apps.api.app.core.errors import AppError
 from apps.api.app.core.response import api_ok
 from apps.api.app.domains.auth.service import require_admin
 from apps.api.app.domains.llm.admin_ops import delete_provider, delete_sellable_model
-from apps.api.app.domains.llm.models import Provider, SellableModel
+from apps.api.app.domains.llm.models import Provider, SellableModel, ModelVariant
 from apps.api.app.domains.llm.service import (
     create_or_update_sellable_model,
     create_provider,
@@ -66,6 +68,21 @@ class ImportUpstreamModelsRequest(BaseModel):
     public_enabled: bool
     member_price_cents: int = Field(ge=0)
     anonymous_price_cents: int = Field(ge=0)
+
+
+class CreateModelVariantRequest(BaseModel):
+    size: str = Field(min_length=1, max_length=64)
+    quality: str = Field(min_length=1, max_length=32, pattern="^(low|medium|high)$")
+    upstream_provider_model: str | None = Field(default=None, max_length=128)
+    member_price_cents: int = Field(ge=0)
+    anonymous_price_cents: int = Field(ge=0, default=0)
+
+
+class UpdateModelVariantRequest(BaseModel):
+    upstream_provider_model: str | None = Field(default=None, max_length=128)
+    member_price_cents: int = Field(ge=0)
+    anonymous_price_cents: int = Field(ge=0, default=0)
+    status: str = Field(default="active", pattern="^(active|disabled)$")
 
 
 @public_router.get("/models")
@@ -177,6 +194,96 @@ def import_upstream_models_route(
     return api_ok([sellable_model_payload(model) for model in models])
 
 
+@model_admin_router.get("/{model_id}/variants")
+def list_model_variants(
+    model_id: int,
+    request: Request,
+    session: Session = Depends(get_db_session),
+):
+    require_admin(request, session)
+    variants = list(
+        session.execute(
+            select(ModelVariant)
+            .where(ModelVariant.model_id == model_id)
+            .order_by(ModelVariant.size.asc(), ModelVariant.quality.asc())
+        ).scalars()
+    )
+    session.commit()
+    return api_ok([variant_payload(v) for v in variants])
+
+
+@model_admin_router.post("/{model_id}/variants", status_code=status.HTTP_201_CREATED)
+def create_model_variant(
+    model_id: int,
+    payload: CreateModelVariantRequest,
+    request: Request,
+    session: Session = Depends(get_db_session),
+):
+    require_admin(request, session)
+    model = session.get(SellableModel, model_id)
+    if model is None:
+        raise AppError(code="model_not_found", message="model not found", status_code=404)
+    existing = session.execute(
+        select(ModelVariant).where(
+            ModelVariant.model_id == model_id,
+            ModelVariant.size == payload.size,
+            ModelVariant.quality == payload.quality,
+        )
+    ).scalar_one_or_none()
+    if existing is not None:
+        raise AppError(code="variant_exists", message="variant already exists for this size+quality", status_code=409)
+    variant = ModelVariant(
+        model_id=model_id,
+        size=payload.size.strip(),
+        quality=payload.quality.strip(),
+        upstream_provider_model=payload.upstream_provider_model.strip() if payload.upstream_provider_model else None,
+        member_price_cents=payload.member_price_cents,
+        anonymous_price_cents=payload.anonymous_price_cents,
+    )
+    session.add(variant)
+    session.flush()
+    session.commit()
+    return api_ok(variant_payload(variant))
+
+
+@model_admin_router.put("/{model_id}/variants/{variant_id}")
+def update_model_variant(
+    model_id: int,
+    variant_id: int,
+    payload: UpdateModelVariantRequest,
+    request: Request,
+    session: Session = Depends(get_db_session),
+):
+    require_admin(request, session)
+    variant = session.get(ModelVariant, variant_id)
+    if variant is None or variant.model_id != model_id:
+        raise AppError(code="variant_not_found", message="variant not found", status_code=404)
+    variant.upstream_provider_model = payload.upstream_provider_model.strip() if payload.upstream_provider_model else None
+    variant.member_price_cents = payload.member_price_cents
+    variant.anonymous_price_cents = payload.anonymous_price_cents
+    variant.status = payload.status
+    session.flush()
+    session.commit()
+    return api_ok(variant_payload(variant))
+
+
+@model_admin_router.delete("/{model_id}/variants/{variant_id}")
+def delete_model_variant(
+    model_id: int,
+    variant_id: int,
+    request: Request,
+    session: Session = Depends(get_db_session),
+):
+    require_admin(request, session)
+    variant = session.get(ModelVariant, variant_id)
+    if variant is None or variant.model_id != model_id:
+        raise AppError(code="variant_not_found", message="variant not found", status_code=404)
+    session.delete(variant)
+    session.flush()
+    session.commit()
+    return api_ok({"deleted": True})
+
+
 @model_admin_router.patch("/{model_code:path}")
 def update_sellable_model_route(
     model_code: str,
@@ -242,6 +349,20 @@ def upstream_model_payload(model: object) -> dict[str, object]:
     return {
         "id": getattr(model, "id"),
         "display_name": getattr(model, "display_name"),
+    }
+
+
+def variant_payload(variant: ModelVariant) -> dict[str, object]:
+    return {
+        "id": variant.id,
+        "model_id": variant.model_id,
+        "size": variant.size,
+        "quality": variant.quality,
+        "upstream_provider_model": variant.upstream_provider_model,
+        "member_price_cents": variant.member_price_cents,
+        "anonymous_price_cents": variant.anonymous_price_cents,
+        "status": variant.status,
+        "created_at": variant.created_at.isoformat() if variant.created_at else None,
     }
 
 
