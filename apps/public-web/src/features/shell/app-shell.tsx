@@ -6,6 +6,7 @@ import {
   APP_MOBILE_NAV_ITEMS,
   APP_NAV_ITEMS,
 } from "@/features/shell/app-navigation";
+import { ViewTransitionLink } from "@/features/shell/view-transition-link";
 import { GlobalPromptCrafter } from "@/features/prompt-crafter/global-prompt-crafter";
 import { ProviderSettingsPopover } from "@/features/shell/provider-settings-popover";
 import { PublicQuotaStatusBadge } from "@/features/shell/public-quota-status";
@@ -43,7 +44,7 @@ export function AppShell({
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
       <AppHeader activeHref={activeHref} brandLabel={brandLabel} headerTitle={resolvedHeaderTitle} leadingAction={leadingAction} navAside={navAside} />
 
-      <main className={workspaceMode ? "min-h-[calc(100dvh-7rem)] w-full overflow-visible px-3 py-3 sm:px-4 md:h-[calc(100dvh-4rem)] md:min-h-0 md:overflow-hidden lg:px-5" : "mx-auto w-full max-w-[1440px] px-4 pb-10 pt-5 sm:px-6 lg:px-8 lg:pt-6"}>
+      <main style={{ viewTransitionName: "main-content" }} className={workspaceMode ? "min-h-[calc(100dvh-7rem)] w-full overflow-visible px-3 py-3 sm:px-4 md:h-[calc(100dvh-4rem)] md:min-h-0 md:overflow-hidden lg:px-5" : "mx-auto w-full max-w-[1440px] px-4 pb-10 pt-5 sm:px-6 lg:px-8 lg:pt-6"}>
         {hasHero ? <HeroSection description={description} eyebrow={eyebrow} title={title} /> : null}
         <section className={workspaceMode ? "min-h-full md:h-full" : hasHero ? "mt-5" : ""}>{children}</section>
       </main>
@@ -118,25 +119,25 @@ function MobileNav({ activeHref }: Readonly<{ activeHref?: string }>) {
 
 function NavLink(props: Readonly<{ active: boolean; item: (typeof APP_NAV_ITEMS)[number] }>) {
   return (
-    <Link
+    <ViewTransitionLink
       href={props.item.href}
       className={getNavLinkClass(props.active)}
       aria-current={props.active ? "page" : undefined}
     >
       {props.item.label}
-    </Link>
+    </ViewTransitionLink>
   );
 }
 
 function MobileNavLink(props: Readonly<{ active: boolean; item: (typeof APP_MOBILE_NAV_ITEMS)[number] }>) {
   return (
-    <Link
+    <ViewTransitionLink
       href={props.item.href}
       className={getMobileNavLinkClass(props.active)}
       aria-current={props.active ? "page" : undefined}
     >
       {props.item.label}
-    </Link>
+    </ViewTransitionLink>
   );
 }
 
