@@ -23,11 +23,11 @@ docker compose up -d --no-deps worker
 
 echo "==> Restarting public-web (waiting for healthy)..."
 docker compose up -d --no-deps public-web
-timeout 60 sh -c 'until docker compose exec public-web wget -qO- http://127.0.0.1:7700/ 2>/dev/null; do sleep 1; done'
+timeout 60 sh -c 'until docker compose exec public-web node -e "require(\"http\").get(\"http://127.0.0.1:7700/\",r=>{process.exit(r.statusCode<400?0:1)}).on(\"error\",()=>process.exit(1))" 2>/dev/null; do sleep 2; done'
 
 echo "==> Restarting admin-web (waiting for healthy)..."
 docker compose up -d --no-deps admin-web
-timeout 60 sh -c 'until docker compose exec admin-web wget -qO- http://127.0.0.1:7701/ 2>/dev/null; do sleep 1; done'
+timeout 60 sh -c 'until docker compose exec admin-web node -e "require(\"http\").get(\"http://127.0.0.1:7701/\",r=>{process.exit(r.statusCode<400?0:1)}).on(\"error\",()=>process.exit(1))" 2>/dev/null; do sleep 2; done'
 
 echo "==> Reloading nginx config..."
 docker compose exec nginx nginx -s reload
