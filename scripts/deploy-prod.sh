@@ -74,8 +74,9 @@ echo "==> Restarting admin-web (waiting for healthy)..."
 docker compose up -d --no-deps admin-web
 timeout 60 sh -c 'until docker compose exec admin-web node -e "require(\"http\").get(\"http://127.0.0.1:7701/\",r=>{process.exit(r.statusCode<400?0:1)}).on(\"error\",()=>process.exit(1))" 2>/dev/null; do sleep 2; done'
 
-echo "==> Reloading nginx config..."
-docker compose exec nginx nginx -s reload
+echo "==> Recreating nginx (remounting config)..."
+docker compose up -d --force-recreate --no-deps nginx
+timeout 60 sh -c 'until docker compose exec nginx wget -qO- http://127.0.0.1:80/health >/dev/null 2>&1; do sleep 2; done'
 
 echo "==> Verifying public nginx routes..."
 assert_public_nginx_routes

@@ -12,3 +12,5 @@ def test_deploy_smoke_checks_public_nginx_static_assets() -> None:
     assert "application/javascript" in source
     assert "image/png" in source
     assert "redirect: \"manual\"" in source
+    assert "--force-recreate --no-deps nginx" in source
+    assert "nginx -s reload" not in source
