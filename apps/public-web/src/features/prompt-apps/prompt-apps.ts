@@ -8,7 +8,7 @@ export type { XiaohongshuAvatarPosterPromptInput } from "./xiaohongshu-avatar-po
 export { buildXiaohongshuAvatarPosterPrompt } from "./xiaohongshu-avatar-poster-prompt";
 
 export type PromptApp = Readonly<{
-  access: "public-image-job-api" | "public-prompt-crafter-api";
+  access: "public-image-job-api";
   cover: PromptAppCover;
   id: string;
   title: string;
@@ -40,19 +40,6 @@ export type SilhouetteUniversePosterPromptInput = Readonly<{
 }>;
 
 export const PROMPT_APPS: readonly PromptApp[] = [
-  {
-    access: "public-prompt-crafter-api",
-    id: "prompt-crafter",
-    cover: {
-      badge: "Prompt",
-      imageSrc: "/app-covers/prompt-crafter.svg",
-      label: "提示词工坊",
-    },
-    title: "提示词工坊",
-    description: "输入一句想法，流式整理成可直接投喂 GPT-image-2 的提示词。",
-    href: "/apps/prompt-crafter",
-    statusLabel: "流式提示词",
-  },
   {
     access: "public-image-job-api",
     id: "character-poster",

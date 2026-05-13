@@ -6,6 +6,7 @@ import {
   APP_MOBILE_NAV_ITEMS,
   APP_NAV_ITEMS,
 } from "@/features/shell/app-navigation";
+import { GlobalPromptCrafter } from "@/features/prompt-crafter/global-prompt-crafter";
 import { ProviderSettingsPopover } from "@/features/shell/provider-settings-popover";
 import { PublicQuotaStatusBadge } from "@/features/shell/public-quota-status";
 import styles from "./app-header.module.css";
@@ -46,6 +47,8 @@ export function AppShell({
         {hasHero ? <HeroSection description={description} eyebrow={eyebrow} title={title} /> : null}
         <section className={workspaceMode ? "min-h-full md:h-full" : hasHero ? "mt-5" : ""}>{children}</section>
       </main>
+
+      <GlobalPromptCrafter />
     </div>
   );
 }
