@@ -1,5 +1,5 @@
-import { GenerationWorkbench } from "@/features/home/generation-workbench";
+import { StudioPage } from "@/features/studio/studio-page";
 
 export default function GeneratePage() {
-  return <GenerationWorkbench />;
+  return <StudioPage />;
 }
