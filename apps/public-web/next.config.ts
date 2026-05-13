@@ -8,7 +8,6 @@ const nextConfig: NextConfig = {
   devIndicators: false,
   experimental: {
     proxyClientMaxBodySize: API_PROXY_BODY_LIMIT,
-    viewTransition: true,
   },
   images: {
     remotePatterns: [

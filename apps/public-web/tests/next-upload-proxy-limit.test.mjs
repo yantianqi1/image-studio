@@ -8,3 +8,7 @@ test("public web proxy raises multipart upload body limit", () => {
   assert.match(nextConfigSource, /const API_PROXY_BODY_LIMIT = "50mb";/);
   assert.match(nextConfigSource, /proxyClientMaxBodySize:\s*API_PROXY_BODY_LIMIT/);
 });
+
+test("public web does not enable unavailable React view transition runtime", () => {
+  assert.doesNotMatch(nextConfigSource, /viewTransition:\s*true/);
+});
