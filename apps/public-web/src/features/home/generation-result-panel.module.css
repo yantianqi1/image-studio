@@ -223,6 +223,7 @@
   border-radius: 1.35rem;
   background: #ffffff;
   box-shadow: 0 12px 26px rgba(15, 23, 42, 0.04);
+  animation: image-card-in 320ms cubic-bezier(0.32, 0.72, 0, 1) both;
 }
 .imagePreviewButton {
   display: block;
@@ -253,6 +254,21 @@
   0%, 100% { opacity: 0.35; transform: scale(0.96); }
   50% { opacity: 1; transform: scale(1.03); }
 }
+@keyframes image-card-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.imageGridMany .imageCard:nth-child(2) { animation-delay: 60ms; }
+.imageGridMany .imageCard:nth-child(3) { animation-delay: 120ms; }
+.imageGridMany .imageCard:nth-child(4) { animation-delay: 180ms; }
+
 @media (max-width: 640px) {
   .header { flex-direction: column; }
   .skeletonGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
