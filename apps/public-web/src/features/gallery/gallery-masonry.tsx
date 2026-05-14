@@ -199,8 +199,10 @@ function GalleryTile({
           alt={title}
           loading="lazy"
           decoding="async"
+          className={styles.tileImage}
           sizes="(min-width: 1180px) 25vw, (min-width: 820px) 25vw, (min-width: 540px) 33vw, 50vw"
           onLoad={(event) => {
+            event.currentTarget.classList.add(styles.tileImageLoaded);
             onImageMeasure(
               item.asset_id,
               event.currentTarget.naturalWidth,

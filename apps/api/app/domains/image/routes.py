@@ -7,7 +7,6 @@ from apps.api.app.domains.auth.ownership import ensure_anonymous_owner, resolve_
 from apps.api.app.domains.auth.service import require_admin
 from apps.api.app.domains.image.admin_service import list_admin_jobs_with_results
 from apps.api.app.domains.image.assets import (
-    ensure_thumbnail_exists,
     persist_uploaded_asset,
     resolve_asset_content,
     resolve_asset_public_urls,
@@ -238,8 +237,6 @@ def get_admin_gallery(
     require_admin(request, session)
     storage = build_asset_storage()
     items, total = list_admin_gallery_items(session, page=page, page_size=page_size, query=q or None)
-    for _result, _job, asset in items:
-        ensure_thumbnail_exists(asset, storage)
     return api_ok({
         "items": [admin_gallery_item_payload(result, job=job, asset=asset, storage=storage) for result, job, asset in items],
         "total": total,

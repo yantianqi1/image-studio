@@ -170,6 +170,15 @@
   transition: filter 180ms ease, transform 220ms ease;
 }
 
+.tileImage {
+  opacity: 0;
+  transition: opacity 300ms ease, filter 180ms ease, transform 220ms ease;
+}
+
+.tileImageLoaded {
+  opacity: 1;
+}
+
 .tile:hover .imageButton img,
 .tile:focus-within .imageButton img {
   filter: brightness(0.95);
