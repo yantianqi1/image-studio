@@ -357,7 +357,7 @@ export function StudioPage() {
   }, []);
 
   return (
-    <AppShell activeHref="/studio" workspaceMode>
+    <AppShell activeHref="/generate" workspaceMode>
       <div
         className={cn(
           "grid h-full overflow-hidden transition-[grid-template-columns] duration-200 ease-in-out",

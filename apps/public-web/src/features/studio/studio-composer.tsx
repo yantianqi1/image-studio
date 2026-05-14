@@ -252,7 +252,7 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
       : "加载中...";
 
   return (
-    <div className="w-full px-3 pb-3 pt-1 sm:px-4 sm:pb-4">
+    <div className="w-full shrink-0 px-3 pb-3 pt-1 sm:px-4 sm:pb-4">
       <input
         ref={fileInputRef}
         type="file"
