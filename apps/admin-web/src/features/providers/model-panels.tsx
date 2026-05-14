@@ -148,7 +148,7 @@ function ModelCard({
           </button>
         </div>
       </form>
-      <VariantPanel model={model} onMessage={(msg) => onUpdated(msg)} onError={onError} />
+      <VariantPanel model={model} providers={providers} onMessage={(msg) => onUpdated(msg)} onError={onError} />
     </div>
   );
 }

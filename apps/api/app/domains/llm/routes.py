@@ -85,6 +85,19 @@ class UpdateModelVariantRequest(BaseModel):
     status: str = Field(default="active", pattern="^(active|disabled)$")
 
 
+class BatchVariantItem(BaseModel):
+    size: str = Field(min_length=1, max_length=64)
+    quality: str = Field(pattern="^(low|medium|high)$")
+    upstream_provider_model: str | None = Field(default=None, max_length=128)
+    member_price_cents: int = Field(ge=0)
+    anonymous_price_cents: int = Field(ge=0, default=0)
+    status: str = Field(default="active", pattern="^(active|disabled)$")
+
+
+class BatchUpsertVariantsRequest(BaseModel):
+    variants: list[BatchVariantItem] = Field(min_length=1, max_length=84)
+
+
 @public_router.get("/models")
 def get_models(session: Session = Depends(get_db_session)):
     models = [sellable_model_payload(model) for model in list_public_models(session)]
@@ -282,6 +295,107 @@ def delete_model_variant(
     session.flush()
     session.commit()
     return api_ok({"deleted": True})
+
+
+@model_admin_router.get("/{model_id}/variant-matrix")
+def get_variant_matrix(
+    model_id: int,
+    request: Request,
+    session: Session = Depends(get_db_session),
+):
+    from apps.api.app.domains.llm.variant_matrix import ALL_SIZES, ASPECT_RATIOS, QUALITY_OPTIONS
+
+    require_admin(request, session)
+    model = session.get(SellableModel, model_id)
+    if model is None:
+        raise AppError(code="model_not_found", message="model not found", status_code=404)
+    existing = list(
+        session.execute(
+            select(ModelVariant).where(ModelVariant.model_id == model_id)
+        ).scalars()
+    )
+    existing_map: dict[tuple[str, str], ModelVariant] = {
+        (v.size, v.quality): v for v in existing
+    }
+    groups = []
+    for ar in ASPECT_RATIOS:
+        tiers = []
+        for sd in ALL_SIZES:
+            if sd.aspect_ratio != ar:
+                continue
+            variants = []
+            for q in QUALITY_OPTIONS:
+                v = existing_map.get((sd.size, q))
+                variants.append({
+                    "quality": q,
+                    "id": v.id if v else None,
+                    "upstream_provider_model": v.upstream_provider_model if v else None,
+                    "member_price_cents": v.member_price_cents if v else None,
+                    "anonymous_price_cents": v.anonymous_price_cents if v else None,
+                    "status": v.status if v else None,
+                })
+            tiers.append({"tier": sd.tier, "size": sd.size, "variants": variants})
+        groups.append({"aspect_ratio": ar, "tiers": tiers})
+    session.commit()
+    return api_ok({"model_id": model_id, "groups": groups})
+
+
+@model_admin_router.post("/{model_id}/variants/batch")
+def batch_upsert_variants(
+    model_id: int,
+    payload: BatchUpsertVariantsRequest,
+    request: Request,
+    session: Session = Depends(get_db_session),
+):
+    from apps.api.app.domains.llm.variant_matrix import ALL_VARIANT_KEYS
+
+    require_admin(request, session)
+    model = session.get(SellableModel, model_id)
+    if model is None:
+        raise AppError(code="model_not_found", message="model not found", status_code=404)
+    invalid_keys = [
+        f"{item.size}×{item.quality}"
+        for item in payload.variants
+        if (item.size, item.quality) not in ALL_VARIANT_KEYS
+    ]
+    if invalid_keys:
+        raise AppError(
+            code="invalid_variant_key",
+            message=f"invalid size×quality: {', '.join(invalid_keys[:5])}",
+            status_code=422,
+        )
+    existing = list(
+        session.execute(
+            select(ModelVariant).where(ModelVariant.model_id == model_id)
+        ).scalars()
+    )
+    existing_map: dict[tuple[str, str], ModelVariant] = {
+        (v.size, v.quality): v for v in existing
+    }
+    results = []
+    for item in payload.variants:
+        upstream = item.upstream_provider_model.strip() if item.upstream_provider_model else None
+        v = existing_map.get((item.size, item.quality))
+        if v is not None:
+            v.upstream_provider_model = upstream
+            v.member_price_cents = item.member_price_cents
+            v.anonymous_price_cents = item.anonymous_price_cents
+            v.status = item.status
+        else:
+            v = ModelVariant(
+                model_id=model_id,
+                size=item.size,
+                quality=item.quality,
+                upstream_provider_model=upstream,
+                member_price_cents=item.member_price_cents,
+                anonymous_price_cents=item.anonymous_price_cents,
+                status=item.status,
+            )
+            session.add(v)
+        results.append(v)
+    session.flush()
+    session.commit()
+    return api_ok([variant_payload(v) for v in results])
 
 
 @model_admin_router.patch("/{model_code:path}")

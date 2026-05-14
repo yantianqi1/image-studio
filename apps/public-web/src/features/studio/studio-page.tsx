@@ -11,6 +11,7 @@ import { AppShell } from "@/features/shell/app-shell";
 import { StudioComposer } from "@/features/studio/studio-composer";
 import { StudioPromptMarket } from "@/features/studio/studio-prompt-market";
 import type { BananaPrompt } from "@/features/studio/studio-prompt-sources";
+import { fetchPromptMarketPrompts } from "@/features/studio/studio-prompt-sources";
 import { StudioResults } from "@/features/studio/studio-results";
 import { StudioSidebar } from "@/features/studio/studio-sidebar";
 import {
@@ -90,6 +91,20 @@ function cleanPromptText(raw: string): string {
   return text || raw.trim();
 }
 
+async function validatePreviewImages(prompts: BananaPrompt[]): Promise<BananaPrompt[]> {
+  const results = await Promise.allSettled(
+    prompts.map((p) =>
+      new Promise<BananaPrompt>((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(p);
+        img.onerror = () => reject();
+        img.src = p.preview;
+      }),
+    ),
+  );
+  return results.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
+}
+
 export function StudioPage() {
   // --- Composer state ---
   const [mode, setMode] = useState<ComposerMode>("generate");
@@ -110,6 +125,36 @@ export function StudioPage() {
   // --- Data ---
   const conversations = useStudioConversations();
   const modelsState = useApiResource(() => publicApi.getModels());
+
+  // --- Preset cards (random 4 from remote market, with valid preview images) ---
+  type PresetCard = { id: string; title: string; hint: string; preview: string; aspectRatio: string; count: number; prompt: BananaPrompt };
+  const [presetCards, setPresetCards] = useState<PresetCard[]>([]);
+  const presetsFetchedRef = useRef(false);
+
+  useEffect(() => {
+    if (presetsFetchedRef.current) return;
+    presetsFetchedRef.current = true;
+    const controller = new AbortController();
+    fetchPromptMarketPrompts(controller.signal)
+      .then((prompts) => {
+        const withPreview = prompts.filter((p) => p.preview && !p.isNsfw);
+        const shuffled = withPreview.sort(() => Math.random() - 0.5);
+        const candidates = shuffled.slice(0, 12);
+        validatePreviewImages(candidates).then((valid) => {
+          setPresetCards(valid.slice(0, 4).map((p) => ({
+            id: p.id,
+            title: p.title,
+            hint: p.category + (p.subCategory ? ` · ${p.subCategory}` : ""),
+            preview: p.preview,
+            aspectRatio: "",
+            count: 1,
+            prompt: p,
+          })));
+        });
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, []);
 
   // Track active abort controllers for polling
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
@@ -296,6 +341,13 @@ export function StudioPage() {
     setPromptMarketOpen(false);
   }, []);
 
+  const handleApplyPresetCard = useCallback((presetId: string) => {
+    const card = presetCards.find((c) => c.id === presetId);
+    if (card) {
+      handleApplyPrompt(card.prompt);
+    }
+  }, [presetCards, handleApplyPrompt]);
+
   const handleReferenceImagesChange = useCallback((images: readonly StoredReferenceImage[]) => {
     setReferenceImages([...images]);
   }, []);
@@ -328,11 +380,13 @@ export function StudioPage() {
           <StudioResults
             conversation={conversations.activeConversation}
             progressByTurnKey={progressMap}
+            presetCards={presetCards}
             onRetryTurn={handleRetryTurn}
             onEditFromTurn={handleEditFromTurn}
             onCancelTurn={handleCancelTurn}
             onImageVisibilityChange={handleImageVisibilityChange}
             onOpenLightbox={handleOpenLightbox}
+            onApplyPreset={handleApplyPresetCard}
           />
           <StudioComposer
             mode={mode}

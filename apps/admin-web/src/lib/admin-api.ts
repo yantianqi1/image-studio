@@ -31,6 +31,40 @@ export type ModelVariant = Readonly<{
   created_at: string | null;
 }>;
 
+export type VariantSlot = Readonly<{
+  quality: string;
+  id: number | null;
+  upstream_provider_model: string | null;
+  member_price_cents: number | null;
+  anonymous_price_cents: number | null;
+  status: string | null;
+}>;
+
+export type VariantTier = Readonly<{
+  tier: string;
+  size: string;
+  variants: readonly VariantSlot[];
+}>;
+
+export type VariantMatrixGroup = Readonly<{
+  aspect_ratio: string;
+  tiers: readonly VariantTier[];
+}>;
+
+export type VariantMatrix = Readonly<{
+  model_id: number;
+  groups: readonly VariantMatrixGroup[];
+}>;
+
+export type BatchVariantInput = {
+  size: string;
+  quality: string;
+  upstream_provider_model?: string | null;
+  member_price_cents: number;
+  anonymous_price_cents: number;
+  status: string;
+};
+
 export type WorkerSummary = Readonly<{
   image_jobs: {
     queued: number;
@@ -240,6 +274,15 @@ export const adminApi = {
   deleteModelVariant(modelId: number, variantId: number) {
     return apiFetch<{ deleted: boolean }>(`/api/admin/models/${modelId}/variants/${variantId}`, {
       method: "DELETE",
+    });
+  },
+  variantMatrix(modelId: number) {
+    return apiFetch<VariantMatrix>(`/api/admin/models/${modelId}/variant-matrix`);
+  },
+  batchUpsertVariants(modelId: number, input: { variants: BatchVariantInput[] }) {
+    return apiFetch<readonly ModelVariant[]>(`/api/admin/models/${modelId}/variants/batch`, {
+      method: "POST",
+      body: JSON.stringify(input),
     });
   },
   fetchUpstreamModels(input: { url: string; api_key_env?: string }) {

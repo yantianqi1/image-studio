@@ -20,14 +20,25 @@ import type { TurnProgress } from "@/features/studio/studio-turn-progress";
 import type { ImageAssetVisibility } from "@/lib/public-api";
 import type { StudioConversation, StudioTurn, StoredImage } from "@/features/studio/studio-types";
 
+type PresetCard = Readonly<{
+  id: string;
+  title: string;
+  hint: string;
+  preview: string;
+  aspectRatio: string;
+  count: number;
+}>;
+
 type StudioResultsProps = Readonly<{
   conversation: StudioConversation | null;
   progressByTurnKey: ReadonlyMap<string, TurnProgress>;
+  presetCards: readonly PresetCard[];
   onRetryTurn: (turnId: string) => void;
   onEditFromTurn: (turnId: string, image: StoredImage) => void;
   onCancelTurn: (turnId: string) => void;
   onImageVisibilityChange: (assetId: number, visibility: ImageAssetVisibility) => void;
   onOpenLightbox: (images: readonly StoredImage[], startIndex: number) => void;
+  onApplyPreset: (presetId: string) => void;
 }>;
 
 const MODE_LABELS: Record<string, { label: string; colorClass: string }> = {
@@ -55,16 +66,17 @@ function formatElapsed(ms: number | undefined) {
 export const StudioResults = memo(function StudioResults({
   conversation,
   progressByTurnKey,
+  presetCards,
   onRetryTurn,
   onEditFromTurn,
   onCancelTurn,
   onImageVisibilityChange,
   onOpenLightbox,
+  onApplyPreset,
 }: StudioResultsProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const turnCountRef = useRef(0);
 
-  // Auto-scroll when new turns are added
   useEffect(() => {
     const turns = conversation?.turns ?? [];
     if (turns.length > turnCountRef.current) {
@@ -75,17 +87,56 @@ export const StudioResults = memo(function StudioResults({
 
   if (!conversation || conversation.turns.length === 0) {
     return (
-      <div className="flex flex-1 items-center justify-center overflow-y-auto p-6 scroll-smooth [scrollbar-width:thin]">
-        <div className="flex flex-col items-center gap-4 text-center">
-          <div className="flex size-16 items-center justify-center rounded-2xl bg-gray-100">
-            <Sparkles className="size-7 text-gray-400" />
-          </div>
-          <div>
-            <p className="text-base font-semibold text-gray-700">开始创作</p>
-            <p className="mt-1.5 max-w-[20rem] text-sm leading-6 text-gray-400">
-              在下方输入提示词，选择模型和参数，点击生成开始创作。支持多轮对话式生成和编辑。
+      <div className="flex flex-1 items-center justify-center overflow-y-auto p-4 scroll-smooth sm:p-6 [scrollbar-width:thin]">
+        <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-5">
+          <div className="mx-auto flex max-w-[640px] flex-col items-center text-center">
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
+              <Sparkles className="size-4 text-blue-500" />
+              生图预设
+            </div>
+            <h1 className="text-3xl font-medium leading-tight text-gray-900 sm:text-5xl">
+              Turn ideas into images
+            </h1>
+            <p className="mx-auto mt-3 max-w-[460px] text-sm leading-6 text-gray-500 sm:text-[15px]">
+              选择一组真实案例预设快速开始，也可以直接在下方输入自己的画面描述。
             </p>
           </div>
+          {presetCards.length > 0 && (
+            <div className="hide-scrollbar flex gap-3 overflow-x-auto px-1 pb-1 text-left sm:grid sm:grid-cols-2 sm:overflow-visible lg:grid-cols-4">
+              {presetCards.map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  className="group w-[250px] shrink-0 overflow-hidden rounded-[22px] border border-gray-100 bg-white transition hover:-translate-y-0.5 hover:shadow-[0_12px_16px_-4px_rgba(36,36,36,0.08)] sm:w-auto"
+                  onClick={() => onApplyPreset(preset.id)}
+                  aria-label={`套用预设：${preset.title}`}
+                >
+                  <div className="relative aspect-[16/9] overflow-hidden bg-gray-100">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={preset.preview}
+                      alt={preset.title}
+                      loading="lazy"
+                      className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+                    />
+                    <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/70 via-black/25 to-transparent px-3 pt-8 pb-2">
+                      <span className="rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-medium text-gray-900 shadow-sm">
+                        {preset.aspectRatio || "Auto"}
+                      </span>
+                      <span className="rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-medium text-white shadow-sm backdrop-blur">
+                        {preset.count} 张
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2 px-4 py-3.5">
+                    <div className="text-sm font-semibold text-gray-900">{preset.title}</div>
+                    <div className="line-clamp-2 text-sm leading-6 text-gray-500">{preset.hint}</div>
+                    <div className="border-t border-gray-100 pt-2 text-xs font-medium text-blue-600">套用这个预设</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     );

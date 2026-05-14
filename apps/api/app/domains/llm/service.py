@@ -314,4 +314,11 @@ def resolve_variant(session: Session, *, model_id: int, size: str | None, qualit
             ModelVariant.status == "active",
         )
     )
-    return session.execute(statement).scalar_one_or_none()
+    variant = session.execute(statement).scalar_one_or_none()
+    if variant is None:
+        raise AppError(
+            code="variant_not_found",
+            message=f"no active pricing variant for size={size} quality={quality}",
+            status_code=422,
+        )
+    return variant
