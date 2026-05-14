@@ -231,15 +231,7 @@ export function StudioPage() {
     }
   }, []);
 
-  const resumeImageJobPolling = useCallback(async (conversationId: string, turn: StudioTurn) => {
-    if (!turn.taskId) {
-      conversations.updateTurn(conversationId, turn.id, {
-        status: "error",
-        error: "生成请求未完成，请重试",
-      });
-      return;
-    }
-
+  const resumeImageJobPolling = useCallback(async (conversationId: string, turn: StudioTurn, jobId: number) => {
     const progressKey = turnProgressKey(conversationId, turn.id);
     if (abortControllersRef.current.has(progressKey)) {
       return;
@@ -253,7 +245,7 @@ export function StudioPage() {
     const startTime = Number.isNaN(createdAtMs) ? Date.now() : createdAtMs;
 
     try {
-      const completed = await waitForImageJobResults(publicApi, turn.taskId, {
+      const completed = await waitForImageJobResults(publicApi, jobId, {
         signal: abortController.signal,
         onJobUpdate: (updatedJob) => {
           if (updatedJob.status === "succeeded") return;
@@ -295,11 +287,14 @@ export function StudioPage() {
         if (turn.status !== "queued" && turn.status !== "generating") {
           continue;
         }
+        if (!turn.taskId) {
+          continue;
+        }
         const progressKey = turnProgressKey(conversation.id, turn.id);
         if (abortControllersRef.current.has(progressKey)) {
           continue;
         }
-        void resumeImageJobPolling(conversation.id, turn);
+        void resumeImageJobPolling(conversation.id, turn, turn.taskId);
       }
     }
   }, [conversations.conversations, conversations.hydrated, resumeImageJobPolling]);
