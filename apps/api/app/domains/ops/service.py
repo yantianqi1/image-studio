@@ -36,19 +36,21 @@ def build_image_job_summary(
     stale_count: int,
     stale_after_seconds: int,
 ) -> dict[str, int]:
+    statement = select(
+        func.count(ImageJob.id).filter(ImageJob.status == "queued"),
+        func.count(ImageJob.id).filter(ImageJob.status == "running"),
+        func.count(ImageJob.id).filter(ImageJob.status == "succeeded"),
+        func.count(ImageJob.id).filter(ImageJob.status == "failed"),
+    )
+    row = session.execute(statement).one()
     return {
-        "queued": count_jobs_by_status(session, status="queued"),
-        "running": count_jobs_by_status(session, status="running"),
-        "succeeded": count_jobs_by_status(session, status="succeeded"),
-        "failed": count_jobs_by_status(session, status="failed"),
+        "queued": int(row[0]),
+        "running": int(row[1]),
+        "succeeded": int(row[2]),
+        "failed": int(row[3]),
         "stale_running": stale_count,
         "stale_after_seconds": stale_after_seconds,
     }
-
-
-def count_jobs_by_status(session: Session, *, status: str) -> int:
-    statement = select(func.count(ImageJob.id)).where(ImageJob.status == status)
-    return int(session.execute(statement).scalar_one())
 
 
 def count_stale_running_jobs(session: Session, *, stale_after_seconds: int) -> int:

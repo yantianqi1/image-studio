@@ -1,9 +1,6 @@
 @import "tailwindcss";
 @import "../features/shell/admin-shell.css";
 @import "../features/ui/admin-ui.css";
-@import "../features/jobs/image-jobs.css";
-@import "../features/jobs/image-job-results.css";
-@import "../features/users/users.css";
 
 :root {
   --background: #f5f7f9;
@@ -36,4 +33,9 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }

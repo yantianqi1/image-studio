@@ -1,42 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
 import { AdminShell } from "@/features/shell/admin-shell";
 import { ErrorBox } from "@/features/ui/error-box";
 import { Panel } from "@/features/ui/panel";
 import { adminApi } from "@/lib/admin-api";
+import { useRedeemCodes } from "@/lib/use-admin-data";
+import { useToast } from "@/lib/toast-context";
 
 export function RedeemPage() {
-  const [codes, setCodes] = useState<
-    readonly {
-      id: number;
-      code: string;
-      credit_amount_cents: number;
-      status: string;
-      redeemed_by_user_id: number | null;
-    }[]
-  >([]);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
-
-  async function refresh() {
-    try {
-      const nextCodes = await adminApi.redeemCodes();
-      setCodes(nextCodes);
-    } catch (nextError) {
-      setError(
-        nextError instanceof Error ? nextError.message : "读取兑换码失败",
-      );
-    }
-  }
-
-  useEffect(() => {
-    const bootstrap = async () => {
-      await refresh();
-    };
-    void bootstrap();
-  }, []);
+  const { data: codes = [], error: loadError, mutate } = useRedeemCodes();
+  const toast = useToast();
 
   return (
     <AdminShell
@@ -52,7 +25,6 @@ export function RedeemPage() {
             className="grid gap-3"
             action={async (formData) => {
               try {
-                setError("");
                 const batch = await adminApi.createRedeemBatch({
                   name: String(formData.get("name") ?? ""),
                   credit_amount_cents: Number(formData.get("amount") ?? "0"),
@@ -61,10 +33,10 @@ export function RedeemPage() {
                     .map((item) => item.trim())
                     .filter(Boolean),
                 });
-                setMessage(`批次 ${batch.name} 已创建`);
-                await refresh();
+                toast.success(`批次 ${batch.name} 已创建`);
+                mutate();
               } catch (nextError) {
-                setError(
+                toast.error(
                   nextError instanceof Error
                     ? nextError.message
                     : "创建批次失败",
@@ -89,10 +61,7 @@ export function RedeemPage() {
               创建批次
             </button>
           </form>
-          <div className="mt-3 grid gap-2">
-            {message ? <div className="admin-card text-emerald-700">{message}</div> : null}
-            {error ? <ErrorBox message={error} /> : null}
-          </div>
+          {loadError ? <div className="mt-3"><ErrorBox message={loadError instanceof Error ? loadError.message : "读取兑换码失败"} /></div> : null}
         </Panel>
       </div>
 

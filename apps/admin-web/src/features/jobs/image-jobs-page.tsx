@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
+import "@/features/jobs/image-jobs.css";
+import "@/features/jobs/image-job-results.css";
 import { AdminShell } from "@/features/shell/admin-shell";
 import { ErrorBox } from "@/features/ui/error-box";
-import { adminApi, type WorkerSummary } from "@/lib/admin-api";
-import type { AdminImageJob } from "@/lib/admin-image-job-types";
+import { useAdminJobs, useWorkerSummary } from "@/lib/use-admin-data";
 
 import { ImageJobDetail } from "./image-job-detail";
 import { ImageJobResults } from "./image-job-results";
@@ -13,68 +14,96 @@ import { ImageJobSidebar } from "./image-job-sidebar";
 import { ImageJobStatsPanel } from "./image-job-stats";
 
 type Tab = "logs" | "stats";
+type StatusFilter = "" | "queued" | "running" | "succeeded" | "failed";
+
+const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
+  { key: "", label: "全部" },
+  { key: "queued", label: "排队" },
+  { key: "running", label: "运行中" },
+  { key: "succeeded", label: "成功" },
+  { key: "failed", label: "失败" },
+];
 
 export function ImageJobsPage() {
   const [activeTab, setActiveTab] = useState<Tab>("logs");
-  const [jobs, setJobs] = useState<readonly AdminImageJob[]>([]);
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
-  const [summary, setSummary] = useState<WorkerSummary | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("");
+  const [page, setPage] = useState(1);
+
+  const { data: jobsData, error: jobsError, isLoading: jobsLoading, mutate: mutateJobs } = useAdminJobs({
+    page,
+    page_size: 50,
+    status: statusFilter || undefined,
+  });
+  const { data: summary } = useWorkerSummary();
+
+  const jobs = jobsData?.items ?? [];
+  const totalJobs = jobsData?.total ?? 0;
+  const totalPages = Math.ceil(totalJobs / 50);
+
   const selectedJob = useMemo(
     () => jobs.find((job) => job.id === selectedJobId) ?? null,
     [jobs, selectedJobId],
   );
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const [nextJobs, nextSummary] = await Promise.all([
-        adminApi.imageJobs(),
-        adminApi.workerSummary(),
-      ]);
-      setJobs(nextJobs);
-      setSummary(nextSummary);
-      setSelectedJobId((current) => resolveSelectedJobId(current, nextJobs));
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "读取图片任务失败");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
+  const error = jobsError instanceof Error ? jobsError.message : jobsError ? "读取图片任务失败" : "";
 
   return (
     <AdminShell
       title="图片任务"
       description="按任务索引、完整提示词和结果图拆分视图，便于快速审阅生成记录。"
-      actions={<RefreshButton loading={loading} onRefresh={loadData} />}
+      actions={<RefreshButton loading={jobsLoading} onRefresh={() => mutateJobs()} />}
     >
       <div className="col-span-12 grid gap-4">
         <TabBar active={activeTab} onChange={setActiveTab} />
         {error ? <ErrorBox message={error} /> : null}
 
         {activeTab === "logs" && (
-          <div className="image-jobs-workbench">
-            <ImageJobSidebar
-              jobs={jobs}
-              loading={loading}
-              selectedJobId={selectedJobId}
-              summary={summary}
-              onSelectJob={setSelectedJobId}
-            />
-            <ImageJobDetail job={selectedJob} />
-            <ImageJobResults job={selectedJob} />
-          </div>
+          <>
+            <StatusFilterBar active={statusFilter} onChange={(s) => { setStatusFilter(s); setPage(1); }} />
+            <div className="image-jobs-workbench">
+              <ImageJobSidebar
+                jobs={jobs}
+                loading={jobsLoading}
+                selectedJobId={selectedJobId}
+                summary={summary ?? null}
+                onSelectJob={setSelectedJobId}
+              />
+              <ImageJobDetail job={selectedJob} />
+              <ImageJobResults job={selectedJob} />
+            </div>
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-2">
+                <button className="admin-button" type="button" disabled={page <= 1} onClick={() => setPage(page - 1)}>上一页</button>
+                <span className="text-sm text-gray-600">{page} / {totalPages}</span>
+                <button className="admin-button" type="button" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>下一页</button>
+              </div>
+            )}
+          </>
         )}
 
         {activeTab === "stats" && <ImageJobStatsPanel />}
       </div>
     </AdminShell>
+  );
+}
+
+function StatusFilterBar({ active, onChange }: { active: StatusFilter; onChange: (s: StatusFilter) => void }) {
+  return (
+    <div className="flex gap-1 rounded-xl bg-gray-100 p-1">
+      {STATUS_FILTERS.map((f) => (
+        <button
+          key={f.key}
+          type="button"
+          className={`rounded-lg px-3 py-1 text-xs font-medium transition-colors ${
+            active === f.key ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+          }`}
+          onClick={() => onChange(f.key)}
+        >
+          {f.label}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -112,17 +141,4 @@ function RefreshButton({ loading, onRefresh }: Readonly<{
       {loading ? "刷新中" : "刷新"}
     </button>
   );
-}
-
-function resolveSelectedJobId(
-  currentId: number | null,
-  jobs: readonly AdminImageJob[],
-) {
-  if (jobs.length === 0) {
-    return null;
-  }
-  if (currentId !== null && jobs.some((job) => job.id === currentId)) {
-    return currentId;
-  }
-  return jobs[0].id;
 }

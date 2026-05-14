@@ -1,16 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
 import { ModelCreatePanel, ModelListPanel } from "@/features/providers/model-panels";
 import { ProviderCreatePanel, ProviderListPanel } from "@/features/providers/provider-panels";
 import { UpstreamModelImportPanel } from "@/features/providers/upstream-model-import-panel";
 import { AdminShell } from "@/features/shell/admin-shell";
 import { ErrorBox } from "@/features/ui/error-box";
-import { adminApi } from "@/lib/admin-api";
-
-type Provider = Awaited<ReturnType<typeof adminApi.providers>>[number];
-type SellableModel = Awaited<ReturnType<typeof adminApi.models>>[number];
+import { useModels, useProviders } from "@/lib/use-admin-data";
+import { useToast } from "@/lib/toast-context";
+import { useState } from "react";
 
 type Tab = "providers" | "models" | "upstream";
 
@@ -41,56 +38,22 @@ function TabBar({ active, onChange }: { active: Tab; onChange: (tab: Tab) => voi
   );
 }
 
-function StatusPanel({ message, error }: { message: string; error: string }) {
-  return (
-    <>
-      {message ? <div className="admin-card text-emerald-700">{message}</div> : null}
-      {error ? <ErrorBox message={error} /> : null}
-    </>
-  );
-}
-
 export function ProvidersPage() {
-  const [providers, setProviders] = useState<readonly Provider[]>([]);
-  const [models, setModels] = useState<readonly SellableModel[]>([]);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
+  const { data: providers = [], error: providersError, mutate: mutateProviders } = useProviders();
+  const { data: models = [], error: modelsError, mutate: mutateModels } = useModels();
   const [activeTab, setActiveTab] = useState<Tab>("providers");
-
-  async function refresh() {
-    const [nextProviders, nextModels] = await Promise.all([
-      adminApi.providers(),
-      adminApi.models(),
-    ]);
-    setProviders(nextProviders);
-    setModels(nextModels);
-  }
+  const toast = useToast();
 
   async function sync(messageText: string) {
-    try {
-      setError("");
-      await refresh();
-      setMessage(messageText);
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "读取供应商配置失败");
-    }
+    await Promise.all([mutateProviders(), mutateModels()]);
+    toast.success(messageText);
   }
 
   function showError(messageText: string) {
-    setMessage("");
-    setError(messageText);
+    toast.error(messageText);
   }
 
-  useEffect(() => {
-    const bootstrap = async () => {
-      try {
-        await refresh();
-      } catch (nextError) {
-        setError(nextError instanceof Error ? nextError.message : "读取供应商配置失败");
-      }
-    };
-    void bootstrap();
-  }, []);
+  const error = providersError || modelsError;
 
   return (
     <AdminShell
@@ -99,7 +62,7 @@ export function ProvidersPage() {
     >
       <div className="col-span-12 grid gap-4">
         <TabBar active={activeTab} onChange={setActiveTab} />
-        <StatusPanel message={message} error={error} />
+        {error ? <ErrorBox message={error instanceof Error ? error.message : "读取供应商配置失败"} /> : null}
 
         {activeTab === "providers" && (
           <div className="grid gap-4">

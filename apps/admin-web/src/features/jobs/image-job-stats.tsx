@@ -1,25 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
-import { adminApi } from "@/lib/admin-api";
+import { useAdminStats } from "@/lib/use-admin-data";
 import type { DailyTrendItem, DistributionItem, ImageJobStats } from "@/lib/admin-image-job-types";
 
 export function ImageJobStatsPanel() {
-  const [stats, setStats] = useState<ImageJobStats | null>(null);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
+  const { data: stats, error, isLoading } = useAdminStats();
 
-  useEffect(() => {
-    setLoading(true);
-    adminApi.imageJobStats()
-      .then(setStats)
-      .catch((e) => setError(e instanceof Error ? e.message : "加载统计失败"))
-      .finally(() => setLoading(false));
-  }, []);
-
-  if (loading) return <div className="admin-panel p-6 text-center text-sm text-gray-500">加载统计数据...</div>;
-  if (error) return <div className="admin-panel p-6 text-center text-sm text-red-600">{error}</div>;
+  if (isLoading) return <div className="admin-panel p-6 text-center text-sm text-gray-500">加载统计数据...</div>;
+  if (error) return <div className="admin-panel p-6 text-center text-sm text-red-600">{error instanceof Error ? error.message : "加载统计失败"}</div>;
   if (!stats) return null;
 
   return (

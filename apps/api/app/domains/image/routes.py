@@ -211,8 +211,26 @@ def resolve_gallery_owner(*, request: Request, response: Response, session: Sess
 
 @admin_router.get("/image-tasks")
 @admin_router.get("/image/jobs")
-def get_admin_jobs(request: Request, session: Session = Depends(get_db_session)):
+def get_admin_jobs(
+    request: Request,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+    status: str = Query(default=""),
+    paginated: int = Query(default=0),
+    session: Session = Depends(get_db_session),
+):
     require_admin(request, session)
+    if paginated:
+        from apps.api.app.domains.image.admin_service import list_admin_jobs_paginated
+        result = list_admin_jobs_paginated(
+            session, page=page, page_size=page_size, status=status or None
+        )
+        return api_ok({
+            "items": [admin_job_payload(job, results=results) for job, results in result["items"]],
+            "total": result["total"],
+            "page": result["page"],
+            "page_size": result["page_size"],
+        })
     return api_ok([
         admin_job_payload(job, results=results)
         for job, results in list_admin_jobs_with_results(session)
@@ -220,9 +238,17 @@ def get_admin_jobs(request: Request, session: Session = Depends(get_db_session))
 
 
 @admin_router.get("/image/stats")
-def get_image_stats(request: Request, session: Session = Depends(get_db_session)):
+def get_image_stats(request: Request, response: Response, session: Session = Depends(get_db_session)):
     require_admin(request, session)
-    return api_ok(get_image_job_stats(session))
+    from apps.api.app.core.cache import app_cache
+    cached = app_cache.get("admin:image_stats")
+    if cached is not None:
+        response.headers["Cache-Control"] = "private, max-age=10"
+        return api_ok(cached)
+    stats = get_image_job_stats(session)
+    app_cache.set("admin:image_stats", stats, ttl_seconds=60)
+    response.headers["Cache-Control"] = "private, max-age=10"
+    return api_ok(stats)
 
 
 @admin_router.get("/image/assets/{asset_id}")

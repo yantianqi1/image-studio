@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import { Panel } from "@/features/ui/panel";
 import { adminApi } from "@/lib/admin-api";
 
@@ -61,49 +63,67 @@ export function ProviderListPanel({
     <Panel title="供应商列表" description="查看当前已配置的模型服务供应商。">
       <div className="grid gap-2">
         {providers.map((provider) => (
-          <div key={provider.id} className="admin-card grid gap-3">
-            <div className="flex items-center justify-between gap-2">
-              <span className="font-semibold text-sm">{provider.name}</span>
-              <span className={providerStatusClass(provider.status)}>{providerStatusText(provider.status)}</span>
-            </div>
-            <div className="grid grid-cols-3 gap-2 text-xs text-gray-400">
-              <div>
-                <span className="text-gray-300">接口类型</span> {providerTypeText(provider.type)}
-              </div>
-              <div className="col-span-2 truncate">
-                <span className="text-gray-300">接口地址</span> {provider.base_url || "-"}
-              </div>
-              <div className="col-span-2 truncate">
-                <span className="text-gray-300">密钥变量</span> {provider.api_key_env || "-"}
-              </div>
-              <div className="truncate">
-                <span className="text-gray-300">默认模型</span> {provider.default_model || "-"}
-              </div>
-            </div>
-            <button
-              className="admin-button border border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
-              type="button"
-              onClick={async () => {
-                if (!window.confirm(`确认删除供应商 ${provider.name}？`)) {
-                  return;
-                }
-                try {
-                  await adminApi.deleteProvider(provider.id);
-                  await onDeleted(`供应商 ${provider.name} 已删除`);
-                } catch (error) {
-                  onError(error instanceof Error ? error.message : "删除供应商失败");
-                }
-              }}
-            >
-              删除供应商
-            </button>
-          </div>
+          <ProviderCard key={provider.id} provider={provider} onDeleted={onDeleted} onError={onError} />
         ))}
         {providers.length === 0 ? (
           <div className="admin-card text-gray-400 text-sm">暂无供应商</div>
         ) : null}
       </div>
     </Panel>
+  );
+}
+
+function ProviderCard({
+  provider,
+  onDeleted,
+  onError,
+}: {
+  provider: Provider;
+  onDeleted: (message: string) => Promise<void>;
+  onError: (message: string) => void;
+}) {
+  const [pending, setPending] = useState(false);
+
+  return (
+    <div className="admin-card grid gap-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-semibold text-sm">{provider.name}</span>
+        <span className={providerStatusClass(provider.status)}>{providerStatusText(provider.status)}</span>
+      </div>
+      <div className="grid grid-cols-3 gap-2 text-xs text-gray-400">
+        <div>
+          <span className="text-gray-300">接口类型</span> {providerTypeText(provider.type)}
+        </div>
+        <div className="col-span-2 truncate">
+          <span className="text-gray-300">接口地址</span> {provider.base_url || "-"}
+        </div>
+        <div className="col-span-2 truncate">
+          <span className="text-gray-300">密钥变量</span> {provider.api_key_env || "-"}
+        </div>
+        <div className="truncate">
+          <span className="text-gray-300">默认模型</span> {provider.default_model || "-"}
+        </div>
+      </div>
+      <button
+        className="admin-button border border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+        type="button"
+        disabled={pending}
+        onClick={async () => {
+          if (!window.confirm(`确认删除供应商 ${provider.name}？`)) return;
+          setPending(true);
+          try {
+            await adminApi.deleteProvider(provider.id);
+            await onDeleted(`供应商 ${provider.name} 已删除`);
+          } catch (error) {
+            onError(error instanceof Error ? error.message : "删除供应商失败");
+          } finally {
+            setPending(false);
+          }
+        }}
+      >
+        {pending ? "删除中..." : "删除供应商"}
+      </button>
+    </div>
   );
 }
 

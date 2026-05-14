@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from sqlalchemy import Date, case, cast, func
+from sqlalchemy import Date, case, cast, func, select
 from sqlalchemy.orm import Session
 
 from apps.api.app.domains.image.models import ImageJob
@@ -14,22 +14,25 @@ def get_image_job_stats(session: Session) -> dict:
     week_ago = today_start - timedelta(days=7)
     two_weeks_ago = today_start - timedelta(days=14)
 
-    total = _scalar(session, func.count(ImageJob.id))
-    succeeded = _scalar(session, func.count(ImageJob.id), ImageJob.status == "succeeded")
-    failed = _scalar(session, func.count(ImageJob.id), ImageJob.status == "failed")
-    success_rate = round(succeeded / total, 4) if total > 0 else 0
+    # Single query for overview + revenue (replaces 6 separate queries)
+    overview_row = session.execute(
+        select(
+            func.count(ImageJob.id),
+            func.count(ImageJob.id).filter(ImageJob.status == "succeeded"),
+            func.count(ImageJob.id).filter(ImageJob.status == "failed"),
+            func.coalesce(func.sum(ImageJob.charge_cents), 0),
+            func.coalesce(func.sum(ImageJob.charge_cents).filter(ImageJob.created_at >= today_start), 0),
+            func.coalesce(func.sum(ImageJob.charge_cents).filter(ImageJob.created_at >= week_ago), 0),
+        )
+    ).one()
 
-    total_revenue = _scalar(session, func.coalesce(func.sum(ImageJob.charge_cents), 0))
-    today_revenue = _scalar(
-        session,
-        func.coalesce(func.sum(ImageJob.charge_cents), 0),
-        ImageJob.created_at >= today_start,
-    )
-    week_revenue = _scalar(
-        session,
-        func.coalesce(func.sum(ImageJob.charge_cents), 0),
-        ImageJob.created_at >= week_ago,
-    )
+    total = int(overview_row[0])
+    succeeded = int(overview_row[1])
+    failed = int(overview_row[2])
+    total_revenue = int(overview_row[3])
+    today_revenue = int(overview_row[4])
+    week_revenue = int(overview_row[5])
+    success_rate = round(succeeded / total, 4) if total > 0 else 0
 
     avg_duration_seconds = _avg_duration(session)
 
@@ -63,14 +66,6 @@ def get_image_job_stats(session: Session) -> dict:
         },
         "daily_trend": daily_trend,
     }
-
-
-def _scalar(session: Session, expr, *filters):
-    stmt = session.query(expr)
-    for f in filters:
-        stmt = stmt.filter(f)
-    result = stmt.scalar()
-    return int(result) if result is not None else 0
 
 
 def _avg_duration(session: Session) -> float | None:

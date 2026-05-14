@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { AdminShell } from "@/features/shell/admin-shell";
 import { ErrorBox } from "@/features/ui/error-box";
 import { Panel } from "@/features/ui/panel";
+import { SubmitButton } from "@/features/ui/submit-button";
 import { adminApi } from "@/lib/admin-api";
+import { useAdminSettings } from "@/lib/use-admin-data";
+import { useToast } from "@/lib/toast-context";
 
 type SettingsState = Readonly<{
   site_title: string;
@@ -17,38 +20,18 @@ type SettingsState = Readonly<{
   public_quota_per_ip_limit: number;
 }>;
 
-const DEFAULT_SETTINGS: SettingsState = {
-  site_title: "image Studio",
-  allow_public_signup: true,
-  allow_anonymous_image: true,
-  uploads_enabled: true,
-  public_quota_mode: "daily_global" as const,
-  public_quota_daily_global_limit: 20,
-  public_quota_per_ip_limit: 20,
-};
-
 export function SettingsPage() {
-  const [message, setMessage] = useState("");
+  const { data: settings, error: loadError, mutate } = useAdminSettings();
   const [error, setError] = useState("");
-  const [settings, setSettings] = useState<SettingsState>(DEFAULT_SETTINGS);
-
-  useEffect(() => {
-    adminApi
-      .settings()
-      .then(setSettings)
-      .catch((nextError) =>
-        setError(
-          nextError instanceof Error ? nextError.message : "读取设置失败",
-        ),
-      );
-  }, []);
+  const toast = useToast();
 
   async function handleSave(formData: FormData) {
+    if (!settings) return;
     try {
       setError("");
       const nextSettings = await adminApi.updateSettings(buildSettingsPayload(formData, settings));
-      setSettings(nextSettings);
-      setMessage("设置已保存并立即影响新请求");
+      mutate(nextSettings, false);
+      toast.success("设置已保存并立即影响新请求");
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "保存设置失败");
     }
@@ -59,19 +42,19 @@ export function SettingsPage() {
       title="站点设置"
       description="公开注册、匿名生图和公开共享额度已经在 API 入口真实生效。"
     >
-      <SettingsPanel error={error} message={message} onSave={handleSave} settings={settings} />
+      {loadError ? <div className="col-span-12"><ErrorBox message={loadError instanceof Error ? loadError.message : "读取设置失败"} /></div> : null}
+      {settings ? <SettingsPanel error={error} onSave={handleSave} settings={settings} /> : null}
     </AdminShell>
   );
 }
 
 type SettingsPanelProps = Readonly<{
   error: string;
-  message: string;
   onSave: (formData: FormData) => Promise<void>;
   settings: SettingsState;
 }>;
 
-function SettingsPanel({ error, message, onSave, settings }: SettingsPanelProps) {
+function SettingsPanel({ error, onSave, settings }: SettingsPanelProps) {
   return (
     <div className="col-span-12 lg:col-span-7">
       <Panel title="公开体验设置" description="提交 /api/admin/settings">
@@ -80,9 +63,9 @@ function SettingsPanel({ error, message, onSave, settings }: SettingsPanelProps)
           <RuntimeSwitches settings={settings} />
           <PublicQuotaModeSelector mode={settings.public_quota_mode} />
           <PublicQuotaLimitInputs settings={settings} />
-          <button className="admin-button" type="submit">保存设置</button>
+          <SubmitButton pendingText="保存中...">保存设置</SubmitButton>
         </form>
-        <SettingsFeedback error={error} message={message} />
+        {error ? <div className="mt-3"><ErrorBox message={error} /></div> : null}
       </Panel>
     </div>
   );
@@ -159,15 +142,6 @@ function QuotaLimitInput(props: Readonly<{ hint: string; label: string; name: st
       <input className="admin-input" name={props.name} type="number" min="1" step="1" defaultValue={props.value} required />
       <span className="admin-hint">{props.hint}</span>
     </label>
-  );
-}
-
-function SettingsFeedback({ error, message }: Readonly<{ error: string; message: string }>) {
-  return (
-    <div className="mt-3 grid gap-2">
-      {message ? <div className="admin-card text-emerald-700">{message}</div> : null}
-      {error ? <ErrorBox message={error} /> : null}
-    </div>
   );
 }
 
