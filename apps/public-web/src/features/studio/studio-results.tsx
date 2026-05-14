@@ -9,7 +9,6 @@ import {
   Globe2,
   Loader2,
   Lock,
-  PencilLine,
   Plus,
   RotateCcw,
   Sparkles,
@@ -163,7 +162,6 @@ export const StudioResults = memo(function StudioResults({
           <TurnCard
             key={turn.id}
             turn={turn}
-            conversationId={conversation.id}
             progress={progressByTurnKey.get(`${conversation.id}:${turn.id}`)}
             onRetry={() => onRetryTurn(turn.id)}
             onEditFromImage={(image) => onEditFromTurn(turn.id, image)}
@@ -179,7 +177,6 @@ export const StudioResults = memo(function StudioResults({
 
 const TurnCard = memo(function TurnCard({
   turn,
-  conversationId,
   progress,
   onRetry,
   onEditFromImage,
@@ -188,7 +185,6 @@ const TurnCard = memo(function TurnCard({
   onOpenLightbox,
 }: Readonly<{
   turn: StudioTurn;
-  conversationId: string;
   progress: TurnProgress | undefined;
   onRetry: () => void;
   onEditFromImage: (image: StoredImage) => void;
@@ -441,10 +437,20 @@ const TurnCard = memo(function TurnCard({
   );
 });
 
-function downloadImage(url: string, prompt: string) {
+async function downloadImage(url: string, prompt: string) {
   const name = prompt.slice(0, 20).replace(/[^\w一-鿿]/g, "_") || "image";
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${name}.png`;
-  a.click();
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = `${name}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(blobUrl);
+  } catch {
+    window.open(url, "_blank");
+  }
 }
