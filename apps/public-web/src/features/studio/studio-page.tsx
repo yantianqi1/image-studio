@@ -23,6 +23,7 @@ import {
   turnProgressKey,
   type TurnProgress,
 } from "@/features/studio/studio-turn-progress";
+import { findAspectRatio } from "@/features/studio/studio-options";
 import {
   DEFAULT_ASPECT_RATIO,
   DEFAULT_COUNT,
@@ -208,6 +209,14 @@ export function StudioPage() {
   // --- Handlers ---
   const handleToggleSidebar = useCallback(() => {
     setSidebarCollapsed((prev) => !prev);
+  }, []);
+
+  const handleAspectRatioChange = useCallback((ratio: string) => {
+    setAspectRatio(ratio);
+    const option = findAspectRatio(ratio);
+    if (option && option.resolutions.length > 0) {
+      setResolution(option.resolutions[0].value);
+    }
   }, []);
 
   const submitDraft = useCallback(async (draft: TurnDraft) => {
@@ -448,7 +457,7 @@ export function StudioPage() {
             onModeChange={setMode}
             onPromptChange={setPrompt}
             onModelChange={setModel}
-            onAspectRatioChange={setAspectRatio}
+            onAspectRatioChange={handleAspectRatioChange}
             onResolutionChange={setResolution}
             onQualityChange={setQuality}
             onCountChange={setCount}

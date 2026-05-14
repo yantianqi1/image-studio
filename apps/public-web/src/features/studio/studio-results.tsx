@@ -513,24 +513,33 @@ function GenerationSkeleton({
 }
 
 function getAspectPadding(aspectRatio: string, resolution: string): string {
+  const ratioMap: Record<string, number> = {
+    "1:1": 1,
+    "3:2": 2 / 3,
+    "16:9": 9 / 16,
+    "21:9": 9 / 21,
+    "9:16": 16 / 9,
+    "4:3": 3 / 4,
+    "3:4": 4 / 3,
+  };
+
   if (resolution && resolution !== "auto") {
     const parts = resolution.split("x");
     if (parts.length === 2) {
       const w = Number(parts[0]);
       const h = Number(parts[1]);
-      if (w > 0 && h > 0) return `${(h / w) * 100}%`;
+      if (w > 0 && h > 0) {
+        const resolvedRatio = h / w;
+        const expectedRatio = ratioMap[aspectRatio];
+        if (!expectedRatio || Math.abs(resolvedRatio - expectedRatio) < 0.1) {
+          return `${resolvedRatio * 100}%`;
+        }
+      }
     }
   }
-  const ratioMap: Record<string, string> = {
-    "1:1": "100%",
-    "3:2": "66.67%",
-    "16:9": "56.25%",
-    "21:9": "42.86%",
-    "9:16": "177.78%",
-    "4:3": "75%",
-    "3:4": "133.33%",
-  };
-  return ratioMap[aspectRatio] ?? "100%";
+
+  const ratio = ratioMap[aspectRatio];
+  return ratio ? `${ratio * 100}%` : "100%";
 }
 
 async function downloadImage(url: string, prompt: string) {
