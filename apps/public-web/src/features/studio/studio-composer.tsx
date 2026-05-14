@@ -120,6 +120,7 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const modelMenuRef = useRef<HTMLDivElement>(null);
+  const settingsContainerRef = useRef<HTMLDivElement>(null);
 
   const activeRatio = ASPECT_RATIO_OPTIONS.find((o) => o.value === aspectRatio);
   const resolutions = activeRatio?.resolutions ?? [];
@@ -137,6 +138,18 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
     window.addEventListener("mousedown", handlePointerDown);
     return () => window.removeEventListener("mousedown", handlePointerDown);
   }, [isModelMenuOpen]);
+
+  // Close settings panel on outside click
+  useEffect(() => {
+    if (!isSettingsOpen) return;
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!settingsContainerRef.current?.contains(event.target as Node)) {
+        setIsSettingsOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", handlePointerDown);
+    return () => window.removeEventListener("mousedown", handlePointerDown);
+  }, [isSettingsOpen]);
 
   // Resize cursor effect
   useEffect(() => {
@@ -430,7 +443,7 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
 
                 {/* Settings toggle (image modes only) */}
                 {mode !== "chat" && (
-                  <div className="relative shrink-0">
+                  <div ref={settingsContainerRef} className="relative shrink-0">
                     <button
                       type="button"
                       className={cn(

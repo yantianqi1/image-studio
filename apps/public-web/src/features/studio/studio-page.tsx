@@ -38,6 +38,14 @@ import { useApiResource } from "@/lib/use-api-resource";
 import { cn } from "@/lib/cn";
 
 const SIDEBAR_COLLAPSED_KEY = "commercial_studio_sidebar_collapsed";
+const SETTINGS_KEY = "commercial_studio_image_settings";
+
+type PersistedSettings = {
+  aspectRatio: string;
+  resolution: string;
+  quality: string;
+  count: number;
+};
 
 function readSidebarCollapsed(): boolean {
   if (typeof window === "undefined") return false;
@@ -46,6 +54,21 @@ function readSidebarCollapsed(): boolean {
 
 function saveSidebarCollapsed(collapsed: boolean) {
   localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed));
+}
+
+function readPersistedSettings(): Partial<PersistedSettings> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (!raw) return {};
+    return JSON.parse(raw) as Partial<PersistedSettings>;
+  } catch {
+    return {};
+  }
+}
+
+function savePersistedSettings(settings: PersistedSettings) {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
 }
 
 const TOOL_INSTRUCTION_PATTERNS = [
@@ -110,10 +133,11 @@ export function StudioPage() {
   const [mode, setMode] = useState<ComposerMode>("generate");
   const [prompt, setPrompt] = useState("");
   const [model, setModel] = useState("");
-  const [aspectRatio, setAspectRatio] = useState(DEFAULT_ASPECT_RATIO);
-  const [resolution, setResolution] = useState(DEFAULT_RESOLUTION);
-  const [quality, setQuality] = useState(DEFAULT_QUALITY);
-  const [count, setCount] = useState(DEFAULT_COUNT);
+  const savedSettings = useRef(readPersistedSettings());
+  const [aspectRatio, setAspectRatio] = useState(savedSettings.current.aspectRatio ?? DEFAULT_ASPECT_RATIO);
+  const [resolution, setResolution] = useState(savedSettings.current.resolution ?? DEFAULT_RESOLUTION);
+  const [quality, setQuality] = useState(savedSettings.current.quality ?? DEFAULT_QUALITY);
+  const [count, setCount] = useState(savedSettings.current.count ?? DEFAULT_COUNT);
   const [referenceImages, setReferenceImages] = useState<StoredReferenceImage[]>([]);
 
   // --- UI state ---
@@ -167,6 +191,11 @@ export function StudioPage() {
   useEffect(() => {
     saveSidebarCollapsed(sidebarCollapsed);
   }, [sidebarCollapsed]);
+
+  // --- Settings persistence ---
+  useEffect(() => {
+    savePersistedSettings({ aspectRatio, resolution, quality, count });
+  }, [aspectRatio, resolution, quality, count]);
 
   // --- Progress subscription ---
   useEffect(() => {
@@ -365,8 +394,8 @@ export function StudioPage() {
         className={cn(
           "grid h-full overflow-hidden transition-[grid-template-columns] duration-200 ease-in-out",
           sidebarCollapsed
-            ? "grid-cols-[56px_minmax(0,1fr)] max-lg:grid-cols-1"
-            : "grid-cols-[240px_minmax(0,1fr)] max-lg:grid-cols-1",
+            ? "grid-cols-1 lg:grid-cols-[56px_minmax(0,1fr)]"
+            : "grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)]",
         )}
       >
         <div className="hidden h-full min-h-0 lg:block">
