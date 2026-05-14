@@ -47,6 +47,49 @@ function saveSidebarCollapsed(collapsed: boolean) {
   localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed));
 }
 
+const TOOL_INSTRUCTION_PATTERNS = [
+  /^加载并使用.*工具.*作画[^]*?(?=\n---|\n\n)/i,
+  /^(?:请)?(?:使用|调用|加载).*(?:工具|模型|插件).*(?:作画|生成|绘制|创作)[^\n]*/i,
+  /^(?:不要|而不是).*(?:分析|给提示词|解释|描述)[^\n]*/i,
+];
+
+function cleanPromptText(raw: string): string {
+  let text = raw.trim();
+
+  // Remove leading tool instructions (lines before "---" separator)
+  const separatorIndex = text.indexOf("\n---");
+  if (separatorIndex !== -1) {
+    const before = text.slice(0, separatorIndex).trim();
+    const after = text.slice(separatorIndex + 4).trim();
+    const beforeHasToolInstruction = TOOL_INSTRUCTION_PATTERNS.some((p) => p.test(before));
+    if (beforeHasToolInstruction && after.length > 0) {
+      text = after;
+    }
+  }
+
+  // Remove standalone tool instruction lines at the start
+  const lines = text.split("\n");
+  let startIndex = 0;
+  for (let i = 0; i < Math.min(lines.length, 3); i++) {
+    const line = lines[i].trim();
+    if (!line || line === "---") {
+      startIndex = i + 1;
+      continue;
+    }
+    if (TOOL_INSTRUCTION_PATTERNS.some((p) => p.test(line))) {
+      startIndex = i + 1;
+      continue;
+    }
+    break;
+  }
+
+  if (startIndex > 0) {
+    text = lines.slice(startIndex).join("\n").trim();
+  }
+
+  return text || raw.trim();
+}
+
 export function StudioPage() {
   // --- Composer state ---
   const [mode, setMode] = useState<ComposerMode>("generate");
@@ -235,7 +278,7 @@ export function StudioPage() {
   }, [conversations]);
 
   const handleApplyPrompt = useCallback((prompt: BananaPrompt) => {
-    setPrompt(prompt.prompt);
+    setPrompt(cleanPromptText(prompt.prompt));
     if (prompt.mode === "edit") {
       setMode("edit");
     } else {
