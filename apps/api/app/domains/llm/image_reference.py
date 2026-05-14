@@ -22,6 +22,12 @@ def extract_image_reference(payload: dict[str, object]) -> ImageReference:
     url = extract_markdown_image_url(text)
     if url is not None:
         return ImageReference(kind="url", value=url)
+    if text.strip():
+        raise AppError(
+            code="provider_content_refused",
+            message=text[:500],
+            status_code=502,
+        )
     raise AppError(code="provider_response_invalid", message="provider response missing image data", status_code=502)
 
 

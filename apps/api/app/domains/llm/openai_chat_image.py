@@ -36,11 +36,12 @@ def render_openai_chat_compatible_image(
         asset_ids = (*asset_ids, source_asset_id)
     storage = build_asset_storage()
     assets = [resolve_image_asset(session, asset_id=asset_id, storage=storage) for asset_id in asset_ids]
+    timeout = httpx.Timeout(connect=30.0, read=get_settings().chat_image_timeout_seconds, write=30.0, pool=10.0)
     response = httpx.post(
         build_provider_url(provider.base_url),
         headers=build_auth_headers(provider),
         json=build_chat_image_payload(prompt=prompt, provider_model=provider_model, assets=assets, storage=storage),
-        timeout=get_settings().chat_image_timeout_seconds,
+        timeout=timeout,
     )
     return parse_chat_image_response(response=response, provider=provider, prompt=prompt)
 

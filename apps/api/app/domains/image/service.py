@@ -283,8 +283,12 @@ def resolve_job_client_provider_config(job: ImageJob) -> ClientProviderConfig | 
     return client_provider_config_from_mapping(job.client_provider_config)
 
 
+NON_RETRYABLE_ERROR_CODES = frozenset({"provider_content_refused", "provider_api_key_missing", "provider_base_url_missing"})
+
+
 def handle_job_failure(session: Session, *, job: ImageJob, exc: Exception) -> None:
-    if job.attempt_count >= job.max_attempts:
+    error_code = getattr(exc, "code", None)
+    if error_code in NON_RETRYABLE_ERROR_CODES or job.attempt_count >= job.max_attempts:
         mark_job_failed(session, job=job, error_message=str(exc))
         return
     retry_at = datetime.utcnow() + timedelta(seconds=IMAGE_JOB_RETRY_DELAY_SECONDS)

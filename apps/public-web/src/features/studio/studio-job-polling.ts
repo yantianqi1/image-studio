@@ -11,6 +11,7 @@ const HISTORY_STATUS_SUCCESS = "success";
 const TERMINAL_FAILED_STATUS = "failed";
 const TERMINAL_SUCCEEDED_STATUS = "succeeded";
 const MISSING_RESULTS_MESSAGE = "生成任务已完成，但没有返回图片结果";
+const MAX_POLL_DURATION_MS = 5 * 60 * 1000;
 
 type Sleep = (milliseconds: number, signal?: AbortSignal) => Promise<void>;
 type JobUpdateHandler = (job: ImageGenerationResponse) => void;
@@ -69,8 +70,12 @@ export async function waitForImageJobResults(
   options: WaitForImageJobOptions = {},
 ): Promise<CompletedImageJob> {
   const sleep = options.sleep ?? defaultSleep;
+  const startedAt = Date.now();
   while (true) {
     throwIfAborted(options.signal);
+    if (Date.now() - startedAt > MAX_POLL_DURATION_MS) {
+      throw new Error("生成超时，请重试");
+    }
     const job = await api.getImageJob(jobId, { signal: options.signal });
     throwIfAborted(options.signal);
     options.onJobUpdate?.(job);
