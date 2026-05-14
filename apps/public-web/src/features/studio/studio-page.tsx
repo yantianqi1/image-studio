@@ -366,7 +366,7 @@ export function StudioPage() {
             : "grid-cols-[240px_minmax(0,1fr)] max-lg:grid-cols-1",
         )}
       >
-        <div className="hidden lg:block">
+        <div className="hidden h-full min-h-0 lg:block">
           <StudioSidebar
           conversations={conversations.conversations}
           activeId={conversations.activeId}
