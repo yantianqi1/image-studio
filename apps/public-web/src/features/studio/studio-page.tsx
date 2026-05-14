@@ -366,7 +366,8 @@ export function StudioPage() {
             : "grid-cols-[240px_minmax(0,1fr)] max-lg:grid-cols-1",
         )}
       >
-        <StudioSidebar
+        <div className="hidden lg:block">
+          <StudioSidebar
           conversations={conversations.conversations}
           activeId={conversations.activeId}
           collapsed={sidebarCollapsed}
@@ -376,6 +377,7 @@ export function StudioPage() {
           onClearAll={conversations.clearAll}
           onToggleCollapse={handleToggleSidebar}
         />
+        </div>
         <main className="flex h-full min-h-0 flex-col overflow-hidden">
           <StudioResults
             conversation={conversations.activeConversation}
