@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   imageJobResultsToHistoryImages,
   waitForImageJobResults,
+  type CompletedImageJob,
 } from "@/features/studio/studio-job-polling";
 import { resolveImageModel } from "@/features/studio/studio-models";
 import { AppShell } from "@/features/shell/app-shell";
@@ -32,6 +33,7 @@ import {
   type ComposerMode,
   type StoredImage,
   type StoredReferenceImage,
+  type StudioTurn,
   type TurnDraft,
 } from "@/features/studio/studio-types";
 import { useStudioConversations } from "@/features/studio/use-studio-conversations";
@@ -130,20 +132,34 @@ async function validatePreviewImages(prompts: BananaPrompt[]): Promise<BananaPro
   return results.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
 }
 
+function imageJobResultsToStoredImages(results: CompletedImageJob["results"]): StoredImage[] {
+  return imageJobResultsToHistoryImages(results).map((img) => ({
+    ...img,
+    visibility: img.visibility as ImageAssetVisibility | undefined,
+  }));
+}
+
+function getImageJobProgressMessage(status: string): string {
+  if (status === "queued" || status === "pending") {
+    return "排队中...";
+  }
+  return "生成中...";
+}
+
 export function StudioPage() {
   // --- Composer state ---
   const [mode, setMode] = useState<ComposerMode>("generate");
   const [prompt, setPrompt] = useState("");
   const [model, setModel] = useState("");
-  const savedSettings = useRef(readPersistedSettings());
-  const [aspectRatio, setAspectRatio] = useState(savedSettings.current.aspectRatio ?? DEFAULT_ASPECT_RATIO);
-  const [resolution, setResolution] = useState(savedSettings.current.resolution ?? DEFAULT_RESOLUTION);
-  const [quality, setQuality] = useState(savedSettings.current.quality ?? DEFAULT_QUALITY);
-  const [count, setCount] = useState(savedSettings.current.count ?? DEFAULT_COUNT);
+  const [initialSettings] = useState(readPersistedSettings);
+  const [aspectRatio, setAspectRatio] = useState(initialSettings.aspectRatio ?? DEFAULT_ASPECT_RATIO);
+  const [resolution, setResolution] = useState(initialSettings.resolution ?? DEFAULT_RESOLUTION);
+  const [quality, setQuality] = useState(initialSettings.quality ?? DEFAULT_QUALITY);
+  const [count, setCount] = useState(initialSettings.count ?? DEFAULT_COUNT);
   const [referenceImages, setReferenceImages] = useState<StoredReferenceImage[]>([]);
 
   // --- UI state ---
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed);
   const [promptMarketOpen, setPromptMarketOpen] = useState(false);
   const [progressMap, setProgressMap] = useState<ReadonlyMap<string, TurnProgress>>(new Map());
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -187,10 +203,6 @@ export function StudioPage() {
 
   // --- Sidebar persistence ---
   useEffect(() => {
-    setSidebarCollapsed(readSidebarCollapsed());
-  }, []);
-
-  useEffect(() => {
     saveSidebarCollapsed(sidebarCollapsed);
   }, [sidebarCollapsed]);
 
@@ -218,6 +230,79 @@ export function StudioPage() {
       setResolution(option.resolutions[0].value);
     }
   }, []);
+
+  const resumeImageJobPolling = useCallback(async (conversationId: string, turn: StudioTurn) => {
+    if (!turn.taskId) {
+      conversations.updateTurn(conversationId, turn.id, {
+        status: "error",
+        error: "生成请求未完成，请重试",
+      });
+      return;
+    }
+
+    const progressKey = turnProgressKey(conversationId, turn.id);
+    if (abortControllersRef.current.has(progressKey)) {
+      return;
+    }
+
+    const abortController = new AbortController();
+    abortControllersRef.current.set(progressKey, abortController);
+    setTurnProgress(progressKey, { message: "恢复任务状态..." });
+
+    const createdAtMs = new Date(turn.createdAt).getTime();
+    const startTime = Number.isNaN(createdAtMs) ? Date.now() : createdAtMs;
+
+    try {
+      const completed = await waitForImageJobResults(publicApi, turn.taskId, {
+        signal: abortController.signal,
+        onJobUpdate: (updatedJob) => {
+          if (updatedJob.status === "succeeded") return;
+          const elapsed = Date.now() - startTime;
+          setTurnProgress(progressKey, {
+            message: getImageJobProgressMessage(updatedJob.status),
+            elapsedMs: elapsed,
+          });
+          conversations.updateTurn(conversationId, turn.id, {
+            status: "generating",
+            taskId: updatedJob.id,
+            taskStatus: updatedJob.status,
+          });
+        },
+      });
+
+      conversations.updateTurn(conversationId, turn.id, {
+        status: "success",
+        taskId: completed.job.id,
+        taskStatus: completed.job.status,
+        images: imageJobResultsToStoredImages(completed.results),
+      });
+    } catch (error: unknown) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return;
+      }
+      const message = error instanceof Error ? error.message : "生成失败";
+      conversations.updateTurn(conversationId, turn.id, { status: "error", error: message });
+    } finally {
+      clearTurnProgress(progressKey);
+      abortControllersRef.current.delete(progressKey);
+    }
+  }, [conversations]);
+
+  useEffect(() => {
+    if (!conversations.hydrated) return;
+    for (const conversation of conversations.conversations) {
+      for (const turn of conversation.turns) {
+        if (turn.status !== "queued" && turn.status !== "generating") {
+          continue;
+        }
+        const progressKey = turnProgressKey(conversation.id, turn.id);
+        if (abortControllersRef.current.has(progressKey)) {
+          continue;
+        }
+        void resumeImageJobPolling(conversation.id, turn);
+      }
+    }
+  }, [conversations.conversations, conversations.hydrated, resumeImageJobPolling]);
 
   const submitDraft = useCallback(async (draft: TurnDraft) => {
     const { turnId, conversationId: convId } = conversations.addTurn(draft);
@@ -260,7 +345,7 @@ export function StudioPage() {
         onJobUpdate: (updatedJob) => {
           if (updatedJob.status === "succeeded") return;
           const elapsed = Date.now() - startTime;
-          const statusText = updatedJob.status === "pending" ? "排队中..." : "生成中...";
+          const statusText = getImageJobProgressMessage(updatedJob.status);
           setTurnProgress(progressKey, { message: statusText, elapsedMs: elapsed });
           conversations.updateTurn(convId, turnId, {
             status: "generating",
@@ -270,10 +355,7 @@ export function StudioPage() {
         },
       });
 
-      const images = imageJobResultsToHistoryImages(completed.results).map((img) => ({
-        ...img,
-        visibility: img.visibility as ImageAssetVisibility | undefined,
-      }));
+      const images = imageJobResultsToStoredImages(completed.results);
       conversations.updateTurn(convId, turnId, { status: "success", images });
     } catch (error: unknown) {
       if (error instanceof DOMException && error.name === "AbortError") {
