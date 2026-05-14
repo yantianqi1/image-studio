@@ -1,3 +1,4 @@
+import { createClientId } from "@/lib/client-id";
 import type { StudioConversation, StudioTurn, TurnStatus } from "@/features/studio/studio-types";
 
 const MIGRATION_DONE_KEY = "commercial_studio_history_migrated";
@@ -49,7 +50,7 @@ function mapStatus(status: string): TurnStatus {
 
 function convertItemToTurn(item: OldHistoryItem): StudioTurn {
   return {
-    id: crypto.randomUUID(),
+    id: createClientId("studio-turn"),
     prompt: item.prompt,
     model: item.modelCode,
     mode: "generate",

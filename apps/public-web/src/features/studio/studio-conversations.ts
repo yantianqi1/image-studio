@@ -1,4 +1,6 @@
 import localforage from "localforage";
+
+import { createClientId } from "@/lib/client-id";
 import type {
   StudioConversation,
   StudioConversationStats,
@@ -58,7 +60,7 @@ export function deleteConversation(
 export function createConversation(title: string): StudioConversation {
   const now = new Date().toISOString();
   return {
-    id: crypto.randomUUID(),
+    id: createClientId("studio-conversation"),
     title,
     createdAt: now,
     updatedAt: now,
@@ -71,7 +73,7 @@ export function addTurnToConversation(
   draft: TurnDraft,
 ): { conversation: StudioConversation; turn: StudioTurn } {
   const turn: StudioTurn = {
-    id: crypto.randomUUID(),
+    id: createClientId("studio-turn"),
     ...draft,
     images: [],
     status: "queued",

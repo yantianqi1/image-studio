@@ -1,3 +1,5 @@
+import { createClientId } from "@/lib/client-id";
+
 export type ClientProviderDraft = Readonly<{
   baseUrl: string;
   apiKey: string;
@@ -73,10 +75,7 @@ function ensureClientId(): string {
 }
 
 function buildClientId(): string {
-  if (window.crypto?.randomUUID) {
-    return `${CLIENT_ID_PREFIX}-${window.crypto.randomUUID()}`;
-  }
-  return `${CLIENT_ID_PREFIX}-${Date.now().toString(36)}`;
+  return createClientId(CLIENT_ID_PREFIX);
 }
 
 function isBrowser(): boolean {
