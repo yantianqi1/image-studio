@@ -194,12 +194,7 @@ const TurnCard = memo(function TurnCard({
 }>) {
   const modeInfo = MODE_LABELS[turn.mode] ?? MODE_LABELS.generate;
   const isBusy = turn.status === "queued" || turn.status === "generating";
-  const busyStartRef = useRef<number | null>(null);
-  if (isBusy && busyStartRef.current == null) {
-    busyStartRef.current = Date.now() - (progress?.elapsedMs ?? 0);
-  } else if (!isBusy) {
-    busyStartRef.current = null;
-  }
+  const busyStartMs = isBusy ? new Date(turn.createdAt).getTime() : null;
 
   return (
     <div className="flex flex-col gap-3 sm:gap-4">
@@ -397,8 +392,8 @@ const TurnCard = memo(function TurnCard({
                 <p className="relative text-sm font-medium text-gray-700">
                   {progress?.message || (turn.status === "queued" ? "准备中..." : "生成中...")}
                 </p>
-                {busyStartRef.current != null && (
-                  <LiveTimer startMs={busyStartRef.current} />
+                {busyStartMs != null && (
+                  <LiveTimer startMs={busyStartMs} />
                 )}
               </div>
             </div>

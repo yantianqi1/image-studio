@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from apps.api.app.core.errors import AppError
 
 MARKDOWN_IMAGE_PATTERN = re.compile(r"!\[[^\]]*\]\((https?://[^\s)]+)\)")
+BASE64_DATA_URL_PATTERN = re.compile(r"^data:image/[^;]+;base64,(.+)$", re.DOTALL)
 
 
 @dataclass(frozen=True)
@@ -18,6 +19,9 @@ def extract_image_reference(payload: dict[str, object]) -> ImageReference:
     data_reference = extract_data_reference(payload)
     if data_reference is not None:
         return data_reference
+    content_array_ref = extract_content_array_reference(payload)
+    if content_array_ref is not None:
+        return content_array_ref
     text = extract_response_text(payload)
     url = extract_markdown_image_url(text)
     if url is not None:
@@ -47,6 +51,50 @@ def extract_data_reference(payload: dict[str, object]) -> ImageReference | None:
     return None
 
 
+def extract_content_array_reference(payload: dict[str, object]) -> ImageReference | None:
+    choices = payload.get("choices")
+    if not isinstance(choices, list) or not choices:
+        return None
+    first_choice = choices[0]
+    if not isinstance(first_choice, dict):
+        return None
+    message = first_choice.get("message")
+    if not isinstance(message, dict):
+        return None
+    content = message.get("content")
+    if not isinstance(content, list):
+        return None
+    for item in content:
+        if not isinstance(item, dict):
+            continue
+        ref = extract_content_item_image(item)
+        if ref is not None:
+            return ref
+    return None
+
+
+def extract_content_item_image(item: dict[str, object]) -> ImageReference | None:
+    item_type = item.get("type")
+    if item_type == "image_url":
+        image_url = item.get("image_url")
+        if isinstance(image_url, dict):
+            url = image_url.get("url")
+            if isinstance(url, str):
+                match = BASE64_DATA_URL_PATTERN.match(url)
+                if match:
+                    return ImageReference(kind="base64", value=match.group(1))
+                if url.startswith(("http://", "https://")):
+                    return ImageReference(kind="url", value=url)
+    if item_type == "image":
+        b64 = item.get("b64_json") or item.get("data")
+        if isinstance(b64, str) and b64:
+            return ImageReference(kind="base64", value=b64)
+        url = item.get("url")
+        if isinstance(url, str) and url.startswith(("http://", "https://")):
+            return ImageReference(kind="url", value=url)
+    return None
+
+
 def extract_response_text(payload: dict[str, object]) -> str:
     output_text = payload.get("output_text")
     if isinstance(output_text, str):
@@ -68,7 +116,17 @@ def extract_choices_text(choices: object) -> str:
     if not isinstance(message, dict):
         return ""
     content = message.get("content")
-    return content if isinstance(content, str) else ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        texts = []
+        for item in content:
+            if isinstance(item, dict) and item.get("type") == "text":
+                text = item.get("text")
+                if isinstance(text, str):
+                    texts.append(text)
+        return "\n".join(texts)
+    return ""
 
 
 def extract_output_content_text(output: object) -> str:

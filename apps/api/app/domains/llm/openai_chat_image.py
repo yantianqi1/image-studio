@@ -144,7 +144,21 @@ def extract_content(value: object) -> str:
     if not isinstance(value, dict):
         return ""
     content = value.get("content")
-    return content if isinstance(content, str) else ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if not isinstance(item, dict):
+                continue
+            if item.get("type") == "text" and isinstance(item.get("text"), str):
+                parts.append(item["text"])
+            elif item.get("type") == "image_url":
+                image_url = item.get("image_url")
+                if isinstance(image_url, dict) and isinstance(image_url.get("url"), str):
+                    parts.append(f'![image]({image_url["url"]})')
+        return "".join(parts)
+    return ""
 
 
 def resolve_image_reference(reference: ImageReference) -> tuple[bytes, str]:
