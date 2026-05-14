@@ -372,7 +372,7 @@ export function StudioPage() {
           activeId={conversations.activeId}
           collapsed={sidebarCollapsed}
           onSelect={conversations.selectConversation}
-          onNew={conversations.newConversation}
+          onNew={() => conversations.newConversation()}
           onDelete={conversations.removeConversation}
           onClearAll={conversations.clearAll}
           onToggleCollapse={handleToggleSidebar}
