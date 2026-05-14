@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useRef } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import {
   CircleStop,
   Clock3,
@@ -61,6 +61,20 @@ function formatElapsed(ms: number | undefined) {
   const seconds = Math.floor(ms / 1000);
   if (seconds < 60) return `${seconds}s`;
   return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+}
+
+function LiveTimer({ startMs }: { startMs: number }) {
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const elapsed = now - startMs;
+  return (
+    <p className="rounded-full bg-white/70 px-2.5 py-1 font-mono text-xs tabular-nums text-gray-400">
+      已等待 {formatElapsed(elapsed)}
+    </p>
+  );
 }
 
 export const StudioResults = memo(function StudioResults({
@@ -184,6 +198,12 @@ const TurnCard = memo(function TurnCard({
 }>) {
   const modeInfo = MODE_LABELS[turn.mode] ?? MODE_LABELS.generate;
   const isBusy = turn.status === "queued" || turn.status === "generating";
+  const busyStartRef = useRef<number | null>(null);
+  if (isBusy && busyStartRef.current == null) {
+    busyStartRef.current = Date.now() - (progress?.elapsedMs ?? 0);
+  } else if (!isBusy) {
+    busyStartRef.current = null;
+  }
 
   return (
     <div className="flex flex-col gap-3 sm:gap-4">
@@ -368,22 +388,21 @@ const TurnCard = memo(function TurnCard({
 
           {/* Loading state */}
           {isBusy && (
-            <div className="mb-3 inline-block w-full break-inside-avoid overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 sm:mb-4">
-              <div className="flex flex-col items-center justify-center gap-2.5 px-5 py-6 text-center text-gray-500">
-                <div className="rounded-full bg-white p-3 shadow-sm">
+            <div className="mb-3 inline-block w-full break-inside-avoid overflow-hidden rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50/80 via-white to-indigo-50/60 sm:mb-4">
+              <div className="relative flex flex-col items-center justify-center gap-2.5 px-5 py-6 text-center text-gray-500">
+                <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-transparent via-blue-100/40 to-transparent" />
+                <div className="relative rounded-full bg-white p-3 shadow-sm ring-2 ring-blue-100/60">
                   {turn.status === "queued" && !progress ? (
                     <Clock3 className="size-5 text-gray-400" />
                   ) : (
                     <Loader2 className="size-5 animate-spin text-blue-500" />
                   )}
                 </div>
-                <p className="text-sm font-medium text-gray-700">
+                <p className="relative text-sm font-medium text-gray-700">
                   {progress?.message || (turn.status === "queued" ? "准备中..." : "生成中...")}
                 </p>
-                {progress?.elapsedMs != null && (
-                  <p className="rounded-full bg-white/70 px-2.5 py-1 font-mono text-xs tabular-nums text-gray-400">
-                    已等待 {formatElapsed(progress.elapsedMs)}
-                  </p>
+                {busyStartRef.current != null && (
+                  <LiveTimer startMs={busyStartRef.current} />
                 )}
               </div>
             </div>
