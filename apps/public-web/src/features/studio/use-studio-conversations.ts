@@ -81,19 +81,21 @@ export function useStudioConversations() {
     setActiveId(null);
   }, []);
 
-  const addTurn = useCallback((draft: TurnDraft) => {
+  const addTurn = useCallback((draft: TurnDraft): { turnId: string; conversationId: string } => {
     let turnId = "";
+    let conversationId = "";
     setConversations((prev) => {
       let conv = prev.find((c) => c.id === activeId);
       if (!conv) {
         conv = createConversation(draft.prompt.slice(0, 12) || "新对话");
         setActiveId(conv.id);
       }
+      conversationId = conv.id;
       const { conversation: updated, turn } = addTurnToConversation(conv, draft);
       turnId = turn.id;
       return saveConversation(prev, updated);
     });
-    return turnId;
+    return { turnId, conversationId };
   }, [activeId]);
 
   const updateTurn = useCallback((conversationId: string, turnId: string, patch: TurnUpdate) => {

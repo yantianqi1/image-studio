@@ -200,9 +200,8 @@ export function StudioPage() {
       visibility: "private",
     };
 
-    const turnId = conversations.addTurn(draft);
-    const convId = conversations.activeId;
-    if (!convId) return;
+    const { turnId, conversationId: convId } = conversations.addTurn(draft);
+    if (!convId || !turnId) return;
 
     setIsSubmitting(true);
     setPrompt("");
@@ -213,12 +212,15 @@ export function StudioPage() {
 
     try {
       // Upload reference images that only have dataUrl
+      if (referenceImages.length > 0) {
+        setTurnProgress(progressKey, { message: "上传参考图..." });
+      }
       const uploadedRefs = await uploadPendingReferenceImages(referenceImages);
       const referenceAssetIds = uploadedRefs
         .map((img) => img.assetId)
         .filter((id): id is number => id != null);
 
-      setTurnProgress(progressKey, { message: "提交中..." });
+      setTurnProgress(progressKey, { message: "提交生成请求..." });
 
       const job = await publicApi.generateImage({
         prompt: draft.prompt,
@@ -232,7 +234,7 @@ export function StudioPage() {
       });
 
       conversations.updateTurn(convId, turnId, { status: "generating", taskId: job.id });
-      setTurnProgress(progressKey, { message: "生成中..." });
+      setTurnProgress(progressKey, { message: "已提交，等待生成..." });
 
       const startTime = Date.now();
       const completed = await waitForImageJobResults(publicApi, job.id, {
@@ -240,7 +242,8 @@ export function StudioPage() {
         onJobUpdate: (updatedJob) => {
           if (updatedJob.status === "succeeded") return;
           const elapsed = Date.now() - startTime;
-          setTurnProgress(progressKey, { message: "生成中...", elapsedMs: elapsed });
+          const statusText = updatedJob.status === "pending" ? "排队中..." : "生成中...";
+          setTurnProgress(progressKey, { message: statusText, elapsedMs: elapsed });
           conversations.updateTurn(convId, turnId, {
             status: "generating",
             taskId: updatedJob.id,

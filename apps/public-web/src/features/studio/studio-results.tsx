@@ -368,21 +368,18 @@ const TurnCard = memo(function TurnCard({
 
           {/* Loading state */}
           {isBusy && (
-            <div className="mb-3 inline-block h-[160px] w-full break-inside-avoid overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 sm:mb-4">
-              <div className="flex h-full flex-col items-center justify-center gap-2 px-5 py-5 text-center text-gray-500">
+            <div className="mb-3 inline-block w-full break-inside-avoid overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 sm:mb-4">
+              <div className="flex flex-col items-center justify-center gap-2.5 px-5 py-6 text-center text-gray-500">
                 <div className="rounded-full bg-white p-3 shadow-sm">
-                  {turn.status === "queued" ? (
+                  {turn.status === "queued" && !progress ? (
                     <Clock3 className="size-5 text-gray-400" />
                   ) : (
                     <Loader2 className="size-5 animate-spin text-blue-500" />
                   )}
                 </div>
-                <p className="text-sm">
-                  {turn.status === "queued" ? "已加入队列..." : "正在处理..."}
+                <p className="text-sm font-medium text-gray-700">
+                  {progress?.message || (turn.status === "queued" ? "准备中..." : "生成中...")}
                 </p>
-                {progress?.message && (
-                  <p className="text-xs text-gray-400">{progress.message}</p>
-                )}
                 {progress?.elapsedMs != null && (
                   <p className="rounded-full bg-white/70 px-2.5 py-1 font-mono text-xs tabular-nums text-gray-400">
                     已等待 {formatElapsed(progress.elapsedMs)}
