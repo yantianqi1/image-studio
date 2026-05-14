@@ -210,42 +210,21 @@ export function StudioPage() {
     setSidebarCollapsed((prev) => !prev);
   }, []);
 
-  const handleSubmit = useCallback(async () => {
-    if (!prompt.trim() || isSubmitting) return;
-
-    const resolvedModel =
-      modelsState.status === "ready"
-        ? resolveImageModel(modelsState.data, model).resolvedModelCode
-        : model;
-
-    const draft: TurnDraft = {
-      prompt: prompt.trim(),
-      model: resolvedModel,
-      mode,
-      referenceImages,
-      count,
-      aspectRatio,
-      resolution,
-      quality,
-      visibility: "private",
-    };
-
+  const submitDraft = useCallback(async (draft: TurnDraft) => {
     const { turnId, conversationId: convId } = conversations.addTurn(draft);
     if (!convId || !turnId) return;
 
     setIsSubmitting(true);
-    setPrompt("");
 
     const progressKey = turnProgressKey(convId, turnId);
     const abortController = new AbortController();
     abortControllersRef.current.set(progressKey, abortController);
 
     try {
-      // Upload reference images that only have dataUrl
-      if (referenceImages.length > 0) {
+      if (draft.referenceImages.length > 0) {
         setTurnProgress(progressKey, { message: "上传参考图..." });
       }
-      const uploadedRefs = await uploadPendingReferenceImages(referenceImages);
+      const uploadedRefs = await uploadPendingReferenceImages(draft.referenceImages);
       const referenceAssetIds = uploadedRefs
         .map((img) => img.assetId)
         .filter((id): id is number => id != null);
@@ -254,11 +233,11 @@ export function StudioPage() {
 
       const job = await publicApi.generateImage({
         prompt: draft.prompt,
-        model_code: resolvedModel,
-        requested_count: count,
-        mode: mode === "chat" ? undefined : mode,
-        size: resolution === "auto" ? undefined : resolution,
-        quality,
+        model_code: draft.model,
+        requested_count: draft.count,
+        mode: draft.mode === "chat" ? undefined : draft.mode,
+        size: draft.resolution === "auto" ? undefined : draft.resolution,
+        quality: draft.quality,
         reference_asset_ids: referenceAssetIds.length > 0 ? referenceAssetIds : undefined,
         visibility: "private",
       });
@@ -298,9 +277,33 @@ export function StudioPage() {
       clearTurnProgress(progressKey);
       abortControllersRef.current.delete(progressKey);
       setIsSubmitting(false);
-      setReferenceImages([]);
     }
-  }, [prompt, isSubmitting, modelsState, model, mode, referenceImages, count, aspectRatio, resolution, quality, conversations]);
+  }, [conversations]);
+
+  const handleSubmit = useCallback(async () => {
+    if (!prompt.trim() || isSubmitting) return;
+
+    const resolvedModel =
+      modelsState.status === "ready"
+        ? resolveImageModel(modelsState.data, model).resolvedModelCode
+        : model;
+
+    const draft: TurnDraft = {
+      prompt: prompt.trim(),
+      model: resolvedModel,
+      mode,
+      referenceImages,
+      count,
+      aspectRatio,
+      resolution,
+      quality,
+      visibility: "private",
+    };
+
+    setPrompt("");
+    setReferenceImages([]);
+    await submitDraft(draft);
+  }, [prompt, isSubmitting, modelsState, model, mode, referenceImages, count, aspectRatio, resolution, quality, submitDraft]);
 
   const handleCancelTurn = useCallback((turnId: string) => {
     const convId = conversations.activeId;
@@ -315,17 +318,23 @@ export function StudioPage() {
 
   const handleRetryTurn = useCallback((turnId: string) => {
     const conv = conversations.activeConversation;
-    if (!conv) return;
+    if (!conv || isSubmitting) return;
     const turn = conv.turns.find((t) => t.id === turnId);
     if (!turn) return;
-    setPrompt(turn.prompt);
-    setModel(turn.model);
-    setMode(turn.mode as ComposerMode);
-    setAspectRatio(turn.aspectRatio);
-    setResolution(turn.resolution);
-    setQuality(turn.quality);
-    setCount(turn.count);
-  }, [conversations]);
+    conversations.removeTurn(conv.id, turnId);
+    const draft: TurnDraft = {
+      prompt: turn.prompt,
+      model: turn.model,
+      mode: turn.mode,
+      referenceImages: turn.referenceImages,
+      count: turn.count,
+      aspectRatio: turn.aspectRatio,
+      resolution: turn.resolution,
+      quality: turn.quality,
+      visibility: turn.visibility,
+    };
+    submitDraft(draft);
+  }, [conversations, isSubmitting, submitDraft]);
 
   const handleEditFromTurn = useCallback((_turnId: string, image: StoredImage) => {
     const ref: StoredReferenceImage = {

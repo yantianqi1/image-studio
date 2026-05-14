@@ -107,6 +107,15 @@ export function useStudioConversations() {
     });
   }, []);
 
+  const removeTurn = useCallback((conversationId: string, turnId: string) => {
+    setConversations((prev) => {
+      const conv = prev.find((c) => c.id === conversationId);
+      if (!conv) return prev;
+      const updated = { ...conv, turns: conv.turns.filter((t) => t.id !== turnId), updatedAt: new Date().toISOString() };
+      return saveConversation(prev, updated);
+    });
+  }, []);
+
   return {
     conversations,
     activeConversation,
@@ -119,5 +128,6 @@ export function useStudioConversations() {
     clearAll,
     addTurn,
     updateTurn,
+    removeTurn,
   } as const;
 }
