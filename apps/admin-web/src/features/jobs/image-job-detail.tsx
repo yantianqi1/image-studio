@@ -1,7 +1,7 @@
 import { StatusPill } from "@/features/ui/status-pill";
 import type { AdminImageJob } from "@/lib/admin-image-job-types";
 
-import { formatJobCents, formatJobDateTime, formatJobOwner } from "./image-job-format";
+import { formatJobCents, formatJobDateTime, formatJobDuration, formatJobOwner, formatJobQuality, formatJobSize } from "./image-job-format";
 
 type ImageJobDetailProps = Readonly<{
   job: AdminImageJob | null;
@@ -102,8 +102,11 @@ function buildDetailItems(job: AdminImageJob): readonly DetailItem[] {
     { label: "来源", value: `${job.source} / ${job.mode}` },
     { label: "模型", value: job.model_code },
     { label: "Provider", value: job.provider_model ?? "未绑定" },
+    { label: "分辨率", value: formatJobSize(job.size) },
+    { label: "画质", value: formatJobQuality(job.quality) },
     { label: "数量", value: String(job.requested_count) },
     { label: "扣费", value: formatJobCents(job.charge_cents) },
+    { label: "耗时", value: formatJobDuration(job.started_at, job.finished_at) },
     { label: "尝试", value: `${job.attempt_count}/${job.max_attempts}` },
     { label: "创建", value: formatJobDateTime(job.created_at) },
     { label: "完成", value: formatJobDateTime(job.finished_at) },

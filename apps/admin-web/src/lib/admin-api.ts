@@ -1,5 +1,5 @@
 import { apiFetch } from "@/lib/api-client";
-import type { AdminImageJob } from "@/lib/admin-image-job-types";
+import type { AdminImageJob, ImageJobStats } from "@/lib/admin-image-job-types";
 import { buildUsersSearch, type AdminUserList, type AdminUsersQuery, type AdminWallet, type AdminWalletLedgerEntry } from "@/lib/admin-users";
 
 export type { AdminUser, AdminUserList, AdminUsersQuery, AdminWallet, AdminWalletLedgerEntry } from "@/lib/admin-users";
@@ -323,6 +323,9 @@ export const adminApi = {
   },
   imageJobs() {
     return apiFetch<readonly AdminImageJob[]>("/api/admin/image/jobs");
+  },
+  imageJobStats() {
+    return apiFetch<ImageJobStats>("/api/admin/image/stats");
   },
   workerSummary() {
     return apiFetch<WorkerSummary>("/api/admin/ops/worker-summary");

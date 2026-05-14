@@ -6,6 +6,7 @@ from apps.api.app.core.response import api_ok
 from apps.api.app.domains.auth.ownership import ensure_anonymous_owner, resolve_request_owner
 from apps.api.app.domains.auth.service import require_admin
 from apps.api.app.domains.image.admin_service import list_admin_jobs_with_results
+from apps.api.app.domains.image.stats_service import get_image_job_stats
 from apps.api.app.domains.image.assets import (
     persist_uploaded_asset,
     resolve_asset_content,
@@ -218,6 +219,12 @@ def get_admin_jobs(request: Request, session: Session = Depends(get_db_session))
     ])
 
 
+@admin_router.get("/image/stats")
+def get_image_stats(request: Request, session: Session = Depends(get_db_session)):
+    require_admin(request, session)
+    return api_ok(get_image_job_stats(session))
+
+
 @admin_router.get("/image/assets/{asset_id}")
 def get_admin_image_asset(asset_id: int, request: Request, session: Session = Depends(get_db_session)):
     require_admin(request, session)
@@ -294,6 +301,8 @@ def job_payload(job) -> dict[str, object]:
         "requested_count": job.requested_count,
         "attempt_count": job.attempt_count,
         "max_attempts": job.max_attempts,
+        "size": job.size,
+        "quality": job.quality,
         "charge_cents": job.charge_cents,
         "error_code": job.error_code,
         "error_message": job.error_message,

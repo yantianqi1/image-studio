@@ -10,8 +10,12 @@ import type { AdminImageJob } from "@/lib/admin-image-job-types";
 import { ImageJobDetail } from "./image-job-detail";
 import { ImageJobResults } from "./image-job-results";
 import { ImageJobSidebar } from "./image-job-sidebar";
+import { ImageJobStatsPanel } from "./image-job-stats";
+
+type Tab = "logs" | "stats";
 
 export function ImageJobsPage() {
+  const [activeTab, setActiveTab] = useState<Tab>("logs");
   const [jobs, setJobs] = useState<readonly AdminImageJob[]>([]);
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
   const [summary, setSummary] = useState<WorkerSummary | null>(null);
@@ -41,7 +45,6 @@ export function ImageJobsPage() {
   }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial admin data load is request-driven state
     void loadData();
   }, [loadData]);
 
@@ -51,19 +54,52 @@ export function ImageJobsPage() {
       description="按任务索引、完整提示词和结果图拆分视图，便于快速审阅生成记录。"
       actions={<RefreshButton loading={loading} onRefresh={loadData} />}
     >
-      {error ? <div className="col-span-12"><ErrorBox message={error} /></div> : null}
-      <div className="image-jobs-workbench">
-        <ImageJobSidebar
-          jobs={jobs}
-          loading={loading}
-          selectedJobId={selectedJobId}
-          summary={summary}
-          onSelectJob={setSelectedJobId}
-        />
-        <ImageJobDetail job={selectedJob} />
-        <ImageJobResults job={selectedJob} />
+      <div className="col-span-12 grid gap-4">
+        <TabBar active={activeTab} onChange={setActiveTab} />
+        {error ? <ErrorBox message={error} /> : null}
+
+        {activeTab === "logs" && (
+          <div className="image-jobs-workbench">
+            <ImageJobSidebar
+              jobs={jobs}
+              loading={loading}
+              selectedJobId={selectedJobId}
+              summary={summary}
+              onSelectJob={setSelectedJobId}
+            />
+            <ImageJobDetail job={selectedJob} />
+            <ImageJobResults job={selectedJob} />
+          </div>
+        )}
+
+        {activeTab === "stats" && <ImageJobStatsPanel />}
       </div>
     </AdminShell>
+  );
+}
+
+function TabBar({ active, onChange }: { active: Tab; onChange: (tab: Tab) => void }) {
+  const tabs: { key: Tab; label: string }[] = [
+    { key: "logs", label: "任务日志" },
+    { key: "stats", label: "统计监控" },
+  ];
+  return (
+    <div className="flex gap-1 rounded-xl bg-gray-100 p-1">
+      {tabs.map((tab) => (
+        <button
+          key={tab.key}
+          type="button"
+          className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
+            active === tab.key
+              ? "bg-white text-gray-900 shadow-sm"
+              : "text-gray-500 hover:text-gray-700"
+          }`}
+          onClick={() => onChange(tab.key)}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
   );
 }
 

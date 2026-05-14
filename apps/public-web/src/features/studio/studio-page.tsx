@@ -12,6 +12,7 @@ import { StudioComposer } from "@/features/studio/studio-composer";
 import { StudioPromptMarket } from "@/features/studio/studio-prompt-market";
 import type { BananaPrompt } from "@/features/studio/studio-prompt-sources";
 import { fetchPromptMarketPrompts } from "@/features/studio/studio-prompt-sources";
+import { StudioLightbox } from "@/features/studio/studio-lightbox";
 import { StudioResults } from "@/features/studio/studio-results";
 import { StudioSidebar } from "@/features/studio/studio-sidebar";
 import {
@@ -384,8 +385,10 @@ export function StudioPage() {
     setReferenceImages([...images]);
   }, []);
 
-  const handleOpenLightbox = useCallback((_images: readonly StoredImage[], _startIndex: number) => {
-    // Lightbox implementation deferred to a separate component
+  const [lightbox, setLightbox] = useState<{ images: readonly StoredImage[]; startIndex: number } | null>(null);
+
+  const handleOpenLightbox = useCallback((images: readonly StoredImage[], startIndex: number) => {
+    setLightbox({ images, startIndex });
   }, []);
 
   return (
@@ -451,6 +454,13 @@ export function StudioPage() {
         onOpenChange={setPromptMarketOpen}
         onApplyPrompt={handleApplyPrompt}
       />
+      {lightbox && (
+        <StudioLightbox
+          images={lightbox.images}
+          startIndex={lightbox.startIndex}
+          onClose={() => setLightbox(null)}
+        />
+      )}
     </AppShell>
   );
 }

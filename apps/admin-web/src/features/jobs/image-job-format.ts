@@ -22,7 +22,27 @@ export function formatJobOwner(userId: number | null) {
 }
 
 export function formatJobCents(value: number) {
-  return `${value} cents`;
+  if (value === 0) return "免费";
+  return `¥${(value / 100).toFixed(2)}`;
+}
+
+const QUALITY_LABELS: Record<string, string> = { low: "低", medium: "中", high: "高" };
+
+export function formatJobQuality(value: string | null) {
+  if (!value) return "自动";
+  return QUALITY_LABELS[value] ?? value;
+}
+
+export function formatJobSize(value: string | null) {
+  if (!value) return "自动";
+  return value;
+}
+
+export function formatJobDuration(startedAt: string | null, finishedAt: string | null) {
+  if (!startedAt || !finishedAt) return "—";
+  const ms = new Date(finishedAt).getTime() - new Date(startedAt).getTime();
+  if (ms < 0 || Number.isNaN(ms)) return "—";
+  return `${(ms / 1000).toFixed(1)}s`;
 }
 
 export function buildPromptPreview(prompt: string) {
