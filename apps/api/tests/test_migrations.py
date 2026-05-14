@@ -14,7 +14,7 @@ from apps.api.app.domains.image.storage_migration import (
 )
 from apps.api.app.infra.db.session import get_engine, get_session_factory, initialize_database
 
-HEAD_REVISION = "20260502_000012"
+HEAD_REVISION = "20260514_000015"
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 

@@ -252,6 +252,7 @@ def create_model_variant(
         upstream_provider_model=payload.upstream_provider_model.strip() if payload.upstream_provider_model else None,
         member_price_cents=payload.member_price_cents,
         anonymous_price_cents=payload.anonymous_price_cents,
+        price_manually_set=True,
     )
     session.add(variant)
     session.flush()
@@ -381,6 +382,7 @@ def batch_upsert_variants(
             v.member_price_cents = item.member_price_cents
             v.anonymous_price_cents = item.anonymous_price_cents
             v.status = item.status
+            v.price_manually_set = True
         else:
             v = ModelVariant(
                 model_id=model_id,
@@ -390,12 +392,78 @@ def batch_upsert_variants(
                 member_price_cents=item.member_price_cents,
                 anonymous_price_cents=item.anonymous_price_cents,
                 status=item.status,
+                price_manually_set=True,
             )
             session.add(v)
         results.append(v)
     session.flush()
     session.commit()
     return api_ok([variant_payload(v) for v in results])
+
+
+class ApplyDefaultPricingRequest(BaseModel):
+    force: bool = Field(default=False)
+
+
+@model_admin_router.post("/{model_id}/variants/apply-default-pricing")
+def apply_default_pricing(
+    model_id: int,
+    payload: ApplyDefaultPricingRequest,
+    request: Request,
+    session: Session = Depends(get_db_session),
+):
+    from apps.api.app.domains.llm.default_pricing import build_all_default_prices, price_credits_to_cents
+
+    require_admin(request, session)
+    model = session.get(SellableModel, model_id)
+    if model is None:
+        raise AppError(code="model_not_found", message="model not found", status_code=404)
+
+    defaults = build_all_default_prices()
+    existing = list(
+        session.execute(
+            select(ModelVariant).where(ModelVariant.model_id == model_id)
+        ).scalars()
+    )
+    existing_map: dict[tuple[str, str], ModelVariant] = {
+        (v.size, v.quality): v for v in existing
+    }
+
+    results = []
+    skipped = 0
+    for dp in defaults:
+        v = existing_map.get((dp.size, dp.quality))
+        if v is not None:
+            if v.price_manually_set and not payload.force:
+                skipped += 1
+                results.append(v)
+                continue
+            v.member_price_credits = dp.price_credits
+            v.member_price_cents = dp.price_cents
+            if not payload.force:
+                v.price_manually_set = False
+        else:
+            v = ModelVariant(
+                model_id=model_id,
+                size=dp.size,
+                quality=dp.quality,
+                member_price_credits=dp.price_credits,
+                member_price_cents=dp.price_cents,
+                anonymous_price_cents=0,
+                price_manually_set=False,
+                status="active",
+            )
+            session.add(v)
+        results.append(v)
+
+    session.flush()
+    session.commit()
+    return api_ok({
+        "updated": len(results) - skipped,
+        "skipped": skipped,
+        "total": len(results),
+        "variants": [variant_payload(v) for v in results],
+    })
 
 
 @model_admin_router.patch("/{model_code:path}")
@@ -473,8 +541,10 @@ def variant_payload(variant: ModelVariant) -> dict[str, object]:
         "size": variant.size,
         "quality": variant.quality,
         "upstream_provider_model": variant.upstream_provider_model,
+        "member_price_credits": variant.member_price_credits,
         "member_price_cents": variant.member_price_cents,
         "anonymous_price_cents": variant.anonymous_price_cents,
+        "price_manually_set": variant.price_manually_set,
         "status": variant.status,
         "created_at": variant.created_at.isoformat() if variant.created_at else None,
     }

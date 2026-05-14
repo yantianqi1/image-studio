@@ -227,7 +227,7 @@ export function StudioPage() {
         model_code: resolvedModel,
         requested_count: count,
         mode: mode === "chat" ? undefined : mode,
-        size: resolution,
+        size: resolution === "auto" ? undefined : resolution,
         quality,
         reference_asset_ids: referenceAssetIds.length > 0 ? referenceAssetIds : undefined,
         visibility: "private",
