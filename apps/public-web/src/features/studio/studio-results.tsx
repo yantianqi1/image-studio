@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import {
   CircleStop,
   Clock3,
@@ -270,132 +270,34 @@ const TurnCard = memo(function TurnCard({
             </div>
           )}
 
-          {/* Image grid */}
-          {turn.mode !== "chat" && turn.images.length > 0 && (
-            <div className="columns-1 gap-3 sm:columns-2 sm:gap-4 xl:columns-3">
-              {turn.images.map((image, index) => {
-                const imageSrc = image.thumbnailUrl || image.url || "";
-                if (!imageSrc && turn.status !== "queued" && turn.status !== "generating") return null;
-
-                if (imageSrc) {
-                  const visibility = image.visibility || "private";
-                  return (
-                    <figure
-                      key={image.id}
-                      className="group relative mb-3 inline-block w-full break-inside-avoid overflow-hidden rounded-2xl bg-gray-100 shadow-[0_0_15px_rgba(44,30,116,0.12)] sm:mb-4"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => onOpenLightbox(index)}
-                        className="block w-full cursor-pointer overflow-hidden text-left"
-                        aria-label="查看大图"
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={imageSrc}
-                          alt={`Generated result ${index + 1}`}
-                          className="block h-auto w-full transition duration-200 group-hover:brightness-95"
-                        />
-                      </button>
-
-                      {/* Hover overlay actions */}
-                      <div className="pointer-events-none absolute top-2 right-2 z-10 flex items-center gap-1 opacity-0 transition duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
-                        <button
-                          type="button"
-                          onClick={() => onOpenLightbox(index)}
-                          className="inline-flex h-7 items-center gap-1 rounded-full bg-white/95 px-2 text-[11px] font-medium text-gray-800 shadow-sm transition hover:bg-white"
-                          aria-label="查看原图"
-                          title="查看原图"
-                        >
-                          <Eye className="size-3" />
-                          查看
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onEditFromImage(image)}
-                          className="inline-flex size-7 items-center justify-center rounded-full bg-white/95 text-gray-800 shadow-sm transition hover:bg-white"
-                          aria-label="加入编辑"
-                          title="加入编辑"
-                        >
-                          <Plus className="size-3.5" />
-                        </button>
-                        {image.url && (
-                          <button
-                            type="button"
-                            onClick={() => downloadImage(image.url!, turn.prompt)}
-                            className="inline-flex size-7 items-center justify-center rounded-full bg-white/95 text-gray-800 shadow-sm transition hover:bg-white"
-                            aria-label="下载"
-                            title="下载"
-                          >
-                            <Download className="size-3.5" />
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Visibility badge */}
-                      <div className="absolute right-2 bottom-2 z-10 flex items-center gap-1">
-                        {image.assetId != null && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              onVisibilityChange(
-                                image.assetId!,
-                                visibility === "public" ? "private" : "public",
-                              )
-                            }
-                            className={cn(
-                              "inline-flex h-6 items-center gap-1 rounded-full px-2 text-[10px] font-medium opacity-0 shadow-sm transition group-hover:opacity-100",
-                              visibility === "public"
-                                ? "bg-white/95 text-blue-600 hover:bg-blue-50"
-                                : "bg-white/95 text-gray-700 hover:bg-gray-100",
-                            )}
-                            aria-label={visibility === "public" ? "取消公开" : "公开"}
-                            title={visibility === "public" ? "取消公开" : "公开"}
-                          >
-                            {visibility === "public" ? <Lock className="size-3" /> : <Globe2 className="size-3" />}
-                            {visibility === "public" ? "取消公开" : "公开"}
-                          </button>
-                        )}
-                        <div
-                          className={cn(
-                            "pointer-events-none inline-flex h-6 items-center gap-1 rounded-full px-2 text-[10px] font-medium shadow-sm backdrop-blur-sm",
-                            visibility === "public"
-                              ? "bg-blue-50/90 text-blue-600 ring-1 ring-blue-200"
-                              : "bg-gray-900/70 text-white ring-1 ring-white/20",
-                          )}
-                        >
-                          {visibility === "public" ? <Globe2 className="size-3" /> : <Lock className="size-3" />}
-                          {visibility === "public" ? "公开" : "私密"}
-                        </div>
-                      </div>
-                    </figure>
-                  );
-                }
-
-                return null;
-              })}
-            </div>
-          )}
-
-          {/* Loading state */}
-          {isBusy && (
-            <div className="mb-3 inline-block w-full break-inside-avoid overflow-hidden rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50/80 via-white to-indigo-50/60 sm:mb-4">
-              <div className="relative flex flex-col items-center justify-center gap-2.5 px-5 py-6 text-center text-gray-500">
-                <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-transparent via-blue-100/40 to-transparent" />
-                <div className="relative rounded-full bg-white p-3 shadow-sm ring-2 ring-blue-100/60">
-                  {turn.status === "queued" && !progress ? (
-                    <Clock3 className="size-5 text-gray-400" />
-                  ) : (
-                    <Loader2 className="size-5 animate-spin text-blue-500" />
-                  )}
-                </div>
-                <p className="relative text-sm font-medium text-gray-700">
-                  {progress?.message || (turn.status === "queued" ? "准备中..." : "生成中...")}
-                </p>
-                {busyStartMs != null && (
-                  <LiveTimer startMs={busyStartMs} />
-                )}
-              </div>
+          {/* Image grid + loading skeletons */}
+          {turn.mode !== "chat" && (turn.images.length > 0 || isBusy) && (
+            <div className={cn(
+              "grid gap-3 sm:gap-4",
+              turn.count <= 1 ? "grid-cols-1 max-w-[520px]" : "grid-cols-2",
+            )}>
+              {turn.images.map((image, index) => (
+                <ImageCell
+                  key={image.id}
+                  image={image}
+                  index={index}
+                  turn={turn}
+                  onOpenLightbox={onOpenLightbox}
+                  onEditFromImage={onEditFromImage}
+                  onVisibilityChange={onVisibilityChange}
+                />
+              ))}
+              {isBusy && Array.from({ length: Math.max(0, turn.count - turn.images.length) }).map((_, i) => (
+                <GenerationSkeleton
+                  key={`skeleton-${i}`}
+                  aspectRatio={turn.aspectRatio}
+                  resolution={turn.resolution}
+                  progress={i === 0 ? progress : undefined}
+                  status={turn.status}
+                  busyStartMs={i === 0 ? busyStartMs : null}
+                  index={i}
+                />
+              ))}
             </div>
           )}
 
@@ -431,6 +333,205 @@ const TurnCard = memo(function TurnCard({
     </div>
   );
 });
+
+function ImageCell({
+  image,
+  index,
+  turn,
+  onOpenLightbox,
+  onEditFromImage,
+  onVisibilityChange,
+}: Readonly<{
+  image: StoredImage;
+  index: number;
+  turn: StudioTurn;
+  onOpenLightbox: (startIndex: number) => void;
+  onEditFromImage: (image: StoredImage) => void;
+  onVisibilityChange: (assetId: number, visibility: ImageAssetVisibility) => void;
+}>) {
+  const imageSrc = image.thumbnailUrl || image.url || "";
+  const [loaded, setLoaded] = useState(false);
+  const onLoad = useCallback(() => setLoaded(true), []);
+
+  if (!imageSrc && turn.status !== "queued" && turn.status !== "generating") return null;
+  if (!imageSrc) return null;
+
+  const visibility = image.visibility || "private";
+  const aspectPadding = getAspectPadding(turn.aspectRatio, turn.resolution);
+
+  return (
+    <figure
+      className={cn(
+        "group relative w-full overflow-hidden rounded-2xl bg-gray-100 shadow-[0_0_15px_rgba(44,30,116,0.12)]",
+        "animate-in",
+      )}
+      style={{ animationDelay: `${index * 120}ms`, animationFillMode: "both" }}
+    >
+      <div className="relative w-full" style={{ paddingBottom: aspectPadding }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={imageSrc}
+          alt={`Generated result ${index + 1}`}
+          onLoad={onLoad}
+          className={cn(
+            "absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:brightness-95",
+            loaded ? "opacity-100" : "opacity-0",
+          )}
+        />
+        {!loaded && (
+          <div className="absolute inset-0 overflow-hidden rounded-2xl">
+            <div className="skeleton-shimmer absolute inset-0 bg-gradient-to-r from-gray-100 via-gray-200/60 to-gray-100" />
+          </div>
+        )}
+      </div>
+
+      {loaded && (
+        <>
+          <button
+            type="button"
+            onClick={() => onOpenLightbox(index)}
+            className="absolute inset-0 cursor-pointer"
+            aria-label="查看大图"
+          />
+          <div className="pointer-events-none absolute top-2 right-2 z-10 flex items-center gap-1 opacity-0 transition duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
+            <button
+              type="button"
+              onClick={() => onOpenLightbox(index)}
+              className="inline-flex h-7 items-center gap-1 rounded-full bg-white/95 px-2 text-[11px] font-medium text-gray-800 shadow-sm transition hover:bg-white"
+              aria-label="查看原图"
+              title="查看原图"
+            >
+              <Eye className="size-3" />
+              查看
+            </button>
+            <button
+              type="button"
+              onClick={() => onEditFromImage(image)}
+              className="inline-flex size-7 items-center justify-center rounded-full bg-white/95 text-gray-800 shadow-sm transition hover:bg-white"
+              aria-label="加入编辑"
+              title="加入编辑"
+            >
+              <Plus className="size-3.5" />
+            </button>
+            {image.url && (
+              <button
+                type="button"
+                onClick={() => downloadImage(image.url!, turn.prompt)}
+                className="inline-flex size-7 items-center justify-center rounded-full bg-white/95 text-gray-800 shadow-sm transition hover:bg-white"
+                aria-label="下载"
+                title="下载"
+              >
+                <Download className="size-3.5" />
+              </button>
+            )}
+          </div>
+          <div className="absolute right-2 bottom-2 z-10 flex items-center gap-1">
+            {image.assetId != null && (
+              <button
+                type="button"
+                onClick={() =>
+                  onVisibilityChange(
+                    image.assetId!,
+                    visibility === "public" ? "private" : "public",
+                  )
+                }
+                className={cn(
+                  "inline-flex h-6 items-center gap-1 rounded-full px-2 text-[10px] font-medium opacity-0 shadow-sm transition group-hover:opacity-100",
+                  visibility === "public"
+                    ? "bg-white/95 text-blue-600 hover:bg-blue-50"
+                    : "bg-white/95 text-gray-700 hover:bg-gray-100",
+                )}
+                aria-label={visibility === "public" ? "取消公开" : "公开"}
+                title={visibility === "public" ? "取消公开" : "公开"}
+              >
+                {visibility === "public" ? <Lock className="size-3" /> : <Globe2 className="size-3" />}
+                {visibility === "public" ? "取消公开" : "公开"}
+              </button>
+            )}
+            <div
+              className={cn(
+                "pointer-events-none inline-flex h-6 items-center gap-1 rounded-full px-2 text-[10px] font-medium shadow-sm backdrop-blur-sm",
+                visibility === "public"
+                  ? "bg-blue-50/90 text-blue-600 ring-1 ring-blue-200"
+                  : "bg-gray-900/70 text-white ring-1 ring-white/20",
+              )}
+            >
+              {visibility === "public" ? <Globe2 className="size-3" /> : <Lock className="size-3" />}
+              {visibility === "public" ? "公开" : "私密"}
+            </div>
+          </div>
+        </>
+      )}
+    </figure>
+  );
+}
+
+function GenerationSkeleton({
+  aspectRatio,
+  resolution,
+  progress,
+  status,
+  busyStartMs,
+  index,
+}: Readonly<{
+  aspectRatio: string;
+  resolution: string;
+  progress: TurnProgress | undefined;
+  status: string;
+  busyStartMs: number | null;
+  index: number;
+}>) {
+  const aspectPadding = getAspectPadding(aspectRatio, resolution);
+
+  return (
+    <div
+      className="relative w-full overflow-hidden rounded-2xl border border-blue-100/80 bg-gradient-to-br from-blue-50/60 via-white to-indigo-50/40"
+      style={{ animationDelay: `${index * 80}ms` }}
+    >
+      <div className="relative w-full" style={{ paddingBottom: aspectPadding }}>
+        <div className="skeleton-shimmer absolute inset-0" />
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-center">
+          <div className="rounded-full bg-white/80 p-2.5 shadow-sm ring-1 ring-blue-100/60 backdrop-blur-sm">
+            {status === "queued" && !progress ? (
+              <Clock3 className="size-4 text-gray-400" />
+            ) : (
+              <Loader2 className="size-4 animate-spin text-blue-500" />
+            )}
+          </div>
+          {index === 0 && (
+            <>
+              <p className="text-xs font-medium text-gray-600">
+                {progress?.message || (status === "queued" ? "准备中..." : "生成中...")}
+              </p>
+              {busyStartMs != null && <LiveTimer startMs={busyStartMs} />}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function getAspectPadding(aspectRatio: string, resolution: string): string {
+  if (resolution && resolution !== "auto") {
+    const parts = resolution.split("x");
+    if (parts.length === 2) {
+      const w = Number(parts[0]);
+      const h = Number(parts[1]);
+      if (w > 0 && h > 0) return `${(h / w) * 100}%`;
+    }
+  }
+  const ratioMap: Record<string, string> = {
+    "1:1": "100%",
+    "3:2": "66.67%",
+    "16:9": "56.25%",
+    "21:9": "42.86%",
+    "9:16": "177.78%",
+    "4:3": "75%",
+    "3:4": "133.33%",
+  };
+  return ratioMap[aspectRatio] ?? "100%";
+}
 
 async function downloadImage(url: string, prompt: string) {
   const name = prompt.slice(0, 20).replace(/[^\w一-鿿]/g, "_") || "image";
