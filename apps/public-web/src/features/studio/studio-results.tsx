@@ -274,7 +274,7 @@ const TurnCard = memo(function TurnCard({
           {turn.mode !== "chat" && (turn.images.length > 0 || isBusy) && (
             <div className={cn(
               "grid gap-3 sm:gap-4",
-              turn.count <= 1 ? "grid-cols-1 max-w-[520px]" : "grid-cols-2",
+              turn.count <= 1 ? "grid-cols-1 max-w-[360px]" : "grid-cols-2 max-w-[560px]",
             )}>
               {turn.images.map((image, index) => (
                 <ImageCell
