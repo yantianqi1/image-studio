@@ -12,6 +12,7 @@ RUN pip install --no-cache-dir -r apps/api/requirements.txt
 COPY alembic.ini alembic.ini
 COPY apps/api apps/api
 COPY apps/worker apps/worker
+COPY .codex/skills .codex/skills
 
 EXPOSE 7800
 

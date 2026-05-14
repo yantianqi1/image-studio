@@ -66,7 +66,7 @@ const MODE_OPTIONS: readonly { value: ComposerMode; label: string; icon: typeof 
 ];
 
 const PROMPT_AREA_MIN_HEIGHT = 74;
-const PROMPT_AREA_DEFAULT_HEIGHT = 104;
+const PROMPT_AREA_DEFAULT_HEIGHT = 80;
 const PROMPT_AREA_MAX_HEIGHT = 320;
 
 function getPromptAreaMaxHeight() {
@@ -335,9 +335,10 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
                   ? "描述你希望如何修改参考图..."
                   : "输入你想要生成的画面，也可直接粘贴图片..."
             }
-            className="min-h-[96px] w-full resize-none border-0 bg-transparent px-5 pt-5 pb-2 text-[15px] leading-6 text-gray-900 outline-none placeholder:text-gray-400 sm:min-h-0 sm:px-5 sm:py-4 sm:text-[15px] sm:leading-6"
+            className="min-h-[56px] w-full resize-none border-0 bg-transparent px-5 pt-5 pb-2 text-[15px] leading-6 text-gray-900 outline-none placeholder:text-gray-400 sm:min-h-0 sm:px-5 sm:py-4 sm:text-[15px] sm:leading-6"
             style={{ height: promptAreaHeight }}
           />
+        </div>
 
           {/* Toolbar */}
           <div
@@ -491,7 +492,6 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
             </div>
 
           </div>
-        </div>
       </div>
     </div>
   );
