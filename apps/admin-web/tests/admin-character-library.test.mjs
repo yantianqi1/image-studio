@@ -9,6 +9,7 @@ const routeSource = readFileSync(
   new URL("../src/app/admin/(protected)/character-library/page.tsx", import.meta.url),
   "utf8",
 );
+const nextConfigSource = readFileSync(new URL("../next.config.ts", import.meta.url), "utf8");
 
 function loadAdminApi(apiClient) {
   const source = readFileSync(new URL("../src/lib/admin-api.ts", import.meta.url), "utf8");
@@ -73,6 +74,11 @@ test("admin character library page is routed from the navigation", () => {
   assert.match(routeSource, /AdminCharacterLibraryPage/);
   assert.match(navSource, /href: "\/admin\/character-library"/);
   assert.match(navSource, /label: "形象库"/);
+});
+
+test("admin Next proxy allows image uploads larger than the default body limit", () => {
+  assert.match(nextConfigSource, /const API_PROXY_BODY_LIMIT = "50mb"/);
+  assert.match(nextConfigSource, /proxyClientMaxBodySize:\s*API_PROXY_BODY_LIMIT/);
 });
 
 function unexpectedApiFetch() {
