@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { History, MessageSquarePlus } from "lucide-react";
 
 import {
@@ -665,11 +666,11 @@ function MobileStudioHistoryDrawer({
 }>) {
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[70] lg:hidden" role="dialog" aria-modal="true" aria-label="历史对话">
       <button
         type="button"
-        className="absolute inset-0 bg-gray-950/45 backdrop-blur-[2px]"
+        className="absolute inset-0 bg-gray-950/45"
         onClick={onClose}
         aria-label="关闭历史记录"
       />
@@ -685,7 +686,8 @@ function MobileStudioHistoryDrawer({
           onToggleCollapse={onClose}
         />
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
