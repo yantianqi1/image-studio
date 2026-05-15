@@ -327,6 +327,7 @@ def job_payload(job) -> dict[str, object]:
         "source_asset_id": job.source_asset_id,
         "provider_id": job.provider_id,
         "provider_model": job.provider_model,
+        "client_provider_base_url": resolve_job_client_provider_base_url(job),
         "status": job.status,
         "requested_count": job.requested_count,
         "attempt_count": job.attempt_count,
@@ -341,6 +342,14 @@ def job_payload(job) -> dict[str, object]:
         "started_at": job.started_at.isoformat() if job.started_at else None,
         "finished_at": job.finished_at.isoformat() if job.finished_at else None,
     }
+
+
+def resolve_job_client_provider_base_url(job) -> str | None:
+    config = job.client_provider_config
+    if not isinstance(config, dict):
+        return None
+    base_url = config.get("base_url")
+    return base_url if isinstance(base_url, str) and base_url.strip() else None
 
 
 def result_payload(result, *, asset=None, storage=None) -> dict[str, object]:

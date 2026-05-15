@@ -7,8 +7,18 @@ from sqlalchemy.orm import Session
 from apps.api.app.domains.image.job_recovery import IMAGE_JOB_RETRY_ERROR_CODE
 from apps.api.app.domains.image.models import ImageJob
 from apps.api.app.domains.image.repository import mark_job_failed
+from apps.api.app.domains.llm.client_provider_pool import (
+    CLIENT_PROVIDER_URL_POOL_EMPTY_CODE,
+    CLIENT_PROVIDER_URL_UNRESOLVED_CODE,
+)
 
-NON_RETRYABLE_ERROR_CODES = frozenset({"provider_content_refused", "provider_api_key_missing", "provider_base_url_missing"})
+NON_RETRYABLE_ERROR_CODES = frozenset({
+    "provider_content_refused",
+    "provider_api_key_missing",
+    "provider_base_url_missing",
+    CLIENT_PROVIDER_URL_POOL_EMPTY_CODE,
+    CLIENT_PROVIDER_URL_UNRESOLVED_CODE,
+})
 
 
 def handle_job_failure(

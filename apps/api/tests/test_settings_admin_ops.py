@@ -35,6 +35,7 @@ def update_site_settings(
     allow_public_signup: bool = True,
     allow_anonymous_image: bool = True,
     uploads_enabled: bool = True,
+    client_provider_url_pool: str = "",
 ) -> None:
     response = client.patch(
         "/api/admin/settings",
@@ -43,6 +44,7 @@ def update_site_settings(
             "allow_public_signup": allow_public_signup,
             "allow_anonymous_image": allow_anonymous_image,
             "uploads_enabled": uploads_enabled,
+            "client_provider_url_pool": client_provider_url_pool,
         },
     )
     assert response.status_code == 200
@@ -143,3 +145,20 @@ def test_public_settings_exposes_site_title() -> None:
 
     assert response.status_code == 200
     assert response.json()["data"]["site_title"] == "Studio X"
+
+
+def test_admin_can_update_client_provider_url_pool() -> None:
+    client = build_client()
+    seed_admin()
+    admin_login(client)
+
+    update_site_settings(
+        client,
+        client_provider_url_pool="https://first.example/v1\nhttps://second.example/v1",
+    )
+    response = client.get("/api/admin/settings")
+
+    assert response.status_code == 200
+    assert response.json()["data"]["client_provider_url_pool"] == (
+        "https://first.example/v1\nhttps://second.example/v1"
+    )

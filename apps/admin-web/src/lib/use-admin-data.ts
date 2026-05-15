@@ -110,6 +110,7 @@ type SiteSettings = {
   public_quota_mode: "daily_global" | "per_ip";
   public_quota_daily_global_limit: number;
   public_quota_per_ip_limit: number;
+  client_provider_url_pool: string;
 };
 
 export function useAdminSettings() {

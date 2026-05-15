@@ -33,7 +33,7 @@ export interface RuntimePort {
 export type UserStatus = "active" | "disabled";
 export type TaskStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
 export type ImageJobMode = "generate" | "edit";
-export type ImageJobSource = "anonymous" | "member" | "admin";
+export type ImageJobSource = "anonymous" | "member" | "admin" | "client_provider";
 export type ModelCapability = "text" | "image" | "chat";
 
 export interface PublicUser {
@@ -113,6 +113,7 @@ export interface ImageJob {
   modelCode: string;
   providerId: number | null;
   providerModel: string | null;
+  clientProviderBaseUrl?: string | null;
   status: TaskStatus;
   requestedCount: number;
   attemptCount: number;

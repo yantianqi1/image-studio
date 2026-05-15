@@ -1,4 +1,5 @@
 import { apiDownload, apiFetch, apiUpload, type ApiRequestOptions } from "@/lib/api-client";
+import { rememberResolvedClientProviderBaseUrl } from "@/lib/client-provider-config";
 import type {
   AnonymousSessionResponse,
   ComicCharacterReference,
@@ -36,6 +37,16 @@ function notifyPublicQuotaRefresh() {
     return;
   }
   window.dispatchEvent(new Event(PUBLIC_QUOTA_REFRESH_EVENT));
+}
+
+function rememberImageJobClientProvider(job: ImageGenerationResponse): ImageGenerationResponse {
+  rememberResolvedClientProviderBaseUrl(job.client_provider_base_url);
+  return job;
+}
+
+function rememberImageJobsClientProvider(jobs: readonly ImageGenerationResponse[]) {
+  jobs.forEach(rememberImageJobClientProvider);
+  return jobs;
 }
 
 export const publicApi = {
@@ -85,12 +96,13 @@ export const publicApi = {
       method: "POST",
       body: input,
     }).then((job) => {
+      rememberImageJobClientProvider(job);
       notifyPublicQuotaRefresh();
       return job;
     });
   },
   getImageJob(jobId: number, options: Pick<ApiRequestOptions, "signal"> = {}) {
-    return apiFetch<ImageGenerationResponse>(`/image/jobs/${jobId}`, options);
+    return apiFetch<ImageGenerationResponse>(`/image/jobs/${jobId}`, options).then(rememberImageJobClientProvider);
   },
   getImageJobResults(jobId: number, options: Pick<ApiRequestOptions, "signal"> = {}) {
     return apiFetch<readonly ImageJobResult[]>(`/image/jobs/${jobId}/results`, options);
@@ -125,7 +137,7 @@ export const publicApi = {
     return apiFetch<PublicQuotaStatus>("/quota");
   },
   getImageJobs() {
-    return apiFetch<readonly ImageGenerationResponse[]>("/image/jobs");
+    return apiFetch<readonly ImageGenerationResponse[]>("/image/jobs").then(rememberImageJobsClientProvider);
   },
   getComicProjects() {
     return apiFetch<readonly ComicProject[]>("/comic/projects");
@@ -134,7 +146,7 @@ export const publicApi = {
     return apiFetch<readonly TaskItem[]>("/comic/tasks");
   },
   getTasks() {
-    return apiFetch<readonly ImageGenerationResponse[]>("/image/jobs");
+    return apiFetch<readonly ImageGenerationResponse[]>("/image/jobs").then(rememberImageJobsClientProvider);
   },
   getWalletLedger() {
     return apiFetch<readonly WalletLedgerItem[]>("/billing/wallets/me/ledger");

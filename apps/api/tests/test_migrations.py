@@ -14,7 +14,7 @@ from apps.api.app.domains.image.storage_migration import (
 )
 from apps.api.app.infra.db.session import get_engine, get_session_factory, initialize_database
 
-HEAD_REVISION = "20260515_000017"
+HEAD_REVISION = "20260515_000018"
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
@@ -46,6 +46,8 @@ def test_alembic_upgrade_creates_core_tables(tmp_path):
     assert inspector.has_table("image_job_reference_assets")
     assert inspector.has_table("anonymous_sessions")
     assert inspector.has_table("site_settings")
+    site_settings_columns = {column["name"] for column in inspector.get_columns("site_settings")}
+    assert "client_provider_url_pool" in site_settings_columns
 
     sellable_model_columns = {column["name"] for column in inspector.get_columns("sellable_models")}
     assert "status" in sellable_model_columns

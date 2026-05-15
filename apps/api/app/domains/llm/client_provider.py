@@ -20,7 +20,7 @@ MAX_CLIENT_ID_LENGTH = 128
 @dataclass(frozen=True)
 class ClientProviderConfig:
     client_id: str
-    base_url: str
+    base_url: str | None
     api_key: str
     provider_type: str | None = None
 
@@ -29,7 +29,7 @@ class ClientProviderConfig:
 class RuntimeProvider:
     name: str
     type: str
-    base_url: str
+    base_url: str | None
     api_key: str
     api_key_env: str | None = None
     default_model: str | None = None
@@ -42,10 +42,11 @@ def read_client_provider_config(request: Request) -> ClientProviderConfig | None
     api_key = normalize_optional_string(request.headers.get(PROVIDER_API_KEY_HEADER))
     if client_id is None and base_url is None and api_key is None:
         return None
-    if client_id is None or base_url is None or api_key is None:
-        raise_client_provider_config_invalid("client id, provider base url and api key are required together")
+    if client_id is None or api_key is None:
+        raise_client_provider_config_invalid("client id and api key are required together")
     validate_client_id(client_id)
-    validate_base_url(base_url)
+    if base_url is not None:
+        validate_base_url(base_url)
     return ClientProviderConfig(client_id=client_id, base_url=base_url, api_key=api_key)
 
 
@@ -57,21 +58,24 @@ def serialize_client_provider_config(
     if config is None:
         return None
     validate_provider_type(provider_type)
-    return {
+    payload = {
         "client_id": config.client_id,
-        "base_url": config.base_url,
         "api_key": config.api_key,
         "provider_type": provider_type,
     }
+    if config.base_url is not None:
+        payload["base_url"] = config.base_url
+    return payload
 
 
 def client_provider_config_from_mapping(payload: Mapping[str, object]) -> ClientProviderConfig:
     client_id = require_payload_string(payload, "client_id")
-    base_url = require_payload_string(payload, "base_url")
+    base_url = normalize_optional_string(payload.get("base_url"))
     api_key = require_payload_string(payload, "api_key")
     provider_type = require_payload_string(payload, "provider_type")
     validate_client_id(client_id)
-    validate_base_url(base_url)
+    if base_url is not None:
+        validate_base_url(base_url)
     validate_provider_type(provider_type)
     return ClientProviderConfig(
         client_id=client_id,

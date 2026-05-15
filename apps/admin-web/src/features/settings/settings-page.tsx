@@ -18,6 +18,7 @@ type SettingsState = Readonly<{
   public_quota_mode: "daily_global" | "per_ip";
   public_quota_daily_global_limit: number;
   public_quota_per_ip_limit: number;
+  client_provider_url_pool: string;
 }>;
 
 export function SettingsPage() {
@@ -61,6 +62,7 @@ function SettingsPanel({ error, onSave, settings }: SettingsPanelProps) {
         <form key={settingsFormKey(settings)} className="grid gap-3" action={onSave}>
           <SiteTitleField siteTitle={settings.site_title} />
           <RuntimeSwitches settings={settings} />
+          <ClientProviderUrlPoolField value={settings.client_provider_url_pool} />
           <PublicQuotaModeSelector mode={settings.public_quota_mode} />
           <PublicQuotaLimitInputs settings={settings} />
           <SubmitButton pendingText="保存中...">保存设置</SubmitButton>
@@ -98,6 +100,21 @@ function SwitchCard(props: Readonly<{ checked: boolean; hint: string; name: stri
         <span className="font-medium">{props.title}</span>
         <span className="admin-hint">{props.hint}</span>
       </div>
+    </label>
+  );
+}
+
+function ClientProviderUrlPoolField({ value }: Readonly<{ value: string }>) {
+  return (
+    <label className="grid gap-1.5 text-sm font-semibold text-gray-700">
+      自有通道 URL 池
+      <textarea
+        className="admin-input min-h-32"
+        name="client_provider_url_pool"
+        defaultValue={value}
+        placeholder={"https://api.example.com/v1\nhttps://api.openai.com/v1"}
+      />
+      <span className="admin-hint">一行一个 URL；用户只填 Key 时按顺序自动识别。</span>
     </label>
   );
 }
@@ -156,6 +173,7 @@ function buildSettingsPayload(formData: FormData, settings: SettingsState): Sett
     public_quota_mode: readQuotaMode(formData),
     public_quota_daily_global_limit: readQuotaLimit(formData, "public_quota_daily_global_limit", settings.public_quota_daily_global_limit),
     public_quota_per_ip_limit: readQuotaLimit(formData, "public_quota_per_ip_limit", settings.public_quota_per_ip_limit),
+    client_provider_url_pool: String(formData.get("client_provider_url_pool") ?? ""),
   };
 }
 
@@ -177,5 +195,6 @@ function settingsFormKey(settings: SettingsState): string {
     settings.public_quota_mode,
     String(settings.public_quota_daily_global_limit),
     String(settings.public_quota_per_ip_limit),
+    settings.client_provider_url_pool,
   ].join(":");
 }

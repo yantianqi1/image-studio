@@ -23,7 +23,7 @@ def get_public_site_settings(session: Session = Depends(get_db_session)):
 @admin_router.get("")
 def get_site_settings(request: Request, session: Session = Depends(get_db_session)):
     require_admin(request, session)
-    return api_ok(settings_payload(get_settings_record(session)))
+    return api_ok(settings_payload(get_settings_record(session), include_admin_fields=True))
 
 
 @admin_router.patch("")
@@ -35,4 +35,4 @@ def update_site_settings(
     require_admin(request, session)
     record = update_settings_record(session, payload)
     session.commit()
-    return api_ok(settings_payload(record))
+    return api_ok(settings_payload(record, include_admin_fields=True))

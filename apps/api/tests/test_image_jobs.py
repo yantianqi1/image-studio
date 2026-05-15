@@ -71,6 +71,13 @@ def client_provider_headers(*, client_id: str = "browser-client-1") -> dict[str,
     }
 
 
+def client_provider_key_only_headers(*, client_id: str = "browser-client-1") -> dict[str, str]:
+    return {
+        "x-client-id": client_id,
+        "x-client-provider-api-key": "sk-client-provider",
+    }
+
+
 def load_wallet_balance(user_id: int) -> tuple[int, int]:
     with session_scope() as session:
         wallet = get_wallet(session, user_id=user_id)
@@ -262,6 +269,67 @@ def test_client_provider_worker_uses_submitted_provider(monkeypatch):
     assert captured["headers"] == {"Authorization": "Bearer sk-client-provider", "Content-Type": "application/json"}
     assert captured["json"]["model"] == "gpt-image-2"
     assert results_response.json()["data"][0]["provider_request_id"] == "req-client"
+
+
+def test_client_provider_worker_resolves_key_only_request_from_url_pool(monkeypatch):
+    client = build_client()
+    seed_admin()
+    admin_login(client)
+    client.patch(
+        "/api/admin/settings",
+        json={
+            "site_title": "image Studio",
+            "allow_public_signup": True,
+            "allow_anonymous_image": True,
+            "uploads_enabled": True,
+            "client_provider_url_pool": "https://bad.example/v1\nhttps://good.example/v1",
+        },
+    )
+    attempts: list[tuple[str, dict[str, str], float]] = []
+    captured: dict[str, object] = {}
+
+    def fake_get(url: str, *, timeout: float, headers=None):
+        if url.endswith("/models"):
+            attempts.append((url, dict(headers), timeout))
+            if url == "https://bad.example/v1/models":
+                return FakeHttpResponse(
+                    status_code=401,
+                    payload={"error": {"message": "invalid api key for this site"}},
+                    headers={},
+                )
+            return FakeHttpResponse(status_code=200, payload={"data": []}, headers={})
+        return FakeHttpResponse(status_code=200, payload={}, headers={"content-type": "image/png"}, content=VALID_PNG_BYTES)
+
+    def fake_post(url: str, *, headers, json, timeout):
+        captured["url"] = url
+        captured["headers"] = headers
+        payload = {"choices": [{"message": {"content": "![result](https://cdn.example.test/client.png)"}}]}
+        return FakeHttpResponse(status_code=200, payload=payload, headers={"x-request-id": "req-client"})
+
+    monkeypatch.setattr("apps.api.app.domains.llm.client_provider_pool.httpx.get", fake_get)
+    monkeypatch.setattr("apps.api.app.domains.llm.openai_chat_image.httpx.post", fake_post)
+    monkeypatch.setattr("apps.api.app.domains.llm.openai_chat_image.httpx.get", fake_get)
+
+    response = client.post(
+        "/api/public/image/jobs",
+        headers=client_provider_key_only_headers(),
+        json={"prompt": "Client key render", "model_code": "gpt-image-2", "requested_count": 1},
+    )
+    assert response.status_code == 201
+    job_id = response.json()["data"]["id"]
+
+    processed_job_id = worker_image_jobs.run_next_image_job()
+    job_response = client.get(f"/api/public/image/jobs/{job_id}")
+
+    assert processed_job_id == job_id
+    assert [item[0] for item in attempts] == [
+        "https://bad.example/v1/models",
+        "https://good.example/v1/models",
+    ]
+    assert attempts[0][1]["Authorization"] == "Bearer sk-client-provider"
+    assert attempts[0][2] == 10.0
+    assert captured["url"] == "https://good.example/v1/chat/completions"
+    assert job_response.json()["data"]["client_provider_base_url"] == "https://good.example/v1"
 
 
 def test_gpt_image_two_job_reserves_configured_price(monkeypatch):

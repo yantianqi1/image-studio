@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Integer, String
+from sqlalchemy import Boolean, DateTime, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from apps.api.app.domains.public_quota.constants import (
@@ -11,6 +11,8 @@ from apps.api.app.domains.public_quota.constants import (
     DEFAULT_PUBLIC_QUOTA_PER_IP_LIMIT,
 )
 from apps.api.app.infra.db.base import Base
+
+DEFAULT_CLIENT_PROVIDER_URL_POOL = "https://ws.wdapi.top/v1\nhttps://api.openai.com/v1"
 
 
 class SiteSettings(Base):
@@ -30,6 +32,11 @@ class SiteSettings(Base):
     public_quota_per_ip_limit: Mapped[int] = mapped_column(
         Integer,
         default=DEFAULT_PUBLIC_QUOTA_PER_IP_LIMIT,
+        nullable=False,
+    )
+    client_provider_url_pool: Mapped[str] = mapped_column(
+        Text,
+        default=DEFAULT_CLIENT_PROVIDER_URL_POOL,
         nullable=False,
     )
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

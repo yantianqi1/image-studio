@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from "react";
 
 import {
+  CLIENT_PROVIDER_DRAFT_CHANGED_EVENT,
   clearClientProviderConfig,
   hasCompleteClientProviderConfig,
   readStoredClientProviderConfig,
@@ -12,7 +13,6 @@ import {
 import styles from "./provider-settings-popover.module.css";
 
 const EMPTY_DRAFT: ClientProviderDraft = { baseUrl: "", apiKey: "" };
-const CLIENT_PROVIDER_DRAFT_CHANGED_EVENT = "commercial-studio-client-provider-draft-changed";
 const EMPTY_DRAFT_SNAPSHOT = JSON.stringify(EMPTY_DRAFT);
 
 export function ProviderSettingsPopover() {
@@ -69,7 +69,7 @@ function ProviderSettingsForm({
   return (
     <div className={styles.form}>
       <SettingsField
-        label="OpenAI 兼容 URL"
+        label="OpenAI 兼容 URL（可选）"
         type="url"
         value={draft.baseUrl}
         onChange={(baseUrl) => onDraftChange({ ...draft, baseUrl })}

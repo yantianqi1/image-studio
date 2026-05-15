@@ -5,6 +5,7 @@ from pathlib import PurePosixPath
 from sqlalchemy import select
 
 from apps.api.app.domains.comic.models import ComicCharacterCard
+from apps.api.app.domains.image import client_provider_rendering
 from apps.api.app.domains.image import service as image_service
 from apps.api.app.domains.image.models import Asset, ImageJobReferenceAsset
 from apps.api.app.domains.llm.service import RenderedImage
@@ -24,7 +25,7 @@ def test_comic_reference_pipeline_generates_page_with_reference_assets(monkeypat
     task = create_task(client)
     install_llm_outputs(monkeypatch)
     monkeypatch.setattr(image_service, "render_image", fake_renderer, raising=False)
-    monkeypatch.setattr(image_service, "render_image_with_client_provider", fake_renderer, raising=False)
+    monkeypatch.setattr(client_provider_rendering, "render_image_with_client_provider", fake_renderer, raising=False)
 
     worker_comic_tasks.run_next_comic_task()
     reference_response = client.post(f"/api/public/comic/tasks/{task['id']}/character-references")
@@ -48,7 +49,7 @@ def test_worker_persists_full_comic_generation_without_frontend_approval(monkeyp
     task = create_task(client)
     install_llm_outputs(monkeypatch)
     monkeypatch.setattr(image_service, "render_image", fake_renderer, raising=False)
-    monkeypatch.setattr(image_service, "render_image_with_client_provider", fake_renderer, raising=False)
+    monkeypatch.setattr(client_provider_rendering, "render_image_with_client_provider", fake_renderer, raising=False)
 
     run_worker_until_idle()
 

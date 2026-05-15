@@ -21,6 +21,9 @@ function loadPublicApi(apiClient) {
       if (path === "@/lib/api-client") {
         return apiClient;
       }
+      if (path === "@/lib/client-provider-config") {
+        return { rememberResolvedClientProviderBaseUrl: () => undefined };
+      }
       throw new Error(`Unexpected require: ${path}`);
     },
   };

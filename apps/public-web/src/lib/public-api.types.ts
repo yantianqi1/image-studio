@@ -49,6 +49,7 @@ export type ImageGenerationResponse = Readonly<{
   charge_cents: number;
   error_message?: string | null;
   source_asset_id?: number | null;
+  client_provider_base_url?: string | null;
   created_at?: string;
 }>;
 

@@ -368,6 +368,7 @@ export const adminApi = {
       public_quota_mode: "daily_global" | "per_ip";
       public_quota_daily_global_limit: number;
       public_quota_per_ip_limit: number;
+      client_provider_url_pool: string;
     }>("/api/admin/settings");
   },
   updateSettings(input: {
@@ -378,6 +379,7 @@ export const adminApi = {
     public_quota_mode: "daily_global" | "per_ip";
     public_quota_daily_global_limit: number;
     public_quota_per_ip_limit: number;
+    client_provider_url_pool: string;
   }) {
     return apiFetch<{
       site_title: string;
@@ -387,6 +389,7 @@ export const adminApi = {
       public_quota_mode: "daily_global" | "per_ip";
       public_quota_daily_global_limit: number;
       public_quota_per_ip_limit: number;
+      client_provider_url_pool: string;
     }>("/api/admin/settings", {
       method: "PATCH",
       body: JSON.stringify(input),
