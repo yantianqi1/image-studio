@@ -8,7 +8,7 @@ export type { XiaohongshuAvatarPosterPromptInput } from "./xiaohongshu-avatar-po
 export { buildXiaohongshuAvatarPosterPrompt } from "./xiaohongshu-avatar-poster-prompt";
 
 export type PromptApp = Readonly<{
-  access: "public-image-job-api";
+  access: "public-image-job-api" | "public-prompt-crafter-api";
   cover: PromptAppCover;
   id: string;
   title: string;
@@ -40,6 +40,19 @@ export type SilhouetteUniversePosterPromptInput = Readonly<{
 }>;
 
 export const PROMPT_APPS: readonly PromptApp[] = [
+  {
+    access: "public-prompt-crafter-api",
+    id: "prompt-crafter",
+    cover: {
+      badge: "Prompt",
+      imageSrc: "/app-covers/prompt-crafter.svg",
+      label: "提示词工坊",
+    },
+    title: "提示词工坊",
+    description: "把简短想法扩展为三套可直接使用的 Markdown 生图提示词。",
+    href: "/apps/prompt-crafter",
+    statusLabel: "AI 提示词",
+  },
   {
     access: "public-image-job-api",
     id: "character-poster",

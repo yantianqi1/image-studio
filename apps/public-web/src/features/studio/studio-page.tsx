@@ -22,6 +22,7 @@ import {
   buildImageJobRequest,
   uploadPendingReferenceImages,
 } from "@/features/studio/studio-image-request";
+import { resolveStudioDraftMode } from "@/features/studio/studio-request-mode";
 import {
   clearTurnProgress,
   getTurnProgressSnapshot,
@@ -44,6 +45,11 @@ import {
   type TurnDraft,
 } from "@/features/studio/studio-types";
 import { useStudioConversations } from "@/features/studio/use-studio-conversations";
+import {
+  clearGeneratePromptParam,
+  listenPromptCrafterUsePrompt,
+  readGeneratePromptParam,
+} from "@/features/prompt-crafter/use-prompt";
 import { publicApi, type ImageAssetVisibility } from "@/lib/public-api";
 import { useApiResource } from "@/lib/use-api-resource";
 import { cn } from "@/lib/cn";
@@ -228,6 +234,21 @@ export function StudioPage() {
     savePersistedSettings({ aspectRatio, resolution, quality, count });
   }, [aspectRatio, resolution, quality, count]);
 
+  useEffect(() => {
+    const queryPrompt = readGeneratePromptParam();
+    if (queryPrompt) {
+      window.setTimeout(() => {
+        setPrompt(queryPrompt);
+        setMode("generate");
+        clearGeneratePromptParam();
+      }, 0);
+    }
+    return listenPromptCrafterUsePrompt((nextPrompt) => {
+      setPrompt(nextPrompt);
+      setMode("generate");
+    });
+  }, []);
+
   // --- Progress subscription ---
   useEffect(() => {
     const update = () => setProgressMap(getTurnProgressSnapshot());
@@ -405,7 +426,7 @@ export function StudioPage() {
     const draft: TurnDraft = {
       prompt: prompt.trim(),
       model: resolvedModel,
-      mode,
+      mode: resolveStudioDraftMode({ composerMode: mode, referenceCount: referenceImages.length }),
       referenceImages,
       count,
       aspectRatio,
@@ -428,6 +449,19 @@ export function StudioPage() {
       controller.abort();
     }
     conversations.updateTurn(convId, turnId, { status: "cancelled" });
+  }, [conversations]);
+
+  const handleDeleteTurn = useCallback((turnId: string) => {
+    const conv = conversations.activeConversation;
+    if (!conv) return;
+    const key = turnProgressKey(conv.id, turnId);
+    const controller = abortControllersRef.current.get(key);
+    if (controller) {
+      controller.abort();
+    }
+    clearTurnProgress(key);
+    abortControllersRef.current.delete(key);
+    conversations.removeTurn(conv.id, turnId);
   }, [conversations]);
 
   const handleRetryTurn = useCallback((turnId: string) => {
@@ -458,7 +492,7 @@ export function StudioPage() {
       thumbnailUrl: image.thumbnailUrl,
     };
     setReferenceImages((prev) => [...prev, ref]);
-    setMode("edit");
+    setMode("generate");
   }, []);
 
   const handleImageVisibilityChange = useCallback(async (assetId: number, visibility: ImageAssetVisibility) => {
@@ -480,11 +514,7 @@ export function StudioPage() {
 
   const handleApplyPrompt = useCallback((prompt: BananaPrompt) => {
     setPrompt(cleanPromptText(prompt.prompt));
-    if (prompt.mode === "edit") {
-      setMode("edit");
-    } else {
-      setMode("generate");
-    }
+    setMode("generate");
     // If the prompt has reference images, fetch them and set as reference images
     if (prompt.referenceImageUrls.length > 0) {
       const refs: StoredReferenceImage[] = prompt.referenceImageUrls.map((url, i) => ({
@@ -550,6 +580,7 @@ export function StudioPage() {
             onRetryTurn={handleRetryTurn}
             onEditFromTurn={handleEditFromTurn}
             onCancelTurn={handleCancelTurn}
+            onDeleteTurn={handleDeleteTurn}
             onImageVisibilityChange={handleImageVisibilityChange}
             onOpenLightbox={handleOpenLightbox}
             onApplyPreset={handleApplyPresetCard}

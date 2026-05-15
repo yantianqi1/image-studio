@@ -12,6 +12,7 @@ import {
   Plus,
   RotateCcw,
   Sparkles,
+  Trash2,
 } from "lucide-react";
 
 import { cn } from "@/lib/cn";
@@ -35,15 +36,16 @@ type StudioResultsProps = Readonly<{
   onRetryTurn: (turnId: string) => void;
   onEditFromTurn: (turnId: string, image: StoredImage) => void;
   onCancelTurn: (turnId: string) => void;
+  onDeleteTurn: (turnId: string) => void;
   onImageVisibilityChange: (assetId: number, visibility: ImageAssetVisibility) => void;
   onOpenLightbox: (images: readonly StoredImage[], startIndex: number) => void;
   onApplyPreset: (presetId: string) => void;
 }>;
 
 const MODE_LABELS: Record<string, { label: string; colorClass: string }> = {
-  generate: { label: "生成", colorClass: "bg-blue-50 text-blue-600" },
-  edit: { label: "编辑", colorClass: "bg-amber-50 text-amber-700" },
-  chat: { label: "聊天", colorClass: "bg-emerald-50 text-emerald-700" },
+  generate: { label: "生图", colorClass: "bg-blue-50 text-blue-600" },
+  edit: { label: "生图", colorClass: "bg-blue-50 text-blue-600" },
+  chat: { label: "对话", colorClass: "bg-emerald-50 text-emerald-700" },
 };
 
 function formatTurnTime(iso: string) {
@@ -83,6 +85,7 @@ export const StudioResults = memo(function StudioResults({
   onRetryTurn,
   onEditFromTurn,
   onCancelTurn,
+  onDeleteTurn,
   onImageVisibilityChange,
   onOpenLightbox,
   onApplyPreset,
@@ -166,6 +169,7 @@ export const StudioResults = memo(function StudioResults({
             onRetry={() => onRetryTurn(turn.id)}
             onEditFromImage={(image) => onEditFromTurn(turn.id, image)}
             onCancel={() => onCancelTurn(turn.id)}
+            onDelete={() => onDeleteTurn(turn.id)}
             onVisibilityChange={onImageVisibilityChange}
             onOpenLightbox={(startIndex) => onOpenLightbox(turn.images, startIndex)}
           />
@@ -181,6 +185,7 @@ const TurnCard = memo(function TurnCard({
   onRetry,
   onEditFromImage,
   onCancel,
+  onDelete,
   onVisibilityChange,
   onOpenLightbox,
 }: Readonly<{
@@ -189,6 +194,7 @@ const TurnCard = memo(function TurnCard({
   onRetry: () => void;
   onEditFromImage: (image: StoredImage) => void;
   onCancel: () => void;
+  onDelete: () => void;
   onVisibilityChange: (assetId: number, visibility: ImageAssetVisibility) => void;
   onOpenLightbox: (startIndex: number) => void;
 }>) {
@@ -235,6 +241,15 @@ const TurnCard = memo(function TurnCard({
                   </button>
                 </>
               )}
+              <button
+                type="button"
+                className="inline-flex size-7 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                onClick={onDelete}
+                aria-label="删除记录"
+                title="删除记录"
+              >
+                <Trash2 className="size-3.5" />
+              </button>
             </div>
           </div>
           <div className="whitespace-pre-wrap break-words">{turn.prompt}</div>

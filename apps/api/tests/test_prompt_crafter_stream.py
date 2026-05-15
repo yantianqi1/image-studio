@@ -14,6 +14,8 @@ def test_prompt_crafter_system_prompt_loads_skill_and_patterns() -> None:
     assert "Default Output" in prompt
     assert "Prompt Patterns" in prompt
     assert "Human-Subject Photography" in prompt
+    assert "严格 Markdown" in prompt
+    assert "三套备选提示词" in prompt
 
 
 def test_prompt_crafter_stream_returns_text_chunks(client, monkeypatch) -> None:

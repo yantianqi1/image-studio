@@ -58,6 +58,63 @@
   color: #cf222e;
 }
 
+.optionList {
+  display: grid;
+  gap: 0.45rem;
+  border-bottom: 1px solid #d7dde5;
+  background: #ffffff;
+  padding: 0.62rem;
+}
+
+.optionItem {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.55rem;
+  border: 1px solid #d8dee4;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 0.48rem 0.55rem;
+}
+
+.optionTitle {
+  min-width: 0;
+  overflow: hidden;
+  color: #24292f;
+  font-size: 0.78rem;
+  font-weight: 760;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.useButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.85rem;
+  border: 1px solid #0969da;
+  border-radius: 8px;
+  background: #0969da;
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: 800;
+  line-height: 1;
+  padding: 0 0.72rem;
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+.useButton:hover:not(:disabled) {
+  border-color: #0757b8;
+  background: #0757b8;
+}
+
+.useButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .markdown {
   color: #24292f;
   font-size: 0.94rem;
@@ -204,6 +261,19 @@
   }
 
   .copyButton {
+    width: 100%;
+    min-height: 2.15rem;
+  }
+
+  .optionItem {
+    grid-template-columns: 1fr;
+  }
+
+  .optionTitle {
+    white-space: normal;
+  }
+
+  .useButton {
     width: 100%;
     min-height: 2.15rem;
   }

@@ -1,22 +1,33 @@
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
-import { parsePromptMarkdown, type PromptMarkdownBlock } from "./prompt-markdown";
+import {
+  extractPromptOptionsFromMarkdown,
+  parsePromptMarkdown,
+  type PromptMarkdownBlock,
+  type PromptMarkdownOption,
+} from "./prompt-markdown";
 import styles from "./prompt-markdown.module.css";
 
 type PromptMarkdownViewProps = Readonly<{
   markdown: string;
   onCopy?: () => Promise<void>;
+  onUsePrompt?: (prompt: string) => void;
   streaming: boolean;
 }>;
 
 type CopyStatus = "idle" | "success" | "error";
+type CopyState = Readonly<{
+  markdown: string;
+  status: CopyStatus;
+}>;
 
 export function PromptMarkdownView(props: PromptMarkdownViewProps) {
   const blocks = useMemo(() => parsePromptMarkdown(props.markdown), [props.markdown]);
-  const [copyStatus, setCopyStatus] = useState<CopyStatus>("idle");
-
-  useEffect(() => setCopyStatus("idle"), [props.markdown]);
+  const options = useMemo(() => extractPromptOptionsFromMarkdown(props.markdown), [props.markdown]);
+  const [copyState, setCopyState] = useState<CopyState>({ markdown: "", status: "idle" });
+  const copyStatus = copyState.markdown === props.markdown ? copyState.status : "idle";
+  const setCopyStatus = (status: CopyStatus) => setCopyState({ markdown: props.markdown, status });
 
   return (
     <div className={styles.markdownShell}>
@@ -26,10 +37,44 @@ export function PromptMarkdownView(props: PromptMarkdownViewProps) {
         onCopy={props.onCopy}
         setCopyStatus={setCopyStatus}
       />
+      {props.onUsePrompt ? (
+        <PromptOptionList
+          disabled={props.streaming}
+          onUsePrompt={props.onUsePrompt}
+          options={options}
+        />
+      ) : null}
       <div className={styles.markdown}>
         {blocks.length > 0 ? blocks.map((block, index) => renderMarkdownBlock(block, index)) : <p className={styles.pending}>...</p>}
         {props.streaming ? <span aria-hidden="true" className={styles.caret} /> : null}
       </div>
+    </div>
+  );
+}
+
+function PromptOptionList(props: Readonly<{
+  disabled: boolean;
+  onUsePrompt: (prompt: string) => void;
+  options: readonly PromptMarkdownOption[];
+}>) {
+  if (props.options.length === 0) {
+    return null;
+  }
+  return (
+    <div className={styles.optionList} aria-label="可使用的提示词">
+      {props.options.map((option, index) => (
+        <div className={styles.optionItem} key={`${option.title}-${index}`}>
+          <span className={styles.optionTitle}>{option.title}</span>
+          <button
+            className={styles.useButton}
+            disabled={props.disabled}
+            type="button"
+            onClick={() => props.onUsePrompt(option.prompt)}
+          >
+            使用
+          </button>
+        </div>
+      ))}
     </div>
   );
 }

@@ -41,7 +41,7 @@ export function AppShell({
   const resolvedHeaderTitle = headerTitle ?? (workspaceMode ? title : undefined);
 
   return (
-    <div className={workspaceMode ? "fixed inset-0 flex flex-col overflow-hidden bg-[var(--background)] text-[var(--foreground)]" : "min-h-screen bg-[var(--background)] text-[var(--foreground)]"}>
+    <div className={workspaceMode ? "fixed inset-0 flex h-[100dvh] flex-col overflow-hidden bg-[var(--background)] text-[var(--foreground)]" : "min-h-screen bg-[var(--background)] text-[var(--foreground)]"}>
       <AppHeader activeHref={activeHref} brandLabel={brandLabel} headerTitle={resolvedHeaderTitle} leadingAction={leadingAction} navAside={navAside} />
 
       <main style={{ viewTransitionName: "main-content" }} className={workspaceMode ? "min-h-0 w-full flex-1 overflow-hidden px-2 pb-2 pt-2 sm:px-4 sm:pb-3 lg:px-5" : "mx-auto w-full max-w-[1440px] px-4 pb-10 pt-5 sm:px-6 lg:px-8 lg:pt-6"}>

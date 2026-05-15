@@ -1,0 +1,163 @@
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(18rem, 0.78fr) minmax(0, 1.22fr);
+  gap: 1rem;
+  min-height: min(42rem, calc(100dvh - 12rem));
+}
+
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid #d8dee4;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #24292f;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.inputPanel,
+.outputPanel {
+  display: grid;
+  align-content: start;
+  gap: 0.9rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 1rem;
+}
+
+.title {
+  margin: 0;
+  color: #111827;
+  font-size: 1.4rem;
+  font-weight: 820;
+  letter-spacing: 0;
+}
+
+.starters {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.starterButton {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f9fafb;
+  color: #374151;
+  cursor: pointer;
+  font-size: 0.86rem;
+  font-weight: 700;
+  line-height: 1.55;
+  padding: 0.7rem 0.75rem;
+  text-align: left;
+}
+
+.form {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.textarea {
+  min-height: 12rem;
+  resize: vertical;
+  border: 1px solid #d8dee4;
+  border-radius: 8px;
+  color: #111827;
+  font: inherit;
+  line-height: 1.65;
+  outline: none;
+  padding: 0.85rem;
+}
+
+.textarea:focus {
+  border-color: #0969da;
+  box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.12);
+}
+
+.actions,
+.outputActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.primaryButton,
+.primarySmallButton,
+.secondaryButton {
+  min-height: 2.35rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.86rem;
+  font-weight: 800;
+  padding: 0 0.85rem;
+}
+
+.primaryButton,
+.primarySmallButton {
+  border: 1px solid #111827;
+  background: #111827;
+  color: #ffffff;
+}
+
+.secondaryButton {
+  border: 1px solid #d8dee4;
+  background: #ffffff;
+  color: #24292f;
+}
+
+.primaryButton:disabled,
+.primarySmallButton:disabled,
+.secondaryButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.outputPanel {
+  min-width: 0;
+}
+
+.outputHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.outputLabel {
+  border: 1px solid #d8dee4;
+  border-radius: 999px;
+  background: #f6f8fa;
+  color: #57606a;
+  font-size: 0.76rem;
+  font-weight: 800;
+  padding: 0.2rem 0.6rem;
+}
+
+.errorText {
+  margin: 0;
+  color: #cf222e;
+  font-size: 0.82rem;
+  font-weight: 720;
+  line-height: 1.5;
+}
+
+@media (max-width: 640px) {
+  .workspace {
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+
+  .outputHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .actions,
+  .outputActions {
+    display: grid;
+  }
+}

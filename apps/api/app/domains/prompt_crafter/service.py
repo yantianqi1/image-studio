@@ -19,6 +19,27 @@ PROMPT_CRAFTER_SKILL_NAME = "gpt-image-2-prompt-crafter"
 PROMPT_CRAFTER_SKILL_FILE = "SKILL.md"
 PROMPT_CRAFTER_PATTERN_FILE = Path("references") / "prompt-patterns.md"
 PROMPT_CRAFTER_SYSTEM_PREFIX = "你正在使用 gpt-image-2-prompt-crafter skill。请严格遵守下面的 skill 与参考模式。"
+PROMPT_CRAFTER_FORMAT_CONTRACT = """
+常规提示词工坊请求必须输出严格 Markdown，并且只输出三套备选提示词。不要输出解释、分析过程、寒暄、总结或提示词之外的说明。
+
+严格 Markdown 结构如下，每套方案必须包含一个二级标题和一个 prompt 代码块：
+## 方案 1：{方向名称}
+```prompt
+{可直接粘贴到生图模型的一整段提示词}
+```
+
+## 方案 2：{方向名称}
+```prompt
+{可直接粘贴到生图模型的一整段提示词}
+```
+
+## 方案 3：{方向名称}
+```prompt
+{可直接粘贴到生图模型的一整段提示词}
+```
+
+三套备选提示词必须显著不同，分别在场景、镜头、构图、光线、材质、情绪或视觉系统上拉开差异；每套都要保留用户明确需求，补足用户没有说清但会影响画面质感的关键视觉信息，并保持合规安全。对于明确要求“只输出一段纯提示词”的内部工具请求，按用户指定格式输出单条纯提示词。
+""".strip()
 PROMPT_CRAFTER_SKILL_MISSING_CODE = "prompt_crafter_skill_missing"
 PROMPT_CRAFTER_MESSAGE_INVALID_CODE = "prompt_crafter_message_invalid"
 PROMPT_CRAFTER_SSE_EVENT_START = "start"
@@ -37,7 +58,7 @@ def build_prompt_crafter_system_prompt() -> str:
     skill_dir = resolve_prompt_crafter_skill_dir()
     skill_text = read_required_text(skill_dir / PROMPT_CRAFTER_SKILL_FILE)
     pattern_text = read_required_text(skill_dir / PROMPT_CRAFTER_PATTERN_FILE)
-    return "\n\n".join([PROMPT_CRAFTER_SYSTEM_PREFIX, skill_text, pattern_text])
+    return "\n\n".join([PROMPT_CRAFTER_SYSTEM_PREFIX, PROMPT_CRAFTER_FORMAT_CONTRACT, skill_text, pattern_text])
 
 
 def stream_prompt_crafter_completion(

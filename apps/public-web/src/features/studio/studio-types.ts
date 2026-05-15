@@ -2,7 +2,7 @@ import type { ImageAssetVisibility } from "@/lib/public-api.types";
 
 export type StudioMode = "generate" | "edit" | "chat";
 export type TurnStatus = "queued" | "generating" | "success" | "error" | "cancelled";
-export type ComposerMode = "generate" | "edit" | "chat";
+export type ComposerMode = "generate" | "chat";
 
 export type StoredReferenceImage = Readonly<{
   name: string;

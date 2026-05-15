@@ -8,11 +8,17 @@ export type PromptMarkdownBlock = Readonly<
   | { type: "unordered-list"; items: readonly string[] }
 >;
 
+export type PromptMarkdownOption = Readonly<{
+  prompt: string;
+  title: string;
+}>;
+
 const CODE_FENCE = "```";
 const MAX_HEADING_LEVEL = 3;
 const MIN_HEADING_LEVEL = 1;
 const ORDERED_LIST_PATTERN = /^\d+\.\s+/;
 const UNORDERED_LIST_PATTERN = /^[-*]\s+/;
+const PROMPT_CODE_LANGUAGES = new Set(["", "prompt", "text"]);
 
 export function parsePromptMarkdown(source: string): readonly PromptMarkdownBlock[] {
   const lines = normalizePromptMarkdown(source).split("\n");
@@ -29,6 +35,28 @@ export function parsePromptMarkdown(source: string): readonly PromptMarkdownBloc
     index = parsed.nextIndex;
   }
   return blocks;
+}
+
+export function extractPromptOptionsFromMarkdown(source: string): readonly PromptMarkdownOption[] {
+  const blocks = parsePromptMarkdown(source);
+  const options: PromptMarkdownOption[] = [];
+  let currentTitle = "";
+
+  for (const block of blocks) {
+    if (block.type === "heading") {
+      currentTitle = block.text;
+      continue;
+    }
+    if (block.type !== "code" || !isPromptCodeBlock(block)) {
+      continue;
+    }
+    const prompt = block.code.trim();
+    if (prompt) {
+      options.push({ title: currentTitle || `方案 ${options.length + 1}`, prompt });
+    }
+  }
+
+  return options;
 }
 
 function parsePromptMarkdownBlock(lines: readonly string[], index: number) {
@@ -139,4 +167,8 @@ function isRuleLine(line: string): boolean {
 
 function normalizePromptMarkdown(source: string): string {
   return source.replaceAll("\r\n", "\n").trim();
+}
+
+function isPromptCodeBlock(block: Extract<PromptMarkdownBlock, { type: "code" }>): boolean {
+  return PROMPT_CODE_LANGUAGES.has(block.language.trim().toLowerCase());
 }

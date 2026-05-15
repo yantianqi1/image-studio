@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
 
@@ -8,7 +7,9 @@ import {
   type PromptCrafterMessage,
   streamPromptCrafter,
 } from "./prompt-crafter-api";
+import { extractPromptOptionsFromMarkdown } from "./prompt-markdown";
 import { PromptMarkdownView } from "./prompt-markdown-view";
+import { applyPromptToGenerate } from "./use-prompt";
 import styles from "./prompt-crafter-drawer.module.css";
 
 const REFINEMENT_PROMPT = "请基于上一版结果继续优化，保留核心主题，强化镜头、构图、材质、光线和可读性。";
@@ -43,7 +44,7 @@ export function PromptCrafterDrawer({ onClose }: Readonly<{ onClose: () => void 
     () => [...messages].reverse().find((m) => m.role === "assistant")?.content.trim() ?? "",
     [messages],
   );
-  const generateHref = `/generate?prompt=${encodeURIComponent(latestPrompt)}`;
+  const firstUsablePrompt = useMemo(() => readFirstUsablePrompt(latestPrompt), [latestPrompt]);
   const canSubmit = draft.trim().length > 0 && status !== "streaming";
   const canContinue = Boolean(latestPrompt) && status !== "streaming";
 
@@ -80,6 +81,17 @@ export function PromptCrafterDrawer({ onClose }: Readonly<{ onClose: () => void 
       onClose();
     }, 220);
   }, [onClose]);
+
+  const handleUsePrompt = useCallback((nextPrompt: string) => {
+    applyPromptToGenerate(nextPrompt);
+    handleClose();
+  }, [handleClose]);
+
+  const handleUseFirstPrompt = useCallback(() => {
+    if (firstUsablePrompt) {
+      handleUsePrompt(firstUsablePrompt);
+    }
+  }, [firstUsablePrompt, handleUsePrompt]);
 
   return (
     <>
@@ -132,14 +144,14 @@ export function PromptCrafterDrawer({ onClose }: Readonly<{ onClose: () => void 
                 >
                   {copyLabel}
                 </button>
-                <Link
+                <button
                   className={styles.resultActionButton}
-                  href={latestPrompt ? generateHref : "#"}
-                  aria-disabled={!latestPrompt}
-                  onClick={latestPrompt ? handleClose : undefined}
+                  disabled={!firstUsablePrompt}
+                  type="button"
+                  onClick={handleUseFirstPrompt}
                 >
                   发送到生图
-                </Link>
+                </button>
               </div>
             </div>
             <div className={styles.resultBody}>
@@ -148,6 +160,7 @@ export function PromptCrafterDrawer({ onClose }: Readonly<{ onClose: () => void 
                   markdown={latestPrompt}
                   streaming={status === "streaming"}
                   onCopy={handleCopy}
+                  onUsePrompt={handleUsePrompt}
                 />
               ) : (
                 <div className={styles.emptyResult}>
@@ -160,6 +173,10 @@ export function PromptCrafterDrawer({ onClose }: Readonly<{ onClose: () => void 
       </aside>
     </>
   );
+}
+
+function readFirstUsablePrompt(markdown: string): string {
+  return extractPromptOptionsFromMarkdown(markdown)[0]?.prompt ?? markdown.trim();
 }
 
 function StarterGrid({ onSelect }: Readonly<{ onSelect: (value: string) => void }>) {

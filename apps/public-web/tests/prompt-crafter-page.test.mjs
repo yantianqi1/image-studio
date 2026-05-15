@@ -86,3 +86,39 @@ test("prompt markdown parser extracts common markdown blocks", () => {
     { type: "code", language: "text", code: "prompt" },
   ]);
 });
+
+test("prompt markdown parser extracts three usable prompt options", () => {
+  const { extractPromptOptionsFromMarkdown } = loadPromptMarkdown();
+  const markdown = [
+    "## 方案 1：电影感人像",
+    "```prompt",
+    "生成一张雨后街道人像。",
+    "```",
+    "## 方案 2：产品视觉",
+    "```prompt",
+    "生成一张咖啡包装主视觉。",
+    "```",
+    "## 方案 3：海报设计",
+    "```prompt",
+    "生成一张城市文化海报。",
+    "```",
+  ].join("\n");
+
+  assert.deepEqual(JSON.parse(JSON.stringify(extractPromptOptionsFromMarkdown(markdown))), [
+    { title: "方案 1：电影感人像", prompt: "生成一张雨后街道人像。" },
+    { title: "方案 2：产品视觉", prompt: "生成一张咖啡包装主视觉。" },
+    { title: "方案 3：海报设计", prompt: "生成一张城市文化海报。" },
+  ]);
+});
+
+test("prompt crafter drawer exposes per-option use actions", () => {
+  const drawerSource = readRequiredSource(
+    new URL("../src/features/prompt-crafter/prompt-crafter-drawer.tsx", import.meta.url),
+    "prompt crafter drawer",
+  );
+  const markdownViewSource = readRequiredSource(markdownViewFile, "prompt markdown view");
+
+  assert.match(drawerSource, /onUsePrompt=\{handleUsePrompt\}/);
+  assert.match(markdownViewSource, /extractPromptOptionsFromMarkdown/);
+  assert.match(markdownViewSource, /使用/);
+});
