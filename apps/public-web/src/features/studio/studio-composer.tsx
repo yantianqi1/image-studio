@@ -10,6 +10,7 @@ import {
   MessageCircle,
   Paintbrush,
   Plus,
+  ShieldCheck,
   SlidersHorizontal,
   Store,
   X,
@@ -26,6 +27,7 @@ import {
 } from "react";
 
 import { cn } from "@/lib/cn";
+import { streamPromptCrafter } from "@/features/prompt-crafter/prompt-crafter-api";
 import { ASPECT_RATIO_OPTIONS, QUALITY_OPTIONS } from "@/features/studio/studio-options";
 import {
   MAX_COUNT,
@@ -119,6 +121,9 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
   const [isPromptAreaResizing, setIsPromptAreaResizing] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
+  const [isComplianceRunning, setIsComplianceRunning] = useState(false);
+  const [complianceSuccess, setComplianceSuccess] = useState(false);
+  const complianceAbortRef = useRef<AbortController | null>(null);
   const modelMenuRef = useRef<HTMLDivElement>(null);
   const settingsContainerRef = useRef<HTMLDivElement>(null);
 
@@ -263,6 +268,54 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
     modelsState.status === "ready"
       ? modelsState.data.find((m) => m.code === model)?.display_name || model
       : "加载中...";
+
+  const handlePromptCompliance = useCallback(async () => {
+    if (!prompt.trim() || isComplianceRunning) return;
+    setIsComplianceRunning(true);
+    setComplianceSuccess(false);
+    complianceAbortRef.current = new AbortController();
+
+    const systemInstruction = `请将下面的图片生成提示词进行合规化改写。
+
+核心目标：在不改变原始画面主题、人物气质、构图、服装、场景、光线、色彩、镜头语言和艺术风格的前提下，去除或弱化可能导致生图失败、审核不通过、内容过于露骨、年龄表达不清、或模型误判的部分，并输出一段完整、干净、自然、可直接用于图像生成模型的最终提示词。
+
+改写要求：
+保持原始画面的核心设定不变，不改变主体、场景、时代风格、服装类型、构图、人物姿态、背景道具、光影氛围和整体美学。保留重要视觉元素，例如发型、服饰、环境、材质、道具、镜头、景深、光线、色彩和细节表现。
+
+如果原提示词中出现未成年、少女、幼态、学生、萝莉、child、teen、young girl 等可能暗示未成年或年龄模糊的词，请统一改写为明确成年人物，例如"成年女性""adult woman""woman in her 20s"。
+
+如果原提示词中出现过度性化身体描写，例如 huge boobs、huge breast、cleavage、oiled skin、seductive、sexy、erotic、nude、revealing 等，请改写为合规的时尚摄影、服装轮廓、气质、材质和光影描述，例如 elegant neckline、refined silhouette、luminous skin、fashion editorial styling、romantic feminine styling。
+
+删除或安全改写色情、裸露、性行为、挑逗性姿势、未成年性化、非自愿、暴力血腥、仇恨、违法、侵犯隐私、真实人物不当使用等不合规内容。
+
+优化提示词结构，删除混乱、重复、无效或堆砌严重的词汇。使用清晰、具体、可视化的摄影语言和画面描述，让最终提示词自然连贯、画面明确、可执行性强。
+
+最终只输出一段完整的纯提示词。不要输出标题、解释、修改说明、列表、引号、代码块或任何额外内容。
+
+原始提示词如下：
+${prompt}`;
+
+    let result = "";
+    try {
+      await streamPromptCrafter({
+        messages: [{ role: "user", content: systemInstruction }],
+        onChunk: (chunk) => {
+          result += chunk;
+          onPromptChange(result);
+        },
+        signal: complianceAbortRef.current.signal,
+      });
+      setComplianceSuccess(true);
+      setTimeout(() => setComplianceSuccess(false), 2000);
+    } catch (error) {
+      if ((error as Error).name !== "AbortError") {
+        onPromptChange(prompt);
+      }
+    } finally {
+      setIsComplianceRunning(false);
+      complianceAbortRef.current = null;
+    }
+  }, [prompt, isComplianceRunning, onPromptChange]);
 
   return (
     <div className="mx-auto w-full max-w-3xl shrink-0 px-3 pb-3 pt-1 sm:px-4 sm:pb-4">
@@ -472,6 +525,33 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
                     )}
                   </div>
                 )}
+
+                {/* Prompt compliance button */}
+                <button
+                  type="button"
+                  className={cn(
+                    "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition",
+                    complianceSuccess
+                      ? "border-green-300 bg-green-50 text-green-600"
+                      : isComplianceRunning
+                        ? "border-blue-200 bg-blue-50 text-blue-600"
+                        : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50",
+                  )}
+                  onClick={handlePromptCompliance}
+                  disabled={isComplianceRunning || !prompt.trim()}
+                  title="提示词合规化"
+                >
+                  {isComplianceRunning ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : complianceSuccess ? (
+                    <Check className="size-3.5" />
+                  ) : (
+                    <ShieldCheck className="size-3.5" />
+                  )}
+                  <span className="hidden sm:inline">
+                    {complianceSuccess ? "已合规" : isComplianceRunning ? "优化中" : "合规"}
+                  </span>
+                </button>
               </div>
 
               {/* Right toolbar */}
