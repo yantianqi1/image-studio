@@ -46,6 +46,13 @@ test("studio composer exposes compliance tooltip and prompt optimization action"
   assert.match(composerSource, /"优化"/);
 });
 
+test("studio composer exposes character library picker", () => {
+  assert.match(composerSource, /onOpenCharacterLibrary/);
+  assert.match(composerSource, /"形象库"/);
+  assert.match(pageSource, /StudioCharacterLibrary/);
+  assert.match(pageSource, /characterLibraryIds/);
+});
+
 test("studio turns can be deleted and retry reuses the original turn", () => {
   assert.match(resultsSource, /onDeleteTurn/);
   assert.match(resultsSource, /aria-label="删除记录"/);

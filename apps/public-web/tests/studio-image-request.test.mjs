@@ -187,6 +187,31 @@ test("buildImageJobRequest keeps reference uploads in generate mode without sour
   assert.equal("source_asset_id" in request, false);
 });
 
+test("buildImageJobRequest forwards selected character library ids", () => {
+  const { buildImageJobRequest } = loadStudioImageRequest();
+  const draft = {
+    prompt: "让角色在花园里读书",
+    model: "gpt-image-2",
+    mode: "generate",
+    referenceImages: [],
+    characterLibraryIds: [12],
+    count: 1,
+    aspectRatio: "1:1",
+    resolution: "1024x1024",
+    quality: "medium",
+    visibility: "private",
+  };
+
+  const request = buildImageJobRequest({
+    draft,
+    conversation: null,
+    referenceImages: [],
+  });
+
+  assert.deepEqual(request.character_library_ids, [12]);
+  assert.equal(request.prompt, "让角色在花园里读书");
+});
+
 test("uploadPendingReferenceImages uploads data url references", async () => {
   const { uploadPendingReferenceImages } = loadStudioImageRequest();
   const uploadedFiles = [];

@@ -1,0 +1,1 @@
+"""Character library domain."""

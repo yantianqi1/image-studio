@@ -75,3 +75,22 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   }
   return (payload as ApiEnvelope<T>).data as T;
 }
+
+export async function apiUpload<T>(path: string, formData: FormData, init?: RequestInit): Promise<T> {
+  const response = await fetch(path, {
+    ...init,
+    method: init?.method ?? "POST",
+    body: formData,
+    cache: "no-store",
+    headers: {
+      Accept: "application/json",
+      ...(init?.headers ?? {}),
+    },
+  });
+  const payload = (await parseJson(response)) as ApiEnvelope<T> | string | { error?: string };
+  if (!response.ok) {
+    redirectUnauthorized(response.status);
+    throw new ApiError(formatApiError(payload, response.status), response.status);
+  }
+  return (payload as ApiEnvelope<T>).data as T;
+}

@@ -23,6 +23,7 @@ export type ImageGenerationRequest = Readonly<{
   quality?: string;
   source_asset_id?: number;
   reference_asset_ids?: readonly number[];
+  character_library_ids?: readonly number[];
   conversation_messages?: readonly ImageConversationMessage[];
   visibility?: ImageAssetVisibility;
 }>;
@@ -58,6 +59,17 @@ export type UploadedImageAsset = Readonly<{
   asset_url: string;
   thumbnail_url?: string;
   mime_type: string;
+  created_at: string;
+}>;
+
+export type CharacterLibraryItem = Readonly<{
+  id: number;
+  name: string;
+  asset_id: number;
+  asset_url: string;
+  thumbnail_url: string;
+  visibility: ImageAssetVisibility;
+  owner_user_id: number | null;
   created_at: string;
 }>;
 

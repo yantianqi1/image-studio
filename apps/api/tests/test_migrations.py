@@ -14,7 +14,7 @@ from apps.api.app.domains.image.storage_migration import (
 )
 from apps.api.app.infra.db.session import get_engine, get_session_factory, initialize_database
 
-HEAD_REVISION = "20260515_000018"
+HEAD_REVISION = "20260515_000019"
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
@@ -44,6 +44,7 @@ def test_alembic_upgrade_creates_core_tables(tmp_path):
     assert inspector.has_table("sellable_models")
     assert inspector.has_table("image_jobs")
     assert inspector.has_table("image_job_reference_assets")
+    assert inspector.has_table("character_library_entries")
     assert inspector.has_table("anonymous_sessions")
     assert inspector.has_table("site_settings")
     site_settings_columns = {column["name"] for column in inspector.get_columns("site_settings")}
@@ -78,6 +79,11 @@ def test_alembic_upgrade_creates_core_tables(tmp_path):
     assert {"id", "job_id", "asset_id", "sequence", "created_at"} <= reference_columns
     reference_indexes = {index["name"] for index in inspector.get_indexes("image_job_reference_assets")}
     assert {"ix_image_job_reference_assets_job_id", "ix_image_job_reference_assets_asset_id"} <= reference_indexes
+
+    character_columns = {column["name"] for column in inspector.get_columns("character_library_entries")}
+    assert {"id", "name", "asset_id", "visibility", "owner_user_id", "created_by_admin_user_id"} <= character_columns
+    character_indexes = {index["name"] for index in inspector.get_indexes("character_library_entries")}
+    assert "ix_character_library_entries_visibility" in character_indexes
 
     comic_task_columns = {column["name"] for column in inspector.get_columns("comic_tasks")}
     assert {
@@ -119,6 +125,7 @@ def test_initialize_database_runs_alembic_to_head(tmp_path):
     assert inspector.has_table("users")
     assert inspector.has_table("image_jobs")
     assert inspector.has_table("image_job_reference_assets")
+    assert inspector.has_table("character_library_entries")
     assert inspector.has_table("anonymous_sessions")
     assert inspector.has_table("site_settings")
 

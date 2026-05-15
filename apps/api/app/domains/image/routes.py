@@ -5,6 +5,7 @@ from apps.api.app.core.deps import get_db_session
 from apps.api.app.core.response import api_ok
 from apps.api.app.domains.auth.ownership import ensure_anonymous_owner, resolve_request_owner
 from apps.api.app.domains.auth.service import require_admin
+from apps.api.app.domains.character_library.service import resolve_character_reference_bundle
 from apps.api.app.domains.image.admin_service import list_admin_jobs_with_results
 from apps.api.app.domains.image.stats_service import get_image_job_stats
 from apps.api.app.domains.image.assets import (
@@ -53,18 +54,24 @@ def create_image_job(
     client_config = read_client_provider_config(request)
     if owner.user_id is None and client_config is None:
         require_anonymous_image_enabled(session)
-    if payload.mode == "edit" or payload.reference_asset_ids:
+    if payload.mode == "edit" or payload.reference_asset_ids or payload.character_library_ids:
         require_uploads_enabled(session)
+    character_bundle = resolve_character_reference_bundle(
+        session,
+        owner=owner,
+        character_ids=payload.character_library_ids,
+        prompt=payload.prompt,
+    )
     job = create_job(
         session,
         owner=owner,
         source=resolve_image_job_source(owner=owner, has_client_provider=client_config is not None),
-        prompt=payload.prompt,
+        prompt=character_bundle.prompt,
         model_code=payload.model_code,
         requested_count=payload.requested_count,
         mode=payload.mode,
         source_asset_id=payload.source_asset_id,
-        reference_asset_ids=payload.reference_asset_ids,
+        reference_asset_ids=[*payload.reference_asset_ids, *character_bundle.asset_ids],
         conversation_messages=[
             message.model_dump(exclude_none=True)
             for message in payload.conversation_messages

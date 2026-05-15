@@ -1,4 +1,4 @@
-import { apiFetch } from "@/lib/api-client";
+import { apiFetch, apiUpload } from "@/lib/api-client";
 import type { AdminImageJob, ImageJobStats } from "@/lib/admin-image-job-types";
 import { buildUsersSearch, type AdminUserList, type AdminUsersQuery, type AdminWallet, type AdminWalletLedgerEntry } from "@/lib/admin-users";
 
@@ -17,6 +17,17 @@ export type AdminGalleryItem = Readonly<{
   revised_prompt: string | null;
   owner_user_id: number | null;
   owner_anonymous_session_id: number | null;
+}>;
+
+export type AdminCharacterLibraryItem = Readonly<{
+  id: number;
+  name: string;
+  asset_id: number;
+  asset_url: string;
+  thumbnail_url: string;
+  visibility: "private" | "public";
+  owner_user_id: number | null;
+  created_at: string;
 }>;
 
 export type ModelVariant = Readonly<{
@@ -358,6 +369,15 @@ export const adminApi = {
     return apiFetch<{ deleted: boolean; asset_id: number }>(`/api/admin/image/assets/${assetId}`, {
       method: "DELETE",
     });
+  },
+  characterLibrary() {
+    return apiFetch<readonly AdminCharacterLibraryItem[]>("/api/admin/character-library");
+  },
+  createCharacterLibraryItem(input: { name: string; file: File }) {
+    const formData = new FormData();
+    formData.append("name", input.name);
+    formData.append("file", input.file);
+    return apiUpload<AdminCharacterLibraryItem>("/api/admin/character-library", formData);
   },
   settings() {
     return apiFetch<{

@@ -13,6 +13,12 @@ export type StoredReferenceImage = Readonly<{
   mimeType?: string;
 }>;
 
+export type StoredCharacterReference = Readonly<{
+  id: number;
+  name: string;
+  thumbnailUrl: string;
+}>;
+
 export type StoredImage = Readonly<{
   id: string;
   assetId?: number;
@@ -31,6 +37,8 @@ export type StudioTurn = Readonly<{
   model: string;
   mode: StudioMode;
   referenceImages: readonly StoredReferenceImage[];
+  characterLibraryIds?: readonly number[];
+  characterReferences?: readonly StoredCharacterReference[];
   count: number;
   aspectRatio: string;
   resolution: string;
@@ -62,6 +70,8 @@ export type TurnDraft = Readonly<{
   model: string;
   mode: StudioMode;
   referenceImages: readonly StoredReferenceImage[];
+  characterLibraryIds?: readonly number[];
+  characterReferences?: readonly StoredCharacterReference[];
   count: number;
   aspectRatio: string;
   resolution: string;

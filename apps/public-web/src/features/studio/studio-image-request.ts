@@ -40,6 +40,9 @@ export function buildImageJobRequest(input: BuildImageJobRequestInput): ImageGen
     size: input.draft.resolution === "auto" ? undefined : input.draft.resolution,
     quality: input.draft.quality,
     visibility: "private",
+    ...(resolveCharacterLibraryIds(input.draft).length
+      ? { character_library_ids: resolveCharacterLibraryIds(input.draft) }
+      : {}),
   };
   return withOptionalImageFields(request, input, referenceAssetIds);
 }
@@ -135,6 +138,13 @@ function assetPart(assetId: number): ImageConversationContentPart {
 
 function collectReferenceAssetIds(images: readonly StoredReferenceImage[]): readonly number[] {
   return images.flatMap((image) => (image.assetId ? [image.assetId] : []));
+}
+
+function resolveCharacterLibraryIds(draft: TurnDraft): readonly number[] {
+  if (draft.characterLibraryIds?.length) {
+    return draft.characterLibraryIds;
+  }
+  return draft.characterReferences?.map((character) => character.id) ?? [];
 }
 
 async function uploadReferenceImage(

@@ -101,6 +101,8 @@ def resolve_reference_assets(
 
 
 def asset_access_allowed(asset: Asset, *, owner: OwnerContext) -> bool:
+    if asset.visibility == "public":
+        return True
     if owner.user_id is not None:
         return asset.owner_user_id == owner.user_id
     if owner.anonymous_session_id is not None:

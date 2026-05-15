@@ -34,6 +34,7 @@ const navGroups = [
       { href: "/admin/image-jobs", label: "图片任务", icon: "image", aliases: ["/admin/image-tasks"] },
       { href: "/admin/comic-jobs", label: "漫画任务", icon: "comic", aliases: ["/admin/comic-tasks"] },
       { href: "/admin/gallery", label: "公开图库", icon: "gallery" },
+      { href: "/admin/character-library", label: "形象库", icon: "character" },
     ],
   },
   {
@@ -158,6 +159,14 @@ const navIcons = {
       <rect x="14" y="3" width="7" height="7" rx="1.5" />
       <rect x="3" y="14" width="7" height="7" rx="1.5" />
       <rect x="14" y="14" width="7" height="7" rx="1.5" />
+    </svg>
+  ),
+  character: (
+    <svg className="admin-nav-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="8" r="3.25" />
+      <path d="M5.25 20a6.75 6.75 0 0 1 13.5 0" />
+      <path d="M17.75 5.5 20 3.25" />
+      <path d="M18.75 8.5h3" />
     </svg>
   ),
 } as const;

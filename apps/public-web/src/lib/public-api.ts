@@ -8,6 +8,7 @@ import type {
   ComicProject,
   ComicTaskCreateRequest,
   ComicTaskImageResult,
+  CharacterLibraryItem,
   CreateComicProjectRequest,
   DeleteResult,
   ImageAssetVisibility,
@@ -126,6 +127,15 @@ export const publicApi = {
     const formData = new FormData();
     formData.append("file", file);
     return apiUpload<UploadedImageAsset>("/image/uploads", formData);
+  },
+  getCharacterLibrary() {
+    return apiFetch<readonly CharacterLibraryItem[]>("/character-library");
+  },
+  createCharacterLibraryItem(input: { name: string; file: File }) {
+    const formData = new FormData();
+    formData.append("name", input.name);
+    formData.append("file", input.file);
+    return apiUpload<CharacterLibraryItem>("/character-library", formData);
   },
   getModels() {
     return apiFetch<readonly PublicModelSummary[]>("/models");
