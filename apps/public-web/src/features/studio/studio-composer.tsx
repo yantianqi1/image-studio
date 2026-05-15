@@ -24,7 +24,6 @@ import {
   type KeyboardEvent,
   type PointerEvent,
 } from "react";
-import { createPortal } from "react-dom";
 
 import { cn } from "@/lib/cn";
 import { ASPECT_RATIO_OPTIONS, QUALITY_OPTIONS } from "@/features/studio/studio-options";
@@ -140,14 +139,11 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
     return () => window.removeEventListener("mousedown", handlePointerDown);
   }, [isModelMenuOpen]);
 
-  // Close settings panel on outside click (for desktop where popover is positioned absolutely)
+  // Close settings panel on outside click
   useEffect(() => {
     if (!isSettingsOpen) return;
     const handlePointerDown = (event: MouseEvent) => {
-      if (
-        !settingsContainerRef.current?.contains(event.target as Node) &&
-        !(event.target as Element)?.closest("[role='dialog'][aria-label='图片参数']")
-      ) {
+      if (!settingsContainerRef.current?.contains(event.target as Node)) {
         setIsSettingsOpen(false);
       }
     };
@@ -269,7 +265,7 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
       : "加载中...";
 
   return (
-    <div className="w-full shrink-0 px-3 pb-3 pt-1 sm:px-4 sm:pb-4">
+    <div className="mx-auto w-full max-w-3xl shrink-0 px-3 pb-3 pt-1 sm:px-4 sm:pb-4">
       <input
         ref={fileInputRef}
         type="file"
@@ -461,6 +457,19 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
                       <SlidersHorizontal className="size-3.5" />
                       <span className="hidden sm:inline">参数</span>
                     </button>
+                    {isSettingsOpen && (
+                      <ImageSettingsPopover
+                        aspectRatio={aspectRatio}
+                        resolution={resolution}
+                        quality={quality}
+                        count={count}
+                        resolutions={resolutions}
+                        onAspectRatioChange={onAspectRatioChange}
+                        onResolutionChange={onResolutionChange}
+                        onQualityChange={onQualityChange}
+                        onCountChange={onCountChange}
+                      />
+                    )}
                   </div>
                 )}
               </div>
@@ -497,23 +506,6 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
 
           </div>
       </div>
-
-      {/* Settings popover rendered via portal to avoid backdrop-filter breaking fixed positioning on mobile */}
-      {isSettingsOpen && mode !== "chat" && createPortal(
-        <ImageSettingsPopover
-          aspectRatio={aspectRatio}
-          resolution={resolution}
-          quality={quality}
-          count={count}
-          resolutions={resolutions}
-          onAspectRatioChange={onAspectRatioChange}
-          onResolutionChange={onResolutionChange}
-          onQualityChange={onQualityChange}
-          onCountChange={onCountChange}
-          onClose={() => setIsSettingsOpen(false)}
-        />,
-        document.body,
-      )}
     </div>
   );
 });
@@ -528,7 +520,6 @@ type ImageSettingsPopoverProps = Readonly<{
   onResolutionChange: (value: string) => void;
   onQualityChange: (value: string) => void;
   onCountChange: (value: number) => void;
-  onClose: () => void;
 }>;
 
 function ImageSettingsPopover({
@@ -541,19 +532,11 @@ function ImageSettingsPopover({
   onResolutionChange,
   onQualityChange,
   onCountChange,
-  onClose,
 }: ImageSettingsPopoverProps) {
   return (
-    <div className="fixed inset-0 z-[80]" role="dialog" aria-modal="true" aria-label="图片参数">
-      <button
-        type="button"
-        className="absolute inset-0 bg-black/20 backdrop-blur-[1px]"
-        onClick={onClose}
-        aria-label="关闭参数面板"
-      />
-      <div
-        className="absolute inset-x-3 bottom-3 max-h-[min(78dvh,34rem)] overflow-y-auto rounded-[20px] border border-gray-200 bg-white p-3 shadow-[0_24px_80px_-32px_rgba(15,23,42,0.35)] sm:inset-x-auto sm:bottom-20 sm:right-4 sm:left-auto sm:w-[22rem] sm:max-h-[min(70dvh,34rem)]"
-      >
+    <div
+      className="absolute bottom-[calc(100%+8px)] right-0 z-[80] max-h-[min(70dvh,34rem)] w-[20rem] overflow-y-auto rounded-2xl border border-gray-200 bg-white p-3 shadow-lg"
+    >
       <div className="mb-3 flex items-center justify-between border-b border-gray-100 pb-2">
         <h2 className="text-sm font-semibold text-gray-900">图片参数</h2>
         <span className="text-[11px] font-medium text-gray-400">当前设置</span>
@@ -607,7 +590,6 @@ function ImageSettingsPopover({
           activeValue={quality}
           onSelect={onQualityChange}
         />
-      </div>
       </div>
     </div>
   );
