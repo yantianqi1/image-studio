@@ -16,6 +16,7 @@ import {
 } from "@/features/studio/studio-models";
 import { AppShell } from "@/features/shell/app-shell";
 import { StudioComposer } from "@/features/studio/studio-composer";
+import { StudioCharacterLibrary } from "@/features/studio/studio-character-library";
 import { StudioPromptMarket } from "@/features/studio/studio-prompt-market";
 import type { BananaPrompt } from "@/features/studio/studio-prompt-sources";
 import { fetchPromptMarketPrompts } from "@/features/studio/studio-prompt-sources";
@@ -54,7 +55,7 @@ import {
   listenPromptCrafterUsePrompt,
   readGeneratePromptParam,
 } from "@/features/prompt-crafter/use-prompt";
-import { publicApi, type ImageAssetVisibility } from "@/lib/public-api";
+import { publicApi, type CharacterLibraryItem, type ImageAssetVisibility } from "@/lib/public-api";
 import { useApiResource } from "@/lib/use-api-resource";
 import { cn } from "@/lib/cn";
 
@@ -201,11 +202,13 @@ export function StudioPage() {
   const [quality, setQuality] = useState(initialSettings.quality ?? DEFAULT_QUALITY);
   const [count, setCount] = useState(initialSettings.count ?? DEFAULT_COUNT);
   const [referenceImages, setReferenceImages] = useState<StoredReferenceImage[]>([]);
+  const [selectedCharacter, setSelectedCharacter] = useState<CharacterLibraryItem | null>(null);
 
   // --- UI state ---
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed);
   const [mobileHistoryOpen, setMobileHistoryOpen] = useState(false);
   const [promptMarketOpen, setPromptMarketOpen] = useState(false);
+  const [characterLibraryOpen, setCharacterLibraryOpen] = useState(false);
   const [composerBottomInset, setComposerBottomInset] = useState(0);
   const [progressMap, setProgressMap] = useState<ReadonlyMap<string, TurnProgress>>(new Map());
   const [submittingConversationIds, setSubmittingConversationIds] = useState<ReadonlySet<string>>(() => new Set());
@@ -221,32 +224,45 @@ export function StudioPage() {
   // --- Preset cards (random 4 from remote market, with valid preview images) ---
   type PresetCard = { id: string; title: string; hint: string; preview: string; aspectRatio: string; count: number; prompt: BananaPrompt };
   const [presetCards, setPresetCards] = useState<PresetCard[]>([]);
+  const [isRefreshingPresets, setIsRefreshingPresets] = useState(false);
   const presetsFetchedRef = useRef(false);
+
+  const loadPresets = useCallback(async (signal: AbortSignal) => {
+    const prompts = await fetchPromptMarketPrompts(signal);
+    const withPreview = prompts.filter((p) => p.preview && !p.isNsfw);
+    const shuffled = withPreview.sort(() => Math.random() - 0.5);
+    const candidates = shuffled.slice(0, 12);
+    const valid = await validatePreviewImages(candidates);
+    setPresetCards(valid.slice(0, 4).map((p) => ({
+      id: p.id,
+      title: p.title,
+      hint: p.category + (p.subCategory ? ` · ${p.subCategory}` : ""),
+      preview: p.preview,
+      aspectRatio: "",
+      count: 1,
+      prompt: p,
+    })));
+  }, []);
 
   useEffect(() => {
     if (presetsFetchedRef.current) return;
     presetsFetchedRef.current = true;
     const controller = new AbortController();
-    fetchPromptMarketPrompts(controller.signal)
-      .then((prompts) => {
-        const withPreview = prompts.filter((p) => p.preview && !p.isNsfw);
-        const shuffled = withPreview.sort(() => Math.random() - 0.5);
-        const candidates = shuffled.slice(0, 12);
-        validatePreviewImages(candidates).then((valid) => {
-          setPresetCards(valid.slice(0, 4).map((p) => ({
-            id: p.id,
-            title: p.title,
-            hint: p.category + (p.subCategory ? ` · ${p.subCategory}` : ""),
-            preview: p.preview,
-            aspectRatio: "",
-            count: 1,
-            prompt: p,
-          })));
-        });
-      })
-      .catch(() => {});
+    loadPresets(controller.signal).catch(() => {});
     return () => controller.abort();
-  }, []);
+  }, [loadPresets]);
+
+  const handleRefreshPresets = useCallback(async () => {
+    if (isRefreshingPresets) return;
+    setIsRefreshingPresets(true);
+    try {
+      await loadPresets(new AbortController().signal);
+    } catch {
+      // ignore
+    } finally {
+      setIsRefreshingPresets(false);
+    }
+  }, [isRefreshingPresets, loadPresets]);
 
   // Track active abort controllers for polling
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
@@ -517,6 +533,10 @@ export function StudioPage() {
       model: resolvedModel,
       mode: resolveStudioDraftMode({ composerMode: mode, referenceCount: referenceImages.length }),
       referenceImages,
+      characterLibraryIds: selectedCharacter ? [selectedCharacter.id] : [],
+      characterReferences: selectedCharacter
+        ? [{ id: selectedCharacter.id, name: selectedCharacter.name, thumbnailUrl: selectedCharacter.thumbnail_url }]
+        : [],
       count,
       aspectRatio,
       resolution,
@@ -526,6 +546,7 @@ export function StudioPage() {
 
     setPrompt("");
     setReferenceImages([]);
+    setSelectedCharacter(null);
     void submitDraft(draft);
   }, [
     prompt,
@@ -534,6 +555,7 @@ export function StudioPage() {
     model,
     mode,
     referenceImages,
+    selectedCharacter,
     count,
     aspectRatio,
     resolution,
@@ -575,6 +597,8 @@ export function StudioPage() {
       model: turn.model,
       mode: turn.mode,
       referenceImages: turn.referenceImages,
+      characterLibraryIds: turn.characterLibraryIds ?? turn.characterReferences?.map((character) => character.id) ?? [],
+      characterReferences: turn.characterReferences ?? [],
       count: turn.count,
       aspectRatio: turn.aspectRatio,
       resolution: turn.resolution,
@@ -645,6 +669,11 @@ export function StudioPage() {
     setReferenceImages([...images]);
   }, []);
 
+  const handleSelectCharacter = useCallback((item: CharacterLibraryItem) => {
+    setSelectedCharacter(item);
+    setCharacterLibraryOpen(false);
+  }, []);
+
   const handleComposerFixedHeightChange = useCallback((height: number) => {
     setComposerBottomInset((current) => (current === height ? current : height));
   }, []);
@@ -689,6 +718,7 @@ export function StudioPage() {
             progressByTurnKey={progressMap}
             bottomInset={composerBottomInset}
             presetCards={presetCards}
+            isRefreshingPresets={isRefreshingPresets}
             onRetryTurn={handleRetryTurn}
             onEditFromTurn={handleEditFromTurn}
             onCancelTurn={handleCancelTurn}
@@ -696,6 +726,7 @@ export function StudioPage() {
             onImageVisibilityChange={handleImageVisibilityChange}
             onOpenLightbox={handleOpenLightbox}
             onApplyPreset={handleApplyPresetCard}
+            onRefreshPresets={handleRefreshPresets}
           />
           <StudioComposer
             mode={mode}
@@ -706,6 +737,7 @@ export function StudioPage() {
             quality={quality}
             count={count}
             referenceImages={referenceImages}
+            selectedCharacter={selectedCharacter}
             modelsState={modelsState}
             selectedModel={selectedModel}
             isSubmitting={isActiveConversationSubmitting}
@@ -717,9 +749,11 @@ export function StudioPage() {
             onQualityChange={setQuality}
             onCountChange={setCount}
             onReferenceImagesChange={handleReferenceImagesChange}
+            onClearCharacter={() => setSelectedCharacter(null)}
             onSubmit={handleSubmit}
             onFixedHeightChange={handleComposerFixedHeightChange}
             onOpenPromptMarket={() => setPromptMarketOpen(true)}
+            onOpenCharacterLibrary={() => setCharacterLibraryOpen(true)}
           />
         </main>
       </div>
@@ -727,6 +761,12 @@ export function StudioPage() {
         open={promptMarketOpen}
         onOpenChange={setPromptMarketOpen}
         onApplyPrompt={handleApplyPrompt}
+      />
+      <StudioCharacterLibrary
+        open={characterLibraryOpen}
+        selectedId={selectedCharacter?.id ?? null}
+        onOpenChange={setCharacterLibraryOpen}
+        onSelect={handleSelectCharacter}
       />
       <MobileStudioHistoryDrawer
         open={mobileHistoryOpen}

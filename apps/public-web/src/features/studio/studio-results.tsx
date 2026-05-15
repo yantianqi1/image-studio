@@ -11,6 +11,7 @@ import {
   Loader2,
   Lock,
   Plus,
+  RefreshCw,
   RotateCcw,
   Sparkles,
   Trash2,
@@ -35,6 +36,7 @@ type StudioResultsProps = Readonly<{
   progressByTurnKey: ReadonlyMap<string, TurnProgress>;
   bottomInset: number;
   presetCards: readonly PresetCard[];
+  isRefreshingPresets: boolean;
   onRetryTurn: (turnId: string) => void;
   onEditFromTurn: (turnId: string, image: StoredImage) => void;
   onCancelTurn: (turnId: string) => void;
@@ -42,12 +44,12 @@ type StudioResultsProps = Readonly<{
   onImageVisibilityChange: (assetId: number, visibility: ImageAssetVisibility) => void;
   onOpenLightbox: (images: readonly StoredImage[], startIndex: number) => void;
   onApplyPreset: (presetId: string) => void;
+  onRefreshPresets: () => void;
 }>;
 
 const MODE_LABELS: Record<string, { label: string; colorClass: string }> = {
   generate: { label: "生图", colorClass: "bg-blue-50 text-blue-600" },
   edit: { label: "生图", colorClass: "bg-blue-50 text-blue-600" },
-  chat: { label: "对话", colorClass: "bg-emerald-50 text-emerald-700" },
 };
 const FIXED_COMPOSER_CLEARANCE = 16;
 
@@ -86,6 +88,7 @@ export const StudioResults = memo(function StudioResults({
   progressByTurnKey,
   bottomInset,
   presetCards,
+  isRefreshingPresets,
   onRetryTurn,
   onEditFromTurn,
   onCancelTurn,
@@ -93,6 +96,7 @@ export const StudioResults = memo(function StudioResults({
   onImageVisibilityChange,
   onOpenLightbox,
   onApplyPreset,
+  onRefreshPresets,
 }: StudioResultsProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const turnCountRef = useRef(0);
@@ -123,39 +127,51 @@ export const StudioResults = memo(function StudioResults({
             </p>
           </div>
           {presetCards.length > 0 && (
-            <div className="hide-scrollbar flex gap-3 overflow-x-auto px-1 pb-1 text-left sm:grid sm:grid-cols-2 sm:overflow-visible lg:grid-cols-4">
-              {presetCards.map((preset) => (
-                <button
-                  key={preset.id}
-                  type="button"
-                  className="group w-[250px] shrink-0 overflow-hidden rounded-[22px] border border-gray-100 bg-white transition hover:-translate-y-0.5 hover:shadow-[0_12px_16px_-4px_rgba(36,36,36,0.08)] sm:w-auto"
-                  onClick={() => onApplyPreset(preset.id)}
-                  aria-label={`套用预设：${preset.title}`}
-                >
-                  <div className="relative aspect-[16/9] overflow-hidden bg-gray-100">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={preset.preview}
-                      alt={preset.title}
-                      loading="lazy"
-                      className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
-                    />
-                    <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/70 via-black/25 to-transparent px-3 pt-8 pb-2">
-                      <span className="rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-medium text-gray-900 shadow-sm">
-                        {preset.aspectRatio || "Auto"}
-                      </span>
-                      <span className="rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-medium text-white shadow-sm backdrop-blur">
-                        {preset.count} 张
-                      </span>
+            <div className="relative">
+              <div className="hide-scrollbar flex gap-3 overflow-x-auto px-1 pb-1 text-left sm:grid sm:grid-cols-2 sm:overflow-visible lg:grid-cols-4">
+                {presetCards.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    className="group w-[250px] shrink-0 overflow-hidden rounded-[22px] border border-gray-100 bg-white transition hover:-translate-y-0.5 hover:shadow-[0_12px_16px_-4px_rgba(36,36,36,0.08)] sm:w-auto"
+                    onClick={() => onApplyPreset(preset.id)}
+                    aria-label={`套用预设：${preset.title}`}
+                  >
+                    <div className="relative aspect-[16/9] overflow-hidden bg-gray-100">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={preset.preview}
+                        alt={preset.title}
+                        loading="lazy"
+                        className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+                      />
+                      <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/70 via-black/25 to-transparent px-3 pt-8 pb-2">
+                        <span className="rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-medium text-gray-900 shadow-sm">
+                          {preset.aspectRatio || "Auto"}
+                        </span>
+                        <span className="rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-medium text-white shadow-sm backdrop-blur">
+                          {preset.count} 张
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex flex-col gap-2 px-4 py-3.5">
-                    <div className="text-sm font-semibold text-gray-900">{preset.title}</div>
-                    <div className="line-clamp-2 text-sm leading-6 text-gray-500">{preset.hint}</div>
-                    <div className="border-t border-gray-100 pt-2 text-xs font-medium text-blue-600">套用这个预设</div>
-                  </div>
-                </button>
-              ))}
+                    <div className="flex flex-col gap-2 px-4 py-3.5">
+                      <div className="text-sm font-semibold text-gray-900">{preset.title}</div>
+                      <div className="line-clamp-2 text-sm leading-6 text-gray-500">{preset.hint}</div>
+                      <div className="border-t border-gray-100 pt-2 text-xs font-medium text-blue-600">套用这个预设</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                className="absolute right-1 bottom-1 z-10 inline-flex size-8 items-center justify-center rounded-full border border-gray-200 bg-white/90 text-gray-500 shadow-sm backdrop-blur transition hover:bg-white hover:text-gray-700 disabled:opacity-50"
+                onClick={onRefreshPresets}
+                disabled={isRefreshingPresets}
+                aria-label="刷新预设"
+                title="刷新预设"
+              >
+                <RefreshCw className={cn("size-3.5", isRefreshingPresets && "animate-spin")} />
+              </button>
             </div>
           )}
         </div>
@@ -288,15 +304,8 @@ const TurnCard = memo(function TurnCard({
       {/* Results section (left-aligned) */}
       <div className="flex justify-start">
         <section className="w-full px-1">
-          {/* Chat response */}
-          {turn.mode === "chat" && turn.images.length > 0 && turn.images[0]?.revisedPrompt && (
-            <div className="mb-3 max-w-[min(94%,760px)] rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm leading-6 text-gray-700 shadow-sm">
-              <div className="whitespace-pre-wrap break-words">{turn.images[0].revisedPrompt}</div>
-            </div>
-          )}
-
           {/* Image grid + loading skeletons */}
-          {turn.mode !== "chat" && (turn.images.length > 0 || isBusy) && (
+          {(turn.images.length > 0 || isBusy) && (
             <div className={cn(
               "grid gap-3 sm:gap-4",
               turn.count <= 1 ? "grid-cols-1 max-w-[360px]" : "grid-cols-2 max-w-[560px]",

@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Store,
+  UserRound,
   WandSparkles,
   X,
 } from "lucide-react";
@@ -47,7 +48,7 @@ import {
   type ComposerMode,
   type StoredReferenceImage,
 } from "@/features/studio/studio-types";
-import type { PublicModelSummary } from "@/lib/public-api.types";
+import type { CharacterLibraryItem, PublicModelSummary } from "@/lib/public-api.types";
 import type { ResourceState } from "@/lib/use-api-resource";
 
 type StudioComposerProps = Readonly<{
@@ -59,6 +60,7 @@ type StudioComposerProps = Readonly<{
   quality: string;
   count: number;
   referenceImages: readonly StoredReferenceImage[];
+  selectedCharacter: CharacterLibraryItem | null;
   modelsState: ResourceState<readonly PublicModelSummary[]>;
   selectedModel: PublicModelSummary | null;
   isSubmitting: boolean;
@@ -70,9 +72,11 @@ type StudioComposerProps = Readonly<{
   onQualityChange: (quality: string) => void;
   onCountChange: (count: number) => void;
   onReferenceImagesChange: (images: readonly StoredReferenceImage[]) => void;
+  onClearCharacter: () => void;
   onSubmit: () => void;
   onFixedHeightChange: (height: number) => void;
   onOpenPromptMarket: () => void;
+  onOpenCharacterLibrary: () => void;
 }>;
 
 const MODE_OPTIONS: readonly { value: ComposerMode; label: string; icon: typeof MessageCircle }[] = [
@@ -80,8 +84,8 @@ const MODE_OPTIONS: readonly { value: ComposerMode; label: string; icon: typeof 
   { value: "generate", label: "生图", icon: Paintbrush },
 ];
 
-const PROMPT_AREA_MIN_HEIGHT = 74;
-const PROMPT_AREA_DEFAULT_HEIGHT = 80;
+const PROMPT_AREA_MIN_HEIGHT = 90;
+const PROMPT_AREA_DEFAULT_HEIGHT = 104;
 const PROMPT_AREA_MAX_HEIGHT = 320;
 
 function getPromptAreaMaxHeight() {
@@ -138,7 +142,6 @@ function getFixedComposerHeight(element: HTMLElement) {
 
 export const StudioComposer = memo(function StudioComposer(props: StudioComposerProps) {
   const {
-    mode,
     prompt,
     model,
     aspectRatio,
@@ -146,10 +149,10 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
     quality,
     count,
     referenceImages,
+    selectedCharacter,
     modelsState,
     selectedModel,
     isSubmitting,
-    onModeChange,
     onPromptChange,
     onModelChange,
     onAspectRatioChange,
@@ -157,9 +160,11 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
     onQualityChange,
     onCountChange,
     onReferenceImagesChange,
+    onClearCharacter,
     onSubmit,
     onFixedHeightChange,
     onOpenPromptMarket,
+    onOpenCharacterLibrary,
   } = props;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -197,7 +202,7 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
       ? formatCurrency(selectedModel.member_price_cents / 100, "CNY")
       : "";
   const isDisabled = isSubmitting || !prompt.trim() || modelsState.status !== "ready";
-  const submitLabel = getSubmitLabel(mode, isSubmitting, referenceImages.length > 0);
+  const submitLabel = getSubmitLabel("generate", isSubmitting, referenceImages.length > 0);
 
   // Close model menu on outside click
   useEffect(() => {
@@ -400,9 +405,30 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
         onChange={handleFileSelect}
       />
 
-      {/* Reference images row */}
-      {referenceImages.length > 0 && (
+      {/* Selected character and reference images row */}
+      {(selectedCharacter || referenceImages.length > 0) && (
         <div className="mb-2 flex max-h-20 gap-2 overflow-x-auto px-1 py-1 sm:mb-3">
+          {selectedCharacter ? (
+            <div className="relative flex h-14 min-w-48 max-w-60 shrink-0 items-center gap-2 rounded-xl border border-gray-200 bg-white px-2 shadow-sm sm:h-16">
+              <img
+                src={selectedCharacter.thumbnail_url}
+                alt={selectedCharacter.name}
+                className="size-10 rounded-lg object-cover sm:size-11"
+              />
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-800">
+                {selectedCharacter.name}
+              </span>
+              <button
+                type="button"
+                onClick={onClearCharacter}
+                className="inline-flex size-6 shrink-0 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+                aria-label="移除形象"
+                title="移除形象"
+              >
+                <X className="size-3.5" />
+              </button>
+            </div>
+          ) : null}
           {referenceImages.map((img, index) => (
             <div key={img.name + index} className="relative size-14 shrink-0 sm:size-16">
               <button
@@ -467,11 +493,9 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
             placeholder={
-              mode === "chat"
-                ? "输入消息与AI聊天..."
-                : referenceImages.length > 0
-                  ? "描述你希望如何修改参考图..."
-                  : "输入你想要生成的画面，也可直接粘贴图片..."
+              referenceImages.length > 0
+                ? "描述你希望如何修改参考图..."
+                : "输入你想要生成的画面，也可直接粘贴图片..."
             }
             className="min-h-[56px] w-full resize-none border-0 bg-transparent px-5 pt-5 pb-2 text-[15px] leading-6 text-gray-900 outline-none placeholder:text-gray-400 sm:min-h-0 sm:px-5 sm:py-4 sm:text-[15px] sm:leading-6"
             style={{ height: promptAreaHeight }}
@@ -487,32 +511,6 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
             <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:gap-3">
               {/* Left toolbar */}
               <div className="flex min-w-0 flex-nowrap items-center gap-1.5 sm:gap-2">
-                {/* Mode toggle */}
-                <div className="inline-flex h-8 shrink-0 items-center rounded-full bg-gray-100 p-0.5 text-xs font-medium text-gray-600">
-                  {MODE_OPTIONS.map((option) => {
-                    const Icon = option.icon;
-                    const active = mode === option.value;
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        className={cn(
-                          "inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 transition",
-                          active
-                            ? "bg-white text-gray-900 shadow-sm"
-                            : "text-gray-500 hover:text-gray-700",
-                        )}
-                        onClick={() => onModeChange(option.value)}
-                        aria-pressed={active}
-                        title={option.label}
-                      >
-                        <Icon className="size-3.5" />
-                        <span className="hidden sm:inline">{option.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-
                 {/* Model selector */}
                 <div ref={modelMenuRef} className="relative shrink-0">
                   <button
@@ -570,9 +568,23 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
                   <span className="hidden sm:inline">市场</span>
                 </button>
 
-                {/* Settings toggle (image modes only) */}
-                {mode !== "chat" && (
-                  <div ref={settingsContainerRef} className="relative shrink-0">
+                <button
+                  type="button"
+                  className={cn(
+                    "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition hover:bg-gray-50",
+                    selectedCharacter
+                      ? "border-gray-300 bg-gray-100 text-gray-900"
+                      : "border-gray-200 bg-white text-gray-600",
+                  )}
+                  onClick={onOpenCharacterLibrary}
+                  title="形象库"
+                >
+                  <UserRound className="size-3.5" />
+                  <span className="hidden sm:inline">形象库</span>
+                </button>
+
+                {/* Settings toggle */}
+                <div ref={settingsContainerRef} className="relative shrink-0">
                     <button
                       type="button"
                       className={cn(
@@ -602,8 +614,7 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
                         onCountChange={onCountChange}
                       />
                     )}
-                  </div>
-                )}
+                </div>
 
                 {/* Prompt compliance button */}
                 <button
