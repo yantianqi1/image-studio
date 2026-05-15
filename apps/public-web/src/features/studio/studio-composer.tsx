@@ -533,142 +533,105 @@ function ImageSettingsPopover({
   onQualityChange,
   onCountChange,
 }: ImageSettingsPopoverProps) {
-  const [openMenu, setOpenMenu] = useState<string | null>(null);
-  const popoverRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (!popoverRef.current?.contains(e.target as Node)) {
-        setOpenMenu(null);
-      }
-    };
-    window.addEventListener("mousedown", handler);
-    return () => window.removeEventListener("mousedown", handler);
-  }, []);
-
-  const aspectRatioLabel = ASPECT_RATIO_OPTIONS.find((o) => o.value === aspectRatio)?.label ?? aspectRatio;
-  const resolutionLabel = resolutions.find((r) => r.value === resolution)?.label ?? resolution;
-  const qualityLabel = QUALITY_OPTIONS.find((o) => o.value === quality)?.label ?? quality;
-
   return (
     <div
-      ref={popoverRef}
-      className="absolute bottom-[calc(100%+8px)] left-0 z-[70] w-[min(calc(100vw-2rem),22rem)] rounded-[20px] border border-gray-200 bg-white p-2.5 shadow-[0_24px_80px_-32px_rgba(15,23,42,0.35)]"
+      className="fixed inset-x-3 bottom-3 z-[70] max-h-[min(78dvh,34rem)] overflow-y-auto rounded-[20px] border border-gray-200 bg-white p-3 shadow-[0_24px_80px_-32px_rgba(15,23,42,0.35)] sm:absolute sm:inset-x-auto sm:bottom-[calc(100%+8px)] sm:right-0 sm:w-[22rem] sm:max-h-[min(70dvh,34rem)]"
     >
-      <div className="grid grid-cols-2 gap-2">
-        {/* Count */}
-        <div className="flex h-9 items-center justify-between gap-1.5 rounded-full border border-gray-200 bg-white px-2.5">
-          <span className="shrink-0 text-[11px] font-medium text-gray-500">张数</span>
-          <div className="flex items-center gap-0.5">
+      <div className="mb-3 flex items-center justify-between border-b border-gray-100 pb-2">
+        <h2 className="text-sm font-semibold text-gray-900">图片参数</h2>
+        <span className="text-[11px] font-medium text-gray-400">当前设置</span>
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2.5">
+          <span className="text-sm font-semibold text-gray-700">张数</span>
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              className="inline-flex size-5 items-center justify-center rounded text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 disabled:opacity-40"
+              className="inline-flex size-8 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 transition hover:bg-gray-100 hover:text-gray-800 disabled:opacity-40"
               onClick={() => onCountChange(Math.max(MIN_COUNT, count - 1))}
               disabled={count <= MIN_COUNT}
+              aria-label="减少张数"
             >
               -
             </button>
-            <span className="min-w-[1.25rem] text-center text-xs font-semibold text-gray-900">{count}</span>
+            <span className="min-w-[2rem] text-center text-sm font-semibold text-gray-900">{count}</span>
             <button
               type="button"
-              className="inline-flex size-5 items-center justify-center rounded text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 disabled:opacity-40"
+              className="inline-flex size-8 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 transition hover:bg-gray-100 hover:text-gray-800 disabled:opacity-40"
               onClick={() => onCountChange(Math.min(MAX_COUNT, count + 1))}
               disabled={count >= MAX_COUNT}
+              aria-label="增加张数"
             >
               +
             </button>
           </div>
         </div>
 
-        {/* Aspect Ratio */}
-        <SettingDropdown
+        <SettingButtonGroup
           label="比例"
-          value={aspectRatioLabel}
-          isOpen={openMenu === "ratio"}
-          onToggle={() => setOpenMenu(openMenu === "ratio" ? null : "ratio")}
           options={ASPECT_RATIO_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
           activeValue={aspectRatio}
-          onSelect={(v) => { onAspectRatioChange(v); setOpenMenu(null); }}
+          onSelect={onAspectRatioChange}
         />
 
-        {/* Resolution */}
         {resolutions.length > 0 && (
-          <SettingDropdown
+          <SettingButtonGroup
             label="分辨率"
-            value={resolutionLabel}
-            isOpen={openMenu === "resolution"}
-            onToggle={() => setOpenMenu(openMenu === "resolution" ? null : "resolution")}
             options={resolutions.map((r) => ({ value: r.value, label: r.label }))}
             activeValue={resolution}
-            onSelect={(v) => { onResolutionChange(v); setOpenMenu(null); }}
+            onSelect={onResolutionChange}
           />
         )}
 
-        {/* Quality */}
-        <SettingDropdown
+        <SettingButtonGroup
           label="质量"
-          value={qualityLabel}
-          isOpen={openMenu === "quality"}
-          onToggle={() => setOpenMenu(openMenu === "quality" ? null : "quality")}
           options={QUALITY_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
           activeValue={quality}
-          onSelect={(v) => { onQualityChange(v); setOpenMenu(null); }}
+          onSelect={onQualityChange}
         />
       </div>
     </div>
   );
 }
 
-function SettingDropdown({
+function SettingButtonGroup({
   label,
-  value,
-  isOpen,
-  onToggle,
   options,
   activeValue,
   onSelect,
 }: Readonly<{
   label: string;
-  value: string;
-  isOpen: boolean;
-  onToggle: () => void;
   options: readonly { value: string; label: string }[];
   activeValue: string;
   onSelect: (value: string) => void;
 }>) {
   return (
-    <div className="relative flex h-9 min-w-0 items-center justify-between gap-1.5 rounded-full border border-gray-200 bg-white px-2.5 text-[11px]">
-      <span className="shrink-0 font-medium text-gray-500">{label}</span>
-      <button
-        type="button"
-        className="flex h-7 min-w-0 flex-1 items-center justify-end gap-1 bg-transparent text-right text-xs font-semibold text-gray-900"
-        onClick={onToggle}
-      >
-        <span className="truncate">{value}</span>
-        <ChevronDown className={cn("size-3.5 shrink-0 opacity-60 transition", isOpen && "rotate-180")} />
-      </button>
-      {isOpen && (
-        <div className="absolute bottom-[calc(100%+0.5rem)] right-0 z-[90] max-h-[14rem] w-[min(17rem,calc(100vw-3rem))] overflow-y-auto rounded-[16px] border border-gray-200 bg-white p-1.5 shadow-[0_18px_46px_-26px_rgba(15,23,42,0.35)]">
-          {options.map((option) => {
-            const active = option.value === activeValue;
-            return (
-              <button
-                key={option.value}
-                type="button"
-                className={cn(
-                  "flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-gray-600 transition hover:bg-gray-100",
-                  active && "bg-gray-100 font-medium text-gray-900",
-                )}
-                onClick={() => onSelect(option.value)}
-              >
-                <span className="min-w-0 truncate">{option.label}</span>
-                {active && <Check className="size-4 shrink-0" />}
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
+    <section className="rounded-2xl border border-gray-200 bg-white p-2.5">
+      <div className="mb-2 text-xs font-semibold text-gray-500">{label}</div>
+      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+        {options.map((option) => {
+          const active = option.value === activeValue;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              className={cn(
+                "flex min-h-9 min-w-0 items-center justify-center gap-1.5 rounded-xl border px-2 py-2 text-center text-xs font-semibold leading-4 transition",
+                active
+                  ? "border-gray-900 bg-gray-900 text-white shadow-sm"
+                  : "border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-300 hover:bg-white hover:text-gray-900",
+              )}
+              onClick={() => onSelect(option.value)}
+              aria-pressed={active}
+            >
+              <span className="min-w-0 break-words">{option.label}</span>
+              {active && <Check className="size-3.5 shrink-0" />}
+            </button>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 

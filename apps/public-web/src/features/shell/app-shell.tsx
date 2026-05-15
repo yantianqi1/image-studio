@@ -41,12 +41,12 @@ export function AppShell({
   const resolvedHeaderTitle = headerTitle ?? (workspaceMode ? title : undefined);
 
   return (
-    <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
+    <div className={workspaceMode ? "flex h-[100dvh] min-h-[100dvh] flex-col overflow-hidden bg-[var(--background)] text-[var(--foreground)]" : "min-h-screen bg-[var(--background)] text-[var(--foreground)]"}>
       <AppHeader activeHref={activeHref} brandLabel={brandLabel} headerTitle={resolvedHeaderTitle} leadingAction={leadingAction} navAside={navAside} />
 
-      <main style={{ viewTransitionName: "main-content" }} className={workspaceMode ? "h-[calc(100dvh-7.5rem)] w-full overflow-hidden px-3 py-3 sm:px-4 md:h-[calc(100dvh-4.35rem)] lg:px-5" : "mx-auto w-full max-w-[1440px] px-4 pb-10 pt-5 sm:px-6 lg:px-8 lg:pt-6"}>
+      <main style={{ viewTransitionName: "main-content" }} className={workspaceMode ? "min-h-0 w-full flex-1 overflow-hidden px-2 pb-2 pt-2 sm:px-4 sm:pb-3 lg:px-5" : "mx-auto w-full max-w-[1440px] px-4 pb-10 pt-5 sm:px-6 lg:px-8 lg:pt-6"}>
         {hasHero ? <HeroSection description={description} eyebrow={eyebrow} title={title} /> : null}
-        <section className={workspaceMode ? "h-full" : hasHero ? "mt-5" : ""}>{children}</section>
+        <section className={workspaceMode ? "h-full min-h-0" : hasHero ? "mt-5" : ""}>{children}</section>
       </main>
 
       <GlobalPromptCrafter />

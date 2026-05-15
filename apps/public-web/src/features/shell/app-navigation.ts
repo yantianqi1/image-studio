@@ -14,5 +14,6 @@ export const APP_MOBILE_NAV_ITEMS: readonly AppNavItem[] = [
   { href: "/", label: "图库" },
   { href: "/generate", label: "创作台" },
   { href: "/comic", label: "漫画" },
+  { href: "/apps", label: "应用" },
   { href: "/login", label: "我的" },
 ] as const;

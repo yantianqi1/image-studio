@@ -157,7 +157,7 @@ export const StudioSidebar = memo(function StudioSidebar({
                       e.stopPropagation();
                       onDelete(conv.id);
                     }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex size-6 items-center justify-center rounded-md text-gray-300 opacity-0 transition hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
+                    className="absolute right-2 top-1/2 inline-flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-gray-400 opacity-100 transition hover:bg-red-50 hover:text-red-500 lg:size-6 lg:text-gray-300 lg:opacity-0 lg:group-hover:opacity-100"
                     aria-label={`删除 ${conv.title}`}
                   >
                     <Trash2 className="size-3.5" />

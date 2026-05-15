@@ -177,17 +177,17 @@
 
 .mobileNav {
   display: none;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.35rem;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.25rem;
   border-top: 1px solid rgba(15, 23, 42, 0.07);
-  padding: 0.45rem 0.75rem 0.55rem;
+  padding: 0.4rem 0.5rem 0.5rem;
 }
 
 .mobileNavItem {
   min-width: 0;
-  height: 2.35rem;
+  height: 2.25rem;
   border-radius: 999px;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
 }
 
 .mobileNavItemActive {

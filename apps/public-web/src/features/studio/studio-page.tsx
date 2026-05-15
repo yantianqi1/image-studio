@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { History, MessageSquarePlus } from "lucide-react";
 
 import {
   imageJobResultsToHistoryImages,
@@ -31,6 +32,7 @@ import {
   DEFAULT_QUALITY,
   DEFAULT_RESOLUTION,
   type ComposerMode,
+  type StudioConversation,
   type StoredImage,
   type StoredReferenceImage,
   type StudioTurn,
@@ -160,6 +162,7 @@ export function StudioPage() {
 
   // --- UI state ---
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed);
+  const [mobileHistoryOpen, setMobileHistoryOpen] = useState(false);
   const [promptMarketOpen, setPromptMarketOpen] = useState(false);
   const [progressMap, setProgressMap] = useState<ReadonlyMap<string, TurnProgress>>(new Map());
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -206,6 +209,15 @@ export function StudioPage() {
     saveSidebarCollapsed(sidebarCollapsed);
   }, [sidebarCollapsed]);
 
+  useEffect(() => {
+    if (!mobileHistoryOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [mobileHistoryOpen]);
+
   // --- Settings persistence ---
   useEffect(() => {
     savePersistedSettings({ aspectRatio, resolution, quality, count });
@@ -222,6 +234,24 @@ export function StudioPage() {
   const handleToggleSidebar = useCallback(() => {
     setSidebarCollapsed((prev) => !prev);
   }, []);
+
+  const handleOpenMobileHistory = useCallback(() => {
+    setMobileHistoryOpen(true);
+  }, []);
+
+  const handleCloseMobileHistory = useCallback(() => {
+    setMobileHistoryOpen(false);
+  }, []);
+
+  const handleMobileSelectConversation = useCallback((id: string) => {
+    conversations.selectConversation(id);
+    setMobileHistoryOpen(false);
+  }, [conversations]);
+
+  const handleMobileNewConversation = useCallback(() => {
+    conversations.newConversation();
+    setMobileHistoryOpen(false);
+  }, [conversations]);
 
   const handleAspectRatioChange = useCallback((ratio: string) => {
     setAspectRatio(ratio);
@@ -498,17 +528,23 @@ export function StudioPage() {
       >
         <div className="hidden h-full min-h-0 lg:block">
           <StudioSidebar
-          conversations={conversations.conversations}
-          activeId={conversations.activeId}
-          collapsed={sidebarCollapsed}
-          onSelect={conversations.selectConversation}
-          onNew={() => conversations.newConversation()}
-          onDelete={conversations.removeConversation}
-          onClearAll={conversations.clearAll}
-          onToggleCollapse={handleToggleSidebar}
-        />
+            conversations={conversations.conversations}
+            activeId={conversations.activeId}
+            collapsed={sidebarCollapsed}
+            onSelect={conversations.selectConversation}
+            onNew={() => conversations.newConversation()}
+            onDelete={conversations.removeConversation}
+            onClearAll={conversations.clearAll}
+            onToggleCollapse={handleToggleSidebar}
+          />
         </div>
         <main className="flex h-full min-h-0 flex-col overflow-hidden">
+          <MobileStudioToolbar
+            activeTitle={conversations.activeConversation?.title ?? "新对话"}
+            conversationCount={conversations.conversations.length}
+            onNew={handleMobileNewConversation}
+            onOpenHistory={handleOpenMobileHistory}
+          />
           <StudioResults
             conversation={conversations.activeConversation}
             progressByTurnKey={progressMap}
@@ -549,6 +585,16 @@ export function StudioPage() {
         onOpenChange={setPromptMarketOpen}
         onApplyPrompt={handleApplyPrompt}
       />
+      <MobileStudioHistoryDrawer
+        open={mobileHistoryOpen}
+        conversations={conversations.conversations}
+        activeId={conversations.activeId}
+        onSelect={handleMobileSelectConversation}
+        onNew={handleMobileNewConversation}
+        onDelete={conversations.removeConversation}
+        onClearAll={conversations.clearAll}
+        onClose={handleCloseMobileHistory}
+      />
       {lightbox && (
         <StudioLightbox
           images={lightbox.images}
@@ -557,6 +603,89 @@ export function StudioPage() {
         />
       )}
     </AppShell>
+  );
+}
+
+function MobileStudioToolbar({
+  activeTitle,
+  conversationCount,
+  onNew,
+  onOpenHistory,
+}: Readonly<{
+  activeTitle: string;
+  conversationCount: number;
+  onNew: () => void;
+  onOpenHistory: () => void;
+}>) {
+  return (
+    <div className="flex shrink-0 items-center gap-2 border-b border-gray-100 bg-white/80 px-2 py-2 backdrop-blur lg:hidden">
+      <button
+        type="button"
+        className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-700 shadow-sm"
+        onClick={onOpenHistory}
+      >
+        <History className="size-4" />
+        历史
+      </button>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold text-gray-900">{activeTitle}</p>
+        <p className="text-[11px] leading-4 text-gray-400">{conversationCount} 条记录</p>
+      </div>
+      <button
+        type="button"
+        className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-gray-900 text-white shadow-sm"
+        onClick={onNew}
+        aria-label="新建对话"
+        title="新建对话"
+      >
+        <MessageSquarePlus className="size-4" />
+      </button>
+    </div>
+  );
+}
+
+function MobileStudioHistoryDrawer({
+  open,
+  conversations,
+  activeId,
+  onSelect,
+  onNew,
+  onDelete,
+  onClearAll,
+  onClose,
+}: Readonly<{
+  open: boolean;
+  conversations: readonly StudioConversation[];
+  activeId: string | null;
+  onSelect: (id: string) => void;
+  onNew: () => void;
+  onDelete: (id: string) => void;
+  onClearAll: () => void;
+  onClose: () => void;
+}>) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[70] lg:hidden" role="dialog" aria-modal="true" aria-label="历史对话">
+      <button
+        type="button"
+        className="absolute inset-0 bg-gray-950/45 backdrop-blur-[2px]"
+        onClick={onClose}
+        aria-label="关闭历史记录"
+      />
+      <div className="absolute inset-y-0 left-0 flex w-[min(23rem,calc(100vw-1rem))] max-w-full flex-col overflow-hidden bg-white pt-[env(safe-area-inset-top)] shadow-2xl">
+        <StudioSidebar
+          conversations={conversations}
+          activeId={activeId}
+          collapsed={false}
+          onSelect={onSelect}
+          onNew={onNew}
+          onDelete={onDelete}
+          onClearAll={onClearAll}
+          onToggleCollapse={onClose}
+        />
+      </div>
+    </div>
   );
 }
 

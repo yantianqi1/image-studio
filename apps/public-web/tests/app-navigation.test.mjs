@@ -9,6 +9,18 @@ const studioPageSource = readFileSync(
   new URL("../src/features/studio/studio-page.tsx", import.meta.url),
   "utf8",
 );
+const studioComposerSource = readFileSync(
+  new URL("../src/features/studio/studio-composer.tsx", import.meta.url),
+  "utf8",
+);
+const studioSidebarSource = readFileSync(
+  new URL("../src/features/studio/studio-sidebar.tsx", import.meta.url),
+  "utf8",
+);
+const appHeaderStylesSource = readFileSync(
+  new URL("../src/features/shell/app-header.module.css", import.meta.url),
+  "utf8",
+);
 
 function loadAppNavigation() {
   const source = readFileSync(new URL("../src/features/shell/app-navigation.ts", import.meta.url), "utf8");
@@ -36,8 +48,9 @@ test("app navigation features 图库 before 创作台", () => {
   assert.equal(APP_NAV_ITEMS[3].label, "应用");
   assert.equal(
     APP_MOBILE_NAV_ITEMS.map((item) => item.label).join(","),
-    "图库,创作台,漫画,我的",
+    "图库,创作台,漫画,应用,我的",
   );
+  assert.equal(APP_MOBILE_NAV_ITEMS.find((item) => item.label === "应用")?.href, "/apps");
   assert.doesNotMatch(
     APP_MOBILE_NAV_ITEMS.map((item) => item.label).join(","),
     /任务|钱包|登录/,
@@ -52,6 +65,19 @@ test("app navigation features 图库 before 创作台", () => {
 test("app shell renders a mobile module switch below the header row", () => {
   assert.match(appShellSource, /<MobileNav activeHref=\{props\.activeHref\} \/>/);
   assert.match(appShellSource, /function MobileNav/);
+  assert.match(appHeaderStylesSource, /grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\)/);
+});
+
+test("studio workspace keeps mobile history and parameters inside the viewport", () => {
+  assert.match(appShellSource, /h-\[100dvh\]/);
+  assert.match(appShellSource, /flex-1 overflow-hidden/);
+  assert.match(studioPageSource, /MobileStudioToolbar/);
+  assert.match(studioPageSource, /MobileStudioHistoryDrawer/);
+  assert.match(studioPageSource, /lg:hidden/);
+  assert.match(studioSidebarSource, /lg:opacity-0 lg:group-hover:opacity-100/);
+  assert.match(studioComposerSource, /fixed inset-x-3 bottom-3/);
+  assert.match(studioComposerSource, /SettingButtonGroup/);
+  assert.doesNotMatch(studioComposerSource, /function SettingDropdown/);
 });
 
 test("product header uses Image Studio as the public brand", () => {
@@ -61,5 +87,5 @@ test("product header uses Image Studio as the public brand", () => {
 
 test("app shell avoids unavailable React ViewTransition runtime export", () => {
   assert.doesNotMatch(appShellSource, /import \{ ViewTransition \} from "react"/);
-  assert.doesNotMatch(appShellSource, /<ViewTransition/);
+  assert.doesNotMatch(appShellSource, /<ViewTransition(?:\s|>)/);
 });
