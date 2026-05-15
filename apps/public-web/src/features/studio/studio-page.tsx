@@ -64,6 +64,15 @@ type PersistedSettings = {
   count: number;
 };
 
+type PollSubmittedImageJobInput = Readonly<{
+  abortController?: AbortController;
+  conversationId: string;
+  initialMessage?: string;
+  jobId: number;
+  startTime: number;
+  turnId: string;
+}>;
+
 function readSidebarCollapsed(): boolean {
   if (typeof window === "undefined") return false;
   return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true";
@@ -159,6 +168,16 @@ function getImageJobProgressMessage(status: string): string {
   return "生成中...";
 }
 
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
+function throwIfAborted(signal: AbortSignal) {
+  if (signal.aborted) {
+    throw new DOMException("Studio turn aborted", "AbortError");
+  }
+}
+
 export function StudioPage() {
   // --- Composer state ---
   const [mode, setMode] = useState<ComposerMode>("generate");
@@ -176,7 +195,7 @@ export function StudioPage() {
   const [mobileHistoryOpen, setMobileHistoryOpen] = useState(false);
   const [promptMarketOpen, setPromptMarketOpen] = useState(false);
   const [progressMap, setProgressMap] = useState<ReadonlyMap<string, TurnProgress>>(new Map());
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submittingConversationIds, setSubmittingConversationIds] = useState<ReadonlySet<string>>(() => new Set());
 
   // --- Data ---
   const conversations = useStudioConversations();
@@ -214,6 +233,10 @@ export function StudioPage() {
 
   // Track active abort controllers for polling
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
+  const pollingTurnKeysRef = useRef<Set<string>>(new Set());
+  const isActiveConversationSubmitting = conversations.activeId
+    ? submittingConversationIds.has(conversations.activeId)
+    : false;
 
   // --- Sidebar persistence ---
   useEffect(() => {
@@ -287,30 +310,46 @@ export function StudioPage() {
     }
   }, []);
 
-  const resumeImageJobPolling = useCallback(async (conversationId: string, turn: StudioTurn, jobId: number) => {
-    const progressKey = turnProgressKey(conversationId, turn.id);
-    if (abortControllersRef.current.has(progressKey)) {
+  const markConversationSubmitting = useCallback((conversationId: string) => {
+    setSubmittingConversationIds((prev) => new Set(prev).add(conversationId));
+  }, []);
+
+  const clearConversationSubmitting = useCallback((conversationId: string) => {
+    setSubmittingConversationIds((prev) => {
+      const next = new Set(prev);
+      next.delete(conversationId);
+      return next;
+    });
+  }, []);
+
+  const pollSubmittedImageJob = useCallback(async (input: PollSubmittedImageJobInput) => {
+    const progressKey = turnProgressKey(input.conversationId, input.turnId);
+    if (pollingTurnKeysRef.current.has(progressKey)) {
       return;
     }
 
-    const abortController = new AbortController();
+    const abortController =
+      input.abortController
+      ?? abortControllersRef.current.get(progressKey)
+      ?? new AbortController();
     abortControllersRef.current.set(progressKey, abortController);
-    setTurnProgress(progressKey, { message: "恢复任务状态..." });
+    pollingTurnKeysRef.current.add(progressKey);
 
-    const createdAtMs = new Date(turn.createdAt).getTime();
-    const startTime = Number.isNaN(createdAtMs) ? Date.now() : createdAtMs;
+    if (input.initialMessage) {
+      setTurnProgress(progressKey, { message: input.initialMessage });
+    }
 
     try {
-      const completed = await waitForImageJobResults(publicApi, jobId, {
+      const completed = await waitForImageJobResults(publicApi, input.jobId, {
         signal: abortController.signal,
         onJobUpdate: (updatedJob) => {
           if (updatedJob.status === "succeeded") return;
-          const elapsed = Date.now() - startTime;
+          const elapsed = Date.now() - input.startTime;
           setTurnProgress(progressKey, {
             message: getImageJobProgressMessage(updatedJob.status),
             elapsedMs: elapsed,
           });
-          conversations.updateTurn(conversationId, turn.id, {
+          conversations.updateTurn(input.conversationId, input.turnId, {
             status: "generating",
             taskId: updatedJob.id,
             taskStatus: updatedJob.status,
@@ -318,7 +357,7 @@ export function StudioPage() {
         },
       });
 
-      conversations.updateTurn(conversationId, turn.id, {
+      conversations.updateTurn(input.conversationId, input.turnId, {
         status: "success",
         taskId: completed.job.id,
         taskStatus: completed.job.status,
@@ -329,12 +368,24 @@ export function StudioPage() {
         return;
       }
       const message = error instanceof Error ? error.message : "生成失败";
-      conversations.updateTurn(conversationId, turn.id, { status: "error", error: message });
+      conversations.updateTurn(input.conversationId, input.turnId, { status: "error", error: message });
     } finally {
       clearTurnProgress(progressKey);
       abortControllersRef.current.delete(progressKey);
+      pollingTurnKeysRef.current.delete(progressKey);
     }
   }, [conversations]);
+
+  const resumeImageJobPolling = useCallback((conversationId: string, turn: StudioTurn, jobId: number) => {
+    const createdAtMs = new Date(turn.createdAt).getTime();
+    void pollSubmittedImageJob({
+      conversationId,
+      initialMessage: "恢复任务状态...",
+      jobId,
+      startTime: Number.isNaN(createdAtMs) ? Date.now() : createdAtMs,
+      turnId: turn.id,
+    });
+  }, [pollSubmittedImageJob]);
 
   useEffect(() => {
     if (!conversations.hydrated) return;
@@ -359,17 +410,18 @@ export function StudioPage() {
     const { turnId, conversationId: convId } = conversations.addTurn(draft);
     if (!convId || !turnId) return;
 
-    setIsSubmitting(true);
-
+    markConversationSubmitting(convId);
     const progressKey = turnProgressKey(convId, turnId);
     const abortController = new AbortController();
     abortControllersRef.current.set(progressKey, abortController);
+    let didStartPolling = false;
 
     try {
       if (draft.referenceImages.length > 0) {
         setTurnProgress(progressKey, { message: "上传参考图..." });
       }
       const uploadedRefs = await uploadPendingReferenceImages(draft.referenceImages, publicApi.uploadImageAsset);
+      throwIfAborted(abortController.signal);
       conversations.updateTurn(convId, turnId, { referenceImages: uploadedRefs });
 
       setTurnProgress(progressKey, { message: "提交生成请求..." });
@@ -379,44 +431,37 @@ export function StudioPage() {
         conversation: conversations.activeConversation,
         referenceImages: uploadedRefs,
       }));
+      throwIfAborted(abortController.signal);
 
       conversations.updateTurn(convId, turnId, { status: "generating", taskId: job.id });
       setTurnProgress(progressKey, { message: "已提交，等待生成..." });
 
-      const startTime = Date.now();
-      const completed = await waitForImageJobResults(publicApi, job.id, {
-        signal: abortController.signal,
-        onJobUpdate: (updatedJob) => {
-          if (updatedJob.status === "succeeded") return;
-          const elapsed = Date.now() - startTime;
-          const statusText = getImageJobProgressMessage(updatedJob.status);
-          setTurnProgress(progressKey, { message: statusText, elapsedMs: elapsed });
-          conversations.updateTurn(convId, turnId, {
-            status: "generating",
-            taskId: updatedJob.id,
-            taskStatus: updatedJob.status,
-          });
-        },
+      didStartPolling = true;
+      void pollSubmittedImageJob({
+        abortController,
+        conversationId: convId,
+        jobId: job.id,
+        startTime: Date.now(),
+        turnId,
       });
-
-      const images = imageJobResultsToStoredImages(completed.results);
-      conversations.updateTurn(convId, turnId, { status: "success", images });
     } catch (error: unknown) {
-      if (error instanceof DOMException && error.name === "AbortError") {
+      if (isAbortError(error)) {
         conversations.updateTurn(convId, turnId, { status: "cancelled" });
       } else {
         const message = error instanceof Error ? error.message : "生成失败";
         conversations.updateTurn(convId, turnId, { status: "error", error: message });
       }
     } finally {
-      clearTurnProgress(progressKey);
-      abortControllersRef.current.delete(progressKey);
-      setIsSubmitting(false);
+      if (!didStartPolling) {
+        clearTurnProgress(progressKey);
+        abortControllersRef.current.delete(progressKey);
+      }
+      clearConversationSubmitting(convId);
     }
-  }, [conversations]);
+  }, [clearConversationSubmitting, conversations, markConversationSubmitting, pollSubmittedImageJob]);
 
-  const handleSubmit = useCallback(async () => {
-    if (!prompt.trim() || isSubmitting) return;
+  const handleSubmit = useCallback(() => {
+    if (!prompt.trim() || isActiveConversationSubmitting) return;
 
     const resolvedModel =
       modelsState.status === "ready"
@@ -437,8 +482,20 @@ export function StudioPage() {
 
     setPrompt("");
     setReferenceImages([]);
-    await submitDraft(draft);
-  }, [prompt, isSubmitting, modelsState, model, mode, referenceImages, count, aspectRatio, resolution, quality, submitDraft]);
+    void submitDraft(draft);
+  }, [
+    prompt,
+    isActiveConversationSubmitting,
+    modelsState,
+    model,
+    mode,
+    referenceImages,
+    count,
+    aspectRatio,
+    resolution,
+    quality,
+    submitDraft,
+  ]);
 
   const handleCancelTurn = useCallback((turnId: string) => {
     const convId = conversations.activeId;
@@ -466,7 +523,7 @@ export function StudioPage() {
 
   const handleRetryTurn = useCallback((turnId: string) => {
     const conv = conversations.activeConversation;
-    if (!conv || isSubmitting) return;
+    if (!conv || submittingConversationIds.has(conv.id)) return;
     const turn = conv.turns.find((t) => t.id === turnId);
     if (!turn) return;
     conversations.removeTurn(conv.id, turnId);
@@ -481,8 +538,8 @@ export function StudioPage() {
       quality: turn.quality,
       visibility: turn.visibility,
     };
-    submitDraft(draft);
-  }, [conversations, isSubmitting, submitDraft]);
+    void submitDraft(draft);
+  }, [conversations, submittingConversationIds, submitDraft]);
 
   const handleEditFromTurn = useCallback((_turnId: string, image: StoredImage) => {
     const ref: StoredReferenceImage = {
@@ -595,7 +652,7 @@ export function StudioPage() {
             count={count}
             referenceImages={referenceImages}
             modelsState={modelsState}
-            isSubmitting={isSubmitting}
+            isSubmitting={isActiveConversationSubmitting}
             onModeChange={setMode}
             onPromptChange={setPrompt}
             onModelChange={setModel}

@@ -61,3 +61,15 @@ test("studio request mode infers edit only when image workspace has references",
   assert.equal(resolveStudioDraftMode({ composerMode: "generate", referenceCount: 0 }), "generate");
   assert.equal(resolveStudioDraftMode({ composerMode: "generate", referenceCount: 1 }), "edit");
 });
+
+test("studio submission lock is scoped to the active conversation only", () => {
+  assert.match(pageSource, /submittingConversationIds/);
+  assert.match(pageSource, /isActiveConversationSubmitting/);
+  assert.doesNotMatch(pageSource, /const \[isSubmitting, setIsSubmitting\]/);
+  assert.doesNotMatch(pageSource, /if \(!prompt\.trim\(\) \|\| isSubmitting\) return/);
+});
+
+test("studio starts image polling without blocking new submissions", () => {
+  assert.match(pageSource, /void pollSubmittedImageJob/);
+  assert.doesNotMatch(pageSource, /await waitForImageJobResults\(publicApi, job\.id/);
+});
