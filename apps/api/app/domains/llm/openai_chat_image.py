@@ -12,6 +12,10 @@ from apps.api.app.core.errors import AppError
 from apps.api.app.domains.image.models import Asset
 from apps.api.app.domains.llm.image_reference import ImageReference, extract_image_reference
 from apps.api.app.domains.llm.models import Provider
+from apps.api.app.domains.llm.openai_chat_image_messages import (
+    build_chat_image_messages,
+    collect_render_asset_ids,
+)
 from apps.api.app.domains.llm.rendering import RenderedImage
 from apps.api.app.infra.storage.asset_storage import AssetStorage
 from apps.api.app.infra.storage.factory import build_asset_storage
@@ -43,12 +47,15 @@ def render_openai_chat_compatible_image(
     provider_model: str,
     source_asset_id: int | None = None,
     reference_asset_ids: tuple[int, ...] = (),
+    conversation_messages: list[dict] | None = None,
     size: str | None = None,
     quality: str | None = None,
 ) -> RenderedImage:
-    asset_ids = tuple(reference_asset_ids or ())
-    if source_asset_id is not None:
-        asset_ids = (*asset_ids, source_asset_id)
+    asset_ids = collect_render_asset_ids(
+        source_asset_id=source_asset_id,
+        reference_asset_ids=reference_asset_ids,
+        conversation_messages=conversation_messages,
+    )
     storage = build_asset_storage()
     assets = [resolve_image_asset(session, asset_id=asset_id, storage=storage) for asset_id in asset_ids]
     timeout = httpx.Timeout(connect=30.0, read=get_settings().chat_image_timeout_seconds, write=30.0, pool=10.0)
@@ -60,6 +67,7 @@ def render_openai_chat_compatible_image(
             provider_model=provider_model,
             assets=assets,
             storage=storage,
+            conversation_messages=conversation_messages,
             size=size,
             quality=quality,
         ),
@@ -74,6 +82,7 @@ def build_chat_image_payload(
     provider_model: str,
     assets: list[Asset],
     storage: AssetStorage,
+    conversation_messages: list[dict] | None = None,
     size: str | None = None,
     quality: str | None = None,
 ) -> dict[str, object]:
@@ -83,6 +92,7 @@ def build_chat_image_payload(
             prompt=build_chat_image_prompt(prompt, size=size, quality=quality),
             assets=assets,
             storage=storage,
+            conversation_messages=conversation_messages,
         ),
         "temperature": CHAT_IMAGE_TEMPERATURE,
         "max_tokens": CHAT_IMAGE_MAX_TOKENS,
@@ -127,19 +137,6 @@ def parse_pixel_size(size: str) -> tuple[int, int] | None:
 
 def build_quality_hint(quality: str | None) -> str:
     return QUALITY_HINTS.get((quality or "").strip().lower(), "")
-
-
-def build_chat_image_messages(*, prompt: str, assets: list[Asset], storage: AssetStorage) -> list[dict[str, object]]:
-    if not assets:
-        return [{"role": "user", "content": prompt}]
-    content: list[dict[str, object]] = [{"type": "text", "text": prompt}]
-    content.extend(build_image_content(asset, storage=storage) for asset in assets)
-    return [{"role": "user", "content": content}]
-
-
-def build_image_content(asset: Asset, *, storage: AssetStorage) -> dict[str, object]:
-    encoded = base64.b64encode(storage.read_bytes(asset.storage_path)).decode("ascii")
-    return {"type": "image_url", "image_url": {"url": f"data:{asset.mime_type};base64,{encoded}"}}
 
 
 def parse_chat_image_response(*, response: httpx.Response | object, provider: Provider, prompt: str) -> RenderedImage:

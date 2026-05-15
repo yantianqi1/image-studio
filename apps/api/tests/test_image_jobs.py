@@ -1,3 +1,4 @@
+import base64
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -17,6 +18,11 @@ from apps.api.app.infra.db.session import initialize_database, session_scope
 from apps.api.app.infra.storage.factory import build_asset_storage
 from apps.api.app.main import create_app
 from apps.worker.worker.tasks import image_jobs as worker_image_jobs
+
+
+VALID_PNG_BYTES = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
+)
 
 
 @dataclass
@@ -120,6 +126,7 @@ def build_rendered_image_from_job(
     model_code: str,
     provider_id: int | None = None,
     provider_model: str | None = None,
+    **_kwargs,
 ) -> RenderedImage:
     del provider_id, provider_model
     return build_rendered_image(prompt=prompt, model_code=model_code)
@@ -236,7 +243,7 @@ def test_client_provider_worker_uses_submitted_provider(monkeypatch):
     def fake_get(url: str, *, timeout: float):
         captured["download_url"] = url
         captured["download_timeout"] = timeout
-        return FakeHttpResponse(status_code=200, payload={}, headers={"content-type": "image/png"}, content=b"client-png")
+        return FakeHttpResponse(status_code=200, payload={}, headers={"content-type": "image/png"}, content=VALID_PNG_BYTES)
 
     monkeypatch.setattr("apps.api.app.domains.llm.openai_chat_image.httpx.post", fake_post)
     monkeypatch.setattr("apps.api.app.domains.llm.openai_chat_image.httpx.get", fake_get)
@@ -415,6 +422,35 @@ def test_image_job_passes_reference_assets_to_renderer(monkeypatch):
     assert render_calls[0]["reference_asset_ids"] == [first_asset.id, second_asset.id]
 
 
+def test_public_image_job_stores_conversation_messages():
+    client = build_client()
+    register_user(client, email="image-conversation@example.com")
+
+    create_response = client.post(
+        "/api/public/image/jobs",
+        json={
+            "prompt": "把它改成夜晚",
+            "model_code": "gpt-image-2",
+            "requested_count": 1,
+            "conversation_messages": [
+                {"role": "user", "content": "画一只白猫"},
+                {"role": "assistant", "content": "Generated image: 白猫坐在窗边"},
+                {"role": "user", "content": "把它改成夜晚"},
+            ],
+        },
+    )
+
+    assert create_response.status_code == 201
+    job_id = create_response.json()["data"]["id"]
+    with session_scope() as session:
+        stored_job = session.get(ImageJob, job_id)
+        assert stored_job.conversation_messages == [
+            {"role": "user", "content": "画一只白猫"},
+            {"role": "assistant", "content": "Generated image: 白猫坐在窗边"},
+            {"role": "user", "content": "把它改成夜晚"},
+        ]
+
+
 def test_worker_claims_and_processes_queued_job(monkeypatch):
     monkeypatch.setattr(image_service, "render_image", build_rendered_image_from_job, raising=False)
     client = build_client()
@@ -446,7 +482,7 @@ def test_worker_claims_and_processes_queued_job(monkeypatch):
 def test_worker_persists_rendered_assets_with_mime_extension(monkeypatch):
     def png_renderer(_session=None, **kwargs) -> RenderedImage:
         return RenderedImage(
-            content=b"png-bytes",
+            content=VALID_PNG_BYTES,
             mime_type="image/png",
             revised_prompt=str(kwargs["prompt"]),
             provider_request_id="test:png",
@@ -465,7 +501,7 @@ def test_worker_persists_rendered_assets_with_mime_extension(monkeypatch):
 
     assert asset is not None
     assert asset.storage_path == f"asset-{asset.id}.png"
-    assert build_asset_storage().read_bytes(asset.storage_path) == b"png-bytes"
+    assert build_asset_storage().read_bytes(asset.storage_path) == VALID_PNG_BYTES
 
 
 def test_user_can_delete_own_image_job_with_results(monkeypatch):
@@ -511,6 +547,7 @@ def test_worker_retries_failed_job_before_terminal_failure(monkeypatch):
         model_code: str,
         provider_id: int | None = None,
         provider_model: str | None = None,
+        **_kwargs,
     ):
         del provider_id, provider_model
         attempts["count"] += 1
@@ -555,6 +592,7 @@ def test_worker_marks_job_failed_after_max_attempts_and_releases_reservation(mon
         model_code: str,
         provider_id: int | None = None,
         provider_model: str | None = None,
+        **_kwargs,
     ):
         del provider_id, provider_model
         raise RuntimeError(f"provider rejected: {prompt}:{model_code}")

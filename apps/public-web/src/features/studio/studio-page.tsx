@@ -19,6 +19,10 @@ import { StudioLightbox } from "@/features/studio/studio-lightbox";
 import { StudioResults } from "@/features/studio/studio-results";
 import { StudioSidebar } from "@/features/studio/studio-sidebar";
 import {
+  buildImageJobRequest,
+  uploadPendingReferenceImages,
+} from "@/features/studio/studio-image-request";
+import {
   clearTurnProgress,
   getTurnProgressSnapshot,
   setTurnProgress,
@@ -344,28 +348,16 @@ export function StudioPage() {
       if (draft.referenceImages.length > 0) {
         setTurnProgress(progressKey, { message: "上传参考图..." });
       }
-      const uploadedRefs = await uploadPendingReferenceImages(draft.referenceImages);
-      const referenceAssetIds = uploadedRefs
-        .map((img) => img.assetId)
-        .filter((id): id is number => id != null);
+      const uploadedRefs = await uploadPendingReferenceImages(draft.referenceImages, publicApi.uploadImageAsset);
+      conversations.updateTurn(convId, turnId, { referenceImages: uploadedRefs });
 
       setTurnProgress(progressKey, { message: "提交生成请求..." });
 
-      const sourceAssetId = draft.mode === "edit" && referenceAssetIds.length > 0
-        ? referenceAssetIds[0]
-        : undefined;
-
-      const job = await publicApi.generateImage({
-        prompt: draft.prompt,
-        model_code: draft.model,
-        requested_count: draft.count,
-        mode: draft.mode === "chat" ? undefined : draft.mode,
-        size: draft.resolution === "auto" ? undefined : draft.resolution,
-        quality: draft.quality,
-        source_asset_id: sourceAssetId,
-        reference_asset_ids: referenceAssetIds.length > 0 ? referenceAssetIds : undefined,
-        visibility: "private",
-      });
+      const job = await publicApi.generateImage(buildImageJobRequest({
+        draft,
+        conversation: conversations.activeConversation,
+        referenceImages: uploadedRefs,
+      }));
 
       conversations.updateTurn(convId, turnId, { status: "generating", taskId: job.id });
       setTurnProgress(progressKey, { message: "已提交，等待生成..." });
@@ -694,38 +686,4 @@ function MobileStudioHistoryDrawer({
     </div>,
     document.body,
   );
-}
-
-async function uploadPendingReferenceImages(
-  images: readonly StoredReferenceImage[],
-): Promise<StoredReferenceImage[]> {
-  const results: StoredReferenceImage[] = [];
-  for (const img of images) {
-    if (img.assetId) {
-      results.push(img);
-      continue;
-    }
-    if (!img.dataUrl) {
-      results.push(img);
-      continue;
-    }
-    // Convert dataUrl to File and upload
-    const blob = await dataUrlToBlob(img.dataUrl);
-    const file = new File([blob], img.name || "reference.png", {
-      type: img.mimeType || "image/png",
-    });
-    const uploaded = await publicApi.uploadImageAsset(file);
-    results.push({
-      ...img,
-      assetId: uploaded.id,
-      assetUrl: uploaded.asset_url,
-      thumbnailUrl: uploaded.thumbnail_url ?? uploaded.asset_url,
-    });
-  }
-  return results;
-}
-
-async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
-  const response = await fetch(dataUrl);
-  return response.blob();
 }

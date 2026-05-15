@@ -196,6 +196,70 @@ def test_chat_compatible_image_job_sends_reference_assets(monkeypatch) -> None:
     assert captured["content"][1]["image_url"]["url"].startswith("data:image/png;base64,")
 
 
+def test_chat_compatible_image_job_sends_conversation_messages_with_image_assets(monkeypatch) -> None:
+    client = build_client()
+    provider = create_chat_image_provider(client)
+    create_chat_image_model(client, provider_id=provider["id"])
+    captured: dict[str, object] = {}
+
+    with session_scope() as session:
+        owner = create_anonymous_owner(session)
+        asset = Asset(
+            owner_user_id=None,
+            owner_anonymous_session_id=owner.anonymous_session_id,
+            storage_path="generated/white-cat.png",
+            mime_type="image/png",
+        )
+        session.add(asset)
+        session.flush()
+        build_asset_storage().write_bytes(asset.storage_path, b"previous-image", asset.mime_type)
+        job = create_job(
+            session,
+            owner=owner,
+            source="anonymous",
+            prompt="把它改成夜晚",
+            model_code="chat-image",
+            requested_count=1,
+            mode="generate",
+            conversation_messages=[
+                {"role": "user", "content": "画一只白猫"},
+                {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "text", "text": "Generated image: 白猫坐在窗边"},
+                        {"type": "image_asset", "asset_id": asset.id},
+                    ],
+                },
+                {"role": "user", "content": "把它改成夜晚"},
+            ],
+        )
+        job_id = job.id
+
+    def fake_post(url: str, *, headers, json, timeout: float):
+        del url, headers, timeout
+        captured["messages"] = json["messages"]
+        payload = {"choices": [{"message": {"content": "![result](https://cdn.example.test/night-cat.png)"}}]}
+        return FakeHttpResponse(status_code=200, payload=payload, headers={})
+
+    def fake_get(url: str, *, timeout: float):
+        del url, timeout
+        return FakeHttpResponse(status_code=200, payload={}, headers={"content-type": "image/png"}, content=VALID_PNG_BYTES)
+
+    monkeypatch.setenv("OPENAI_PROVIDER_KEY", "sk-test")
+    monkeypatch.setattr("apps.api.app.domains.llm.openai_chat_image.httpx.post", fake_post)
+    monkeypatch.setattr("apps.api.app.domains.llm.openai_chat_image.httpx.get", fake_get)
+    processed_job_id = worker_image_jobs.run_next_image_job()
+
+    assert processed_job_id == job_id
+    messages = captured["messages"]
+    assert [message["role"] for message in messages] == ["user", "assistant", "user"]
+    assert messages[0]["content"] == "画一只白猫"
+    assert messages[1]["content"][0] == {"type": "text", "text": "Generated image: 白猫坐在窗边"}
+    assert messages[1]["content"][1]["type"] == "image_url"
+    assert messages[1]["content"][1]["image_url"]["url"].startswith("data:image/png;base64,")
+    assert messages[2]["content"] == "把它改成夜晚"
+
+
 def test_chat_compatible_image_parser_accepts_plain_markdown_response(monkeypatch) -> None:
     from apps.api.app.domains.llm.models import Provider
     from apps.api.app.domains.llm.openai_chat_image import parse_chat_image_response

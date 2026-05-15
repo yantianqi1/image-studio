@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
@@ -8,8 +8,13 @@ from sqlalchemy.orm import Session
 from apps.api.app.core.errors import AppError
 from apps.api.app.domains.auth.ownership import OwnerContext
 from apps.api.app.domains.image.assets import ensure_thumbnail_exists, persist_rendered_asset
+from apps.api.app.domains.image.conversation_messages import (
+    normalize_conversation_messages,
+    validate_conversation_message_assets,
+)
 from apps.api.app.domains.image.gallery import normalize_asset_visibility, set_asset_visibility
-from apps.api.app.domains.image.job_recovery import IMAGE_JOB_RETRY_ERROR_CODE, recover_stale_running_jobs
+from apps.api.app.domains.image.job_failure import handle_job_failure
+from apps.api.app.domains.image.job_recovery import recover_stale_running_jobs
 from apps.api.app.domains.image.models import ImageJob
 from apps.api.app.domains.image.repository import (
     build_reservation,
@@ -26,7 +31,6 @@ from apps.api.app.domains.image.repository import (
     list_jobs,
     list_jobs_for_owner,
     list_reference_asset_ids,
-    mark_job_failed,
     resolve_charge_cents,
     resolve_reference_assets,
     resolve_source_asset,
@@ -61,6 +65,7 @@ def create_job(
     mode: str,
     source_asset_id: int | None = None,
     reference_asset_ids: list[int] | None = None,
+    conversation_messages: list[dict] | None = None,
     client_access_id: str | None = None,
     client_provider_config: ClientProviderConfig | None = None,
     storage_subdir: str | None = None,
@@ -72,6 +77,8 @@ def create_job(
     variant = resolve_variant(session, model_id=target.model.id, size=size, quality=quality)
     source_asset = resolve_source_asset(session, mode=mode, source_asset_id=source_asset_id, owner=owner)
     reference_assets = resolve_reference_assets(session, reference_asset_ids=reference_asset_ids, owner=owner)
+    normalized_messages = normalize_conversation_messages(conversation_messages)
+    validate_conversation_message_assets(session, messages=normalized_messages, owner=owner)
     charge_cents = resolve_charge_cents(
         owner=owner,
         client_provider_config=client_provider_config,
@@ -91,6 +98,7 @@ def create_job(
         provider_model=variant.upstream_provider_model if variant and variant.upstream_provider_model else target.provider_model,
         client_access_id=client_access_id,
         client_provider_config=serialize_client_provider_config(config=client_provider_config, provider_type=target.provider.type),
+        conversation_messages=normalized_messages,
         storage_subdir=storage_subdir,
         visibility=visibility,
         size=size,
@@ -117,6 +125,7 @@ def build_image_job(
     provider_model: str | None,
     client_access_id: str | None,
     client_provider_config: dict[str, str] | None,
+    conversation_messages: list[dict] | None,
     storage_subdir: str | None,
     visibility: str,
     size: str | None,
@@ -135,6 +144,7 @@ def build_image_job(
         provider_model=provider_model,
         client_access_id=client_access_id,
         client_provider_config=client_provider_config,
+        conversation_messages=conversation_messages,
         storage_subdir=storage_subdir,
         visibility=normalize_asset_visibility(visibility),
         requested_count=requested_count,
@@ -191,7 +201,7 @@ def process_claimed_job(session: Session, *, job_id: int) -> ImageJob:
         complete_job(session, job=job)
     except Exception as exc:
         clear_job_outputs(session, job_id=job.id)
-        handle_job_failure(session, job=job, exc=exc)
+        handle_job_failure(session, job=job, exc=exc, retry_delay_seconds=IMAGE_JOB_RETRY_DELAY_SECONDS)
     session.flush()
     return job
 
@@ -232,6 +242,7 @@ def render_job_image(
 def render_with_client_provider(session: Session, *, config: ClientProviderConfig, options: dict[str, object]):
     source_asset_id = options.get("source_asset_id")
     reference_asset_ids = options.get("reference_asset_ids")
+    conversation_messages = options.get("conversation_messages")
     return render_image_with_client_provider(
         session,
         config=config,
@@ -240,6 +251,7 @@ def render_with_client_provider(session: Session, *, config: ClientProviderConfi
         provider_model=str(options.get("provider_model") or ""),
         source_asset_id=source_asset_id if isinstance(source_asset_id, int) else None,
         reference_asset_ids=reference_asset_ids if isinstance(reference_asset_ids, list) else [],
+        conversation_messages=conversation_messages if isinstance(conversation_messages, list) else None,
         size=str(options["size"]) if options.get("size") else None,
         quality=str(options["quality"]) if options.get("quality") else None,
     )
@@ -258,6 +270,8 @@ def build_render_options(*, job: ImageJob, reference_asset_ids: list[int]) -> di
         options["source_asset_id"] = job.source_asset_id
     if reference_asset_ids:
         options["reference_asset_ids"] = reference_asset_ids
+    if job.conversation_messages:
+        options["conversation_messages"] = job.conversation_messages
     return options
 
 
@@ -281,20 +295,3 @@ def resolve_job_client_provider_config(job: ImageJob) -> ClientProviderConfig | 
     if not job.client_provider_config:
         return None
     return client_provider_config_from_mapping(job.client_provider_config)
-
-
-NON_RETRYABLE_ERROR_CODES = frozenset({"provider_content_refused", "provider_api_key_missing", "provider_base_url_missing"})
-
-
-def handle_job_failure(session: Session, *, job: ImageJob, exc: Exception) -> None:
-    error_code = getattr(exc, "code", None)
-    if error_code in NON_RETRYABLE_ERROR_CODES or job.attempt_count >= job.max_attempts:
-        mark_job_failed(session, job=job, error_message=str(exc))
-        return
-    retry_at = datetime.utcnow() + timedelta(seconds=IMAGE_JOB_RETRY_DELAY_SECONDS)
-    job.status = "queued"
-    job.error_code = IMAGE_JOB_RETRY_ERROR_CODE
-    job.error_message = str(exc)
-    job.available_at = retry_at
-    job.finished_at = None
-    session.flush()

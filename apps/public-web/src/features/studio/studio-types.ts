@@ -69,7 +69,7 @@ export type TurnDraft = Readonly<{
   visibility: ImageAssetVisibility;
 }>;
 
-export type TurnUpdate = Partial<Pick<StudioTurn, "status" | "images" | "error" | "taskId" | "taskStatus">>;
+export type TurnUpdate = Partial<Pick<StudioTurn, "status" | "images" | "referenceImages" | "error" | "taskId" | "taskStatus">>;
 
 export const DEFAULT_ASPECT_RATIO = "1:1";
 export const DEFAULT_RESOLUTION = "1024x1024";

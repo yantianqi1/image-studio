@@ -14,7 +14,7 @@ from apps.api.app.domains.image.storage_migration import (
 )
 from apps.api.app.infra.db.session import get_engine, get_session_factory, initialize_database
 
-HEAD_REVISION = "20260515_000016"
+HEAD_REVISION = "20260515_000017"
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
@@ -60,6 +60,7 @@ def test_alembic_upgrade_creates_core_tables(tmp_path):
         "client_provider_config",
         "anonymous_session_id",
         "storage_subdir",
+        "conversation_messages",
         "visibility",
     } <= image_job_columns
 

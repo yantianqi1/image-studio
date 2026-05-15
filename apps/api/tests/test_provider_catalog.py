@@ -14,6 +14,11 @@ from apps.api.app.main import create_app
 from apps.worker.worker.tasks import image_jobs as worker_image_jobs
 
 
+VALID_PNG_BYTES = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
+)
+
+
 def build_client() -> TestClient:
     initialize_database()
     return TestClient(create_app())
@@ -131,7 +136,7 @@ def test_openai_compatible_job_uses_http_adapter(monkeypatch) -> None:
         captured["json"] = json
         captured["timeout"] = timeout
         payload = {
-            "data": [{"b64_json": base64.b64encode(b"png-bytes").decode("ascii")}],
+            "data": [{"b64_json": base64.b64encode(VALID_PNG_BYTES).decode("ascii")}],
             "output_format": "png",
         }
         return FakeHttpResponse(status_code=200, payload=payload, headers={"x-request-id": "req-openai-1"})
@@ -180,7 +185,7 @@ def test_openai_compatible_edit_job_uses_multipart_adapter(monkeypatch) -> None:
         captured["mime_type"] = image_file[2]
         captured["content"] = image_file[1].read()
         captured["timeout"] = timeout
-        payload = {"data": [{"b64_json": base64.b64encode(b"edited-png").decode("ascii") }]}
+        payload = {"data": [{"b64_json": base64.b64encode(VALID_PNG_BYTES).decode("ascii")}]}
         return FakeHttpResponse(status_code=200, payload=payload, headers={"x-request-id": "req-edit-1"})
 
     monkeypatch.setenv("OPENAI_PROVIDER_KEY", "sk-test")
@@ -253,7 +258,7 @@ def test_openai_compatible_reference_assets_use_multipart_adapter(monkeypatch) -
         captured["filenames"] = [item[1][0] for item in files]
         captured["contents"] = [item[1][1].read() for item in files]
         captured["timeout"] = timeout
-        payload = {"data": [{"b64_json": base64.b64encode(b"referenced-png").decode("ascii")}]}
+        payload = {"data": [{"b64_json": base64.b64encode(VALID_PNG_BYTES).decode("ascii")}]}
         return FakeHttpResponse(status_code=200, payload=payload, headers={"x-request-id": "req-ref-1"})
 
     monkeypatch.setenv("OPENAI_PROVIDER_KEY", "sk-test")
@@ -289,7 +294,7 @@ def test_public_image_job_accepts_reference_asset_ids(monkeypatch) -> None:
         captured["filenames"] = [item[1][0] for item in files or []]
         captured["contents"] = [item[1][1].read() for item in files or []]
         captured["timeout"] = timeout
-        payload = {"data": [{"b64_json": base64.b64encode(b"referenced-png").decode("ascii")}]}
+        payload = {"data": [{"b64_json": base64.b64encode(VALID_PNG_BYTES).decode("ascii")}]}
         return FakeHttpResponse(status_code=200, payload=payload, headers={"x-request-id": "req-public-ref-1"})
 
     monkeypatch.setenv("OPENAI_PROVIDER_KEY", "sk-test")

@@ -83,7 +83,8 @@ function clampPromptAreaHeight(height: number) {
 function getSubmitLabel(mode: ComposerMode, isSubmitting: boolean, hasRefs: boolean) {
   if (isSubmitting) return "处理中";
   if (mode === "chat") return "发送";
-  if (mode === "edit" || hasRefs) return "编辑图片";
+  if (mode === "edit") return "编辑图片";
+  if (hasRefs) return "参考生成";
   return "生成图片";
 }
 
@@ -205,9 +206,8 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
         newImages.push({ name: file.name || "pasted-image.png", dataUrl, mimeType: file.type });
       }
       onReferenceImagesChange([...referenceImages, ...newImages]);
-      if (mode !== "edit") onModeChange("edit");
     },
-    [mode, onModeChange, onReferenceImagesChange, referenceImages],
+    [onReferenceImagesChange, referenceImages],
   );
 
   const handleFileSelect = useCallback(
@@ -220,10 +220,9 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
         newImages.push({ name: file.name, dataUrl, mimeType: file.type });
       }
       onReferenceImagesChange([...referenceImages, ...newImages]);
-      if (mode !== "edit") onModeChange("edit");
       event.target.value = "";
     },
-    [mode, onModeChange, onReferenceImagesChange, referenceImages],
+    [onReferenceImagesChange, referenceImages],
   );
 
   const handleRemoveReference = useCallback(

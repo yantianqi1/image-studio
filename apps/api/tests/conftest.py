@@ -16,6 +16,7 @@ def reset_cached_settings(tmp_path):
     os.environ["GENERATED_ASSETS_DIR"] = str(tmp_path / "generated-assets")
     os.environ["APP_ENV"] = "test"
     os.environ["APP_VERSION"] = "0.1.0"
+    os.environ["OPENAI_PROVIDER_TYPE"] = "openai-chat-compatible"
     get_settings.cache_clear()
     get_engine.cache_clear()
     get_session_factory.cache_clear()

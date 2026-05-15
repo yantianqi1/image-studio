@@ -224,6 +224,7 @@ def render_image(
     provider_model: str,
     source_asset_id: int | None = None,
     reference_asset_ids: list[int] | None = None,
+    conversation_messages: list[dict] | None = None,
     size: str | None = None,
     quality: str | None = None,
 ) -> RenderedImage:
@@ -252,6 +253,7 @@ def render_image(
             provider_model=provider_model,
             source_asset_id=source_asset_id,
             reference_asset_ids=reference_ids,
+            conversation_messages=conversation_messages,
             size=size,
             quality=quality,
         )
@@ -267,6 +269,7 @@ def render_image_with_client_provider(
     provider_model: str,
     source_asset_id: int | None = None,
     reference_asset_ids: list[int] | None = None,
+    conversation_messages: list[dict] | None = None,
     size: str | None = None,
     quality: str | None = None,
 ) -> RenderedImage:
@@ -291,6 +294,7 @@ def render_image_with_client_provider(
             provider_model=provider_model,
             source_asset_id=source_asset_id,
             reference_asset_ids=reference_ids,
+            conversation_messages=conversation_messages,
             size=size,
             quality=quality,
         )

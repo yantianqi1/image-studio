@@ -23,7 +23,18 @@ export type ImageGenerationRequest = Readonly<{
   quality?: string;
   source_asset_id?: number;
   reference_asset_ids?: readonly number[];
+  conversation_messages?: readonly ImageConversationMessage[];
   visibility?: ImageAssetVisibility;
+}>;
+
+export type ImageConversationContentPart = Readonly<
+  | { type: "text"; text: string }
+  | { type: "image_asset"; asset_id: number }
+>;
+
+export type ImageConversationMessage = Readonly<{
+  role: "system" | "user" | "assistant";
+  content: string | readonly ImageConversationContentPart[];
 }>;
 
 export type ImageAssetVisibility = "private" | "public";

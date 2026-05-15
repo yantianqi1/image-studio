@@ -46,6 +46,7 @@ class ImageJob(Base):
     provider_model: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     client_access_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     client_provider_config: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    conversation_messages: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     storage_subdir: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     size: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     quality: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)

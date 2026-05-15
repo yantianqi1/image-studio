@@ -65,6 +65,10 @@ def create_image_job(
         mode=payload.mode,
         source_asset_id=payload.source_asset_id,
         reference_asset_ids=payload.reference_asset_ids,
+        conversation_messages=[
+            message.model_dump(exclude_none=True)
+            for message in payload.conversation_messages
+        ],
         client_access_id=client_config.client_id if owner.user_id is None and client_config else None,
         client_provider_config=client_config if owner.user_id is None else None,
         visibility=payload.visibility,
