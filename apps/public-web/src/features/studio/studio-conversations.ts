@@ -89,6 +89,35 @@ export function addTurnToConversation(
   return { conversation: updated, turn };
 }
 
+export function retryTurnInConversation(
+  conversation: StudioConversation,
+  turnId: string,
+  retriedAt = new Date().toISOString(),
+): StudioConversation | null {
+  const target = conversation.turns.find((turn) => turn.id === turnId);
+  if (!target) return null;
+  return {
+    ...conversation,
+    updatedAt: retriedAt,
+    turns: conversation.turns.map((turn) =>
+      turn.id === turnId ? resetTurnForRetry(target, retriedAt) : turn,
+    ),
+  };
+}
+
+export function removeTurnFromConversation(
+  conversation: StudioConversation,
+  turnId: string,
+  removedAt = new Date().toISOString(),
+): StudioConversation | null {
+  if (!conversation.turns.some((turn) => turn.id === turnId)) return null;
+  return {
+    ...conversation,
+    updatedAt: removedAt,
+    turns: conversation.turns.filter((turn) => turn.id !== turnId),
+  };
+}
+
 export function updateTurnInConversation(
   conversation: StudioConversation,
   turnId: string,
@@ -113,6 +142,18 @@ export function getConversationStats(
     }
   }
   return { running, queued };
+}
+
+function resetTurnForRetry(turn: StudioTurn, retriedAt: string): StudioTurn {
+  return {
+    ...turn,
+    images: [],
+    status: "queued",
+    error: undefined,
+    taskId: null,
+    taskStatus: null,
+    createdAt: retriedAt,
+  };
 }
 
 export function getActiveConversationId(): string | null {

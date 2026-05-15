@@ -93,6 +93,15 @@ export interface SellableModel {
   publicEnabled: boolean;
   memberPriceCents: number;
   anonymousPriceCents: number;
+  variants?: SellableModelVariant[];
+}
+
+export interface SellableModelVariant {
+  id: number;
+  size: string;
+  quality: string;
+  memberPriceCents: number;
+  anonymousPriceCents: number;
 }
 
 export interface ImageJob {

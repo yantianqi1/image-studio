@@ -56,7 +56,11 @@ test("buildImageConversationMessages sends prior user and generated image contex
     visibility: "private",
   };
 
-  const messages = buildImageConversationMessages(conversation, draft, []);
+  const messages = buildImageConversationMessages({
+    conversation,
+    draft,
+    referenceImages: [],
+  });
 
   assert.deepEqual(JSON.parse(JSON.stringify(messages)), [
     { role: "user", content: "画一只白猫" },
@@ -68,6 +72,93 @@ test("buildImageConversationMessages sends prior user and generated image contex
       ],
     },
     { role: "user", content: "把它改成夜晚" },
+  ]);
+});
+
+test("buildImageJobRequest retries an existing turn with only earlier context", () => {
+  const { buildImageJobRequest } = loadStudioImageRequest();
+  const conversation = {
+    id: "conv-1",
+    title: "海报",
+    createdAt: "2026-05-15T00:00:00.000Z",
+    updatedAt: "2026-05-15T00:03:00.000Z",
+    turns: [
+      {
+        id: "turn-1",
+        prompt: "画一个红色杯子",
+        model: "gpt-image-2",
+        mode: "generate",
+        referenceImages: [],
+        count: 1,
+        aspectRatio: "1:1",
+        resolution: "1024x1024",
+        quality: "medium",
+        visibility: "private",
+        images: [{ id: "img-1", assetId: 101, revisedPrompt: "红色陶瓷杯" }],
+        status: "success",
+        createdAt: "2026-05-15T00:00:30.000Z",
+      },
+      {
+        id: "turn-2",
+        prompt: "把杯子放到木桌上",
+        model: "gpt-image-2",
+        mode: "chat",
+        referenceImages: [],
+        count: 1,
+        aspectRatio: "1:1",
+        resolution: "1024x1024",
+        quality: "medium",
+        visibility: "private",
+        images: [{ id: "img-2", assetId: 102, revisedPrompt: "旧的木桌版本" }],
+        status: "success",
+        createdAt: "2026-05-15T00:01:30.000Z",
+      },
+      {
+        id: "turn-3",
+        prompt: "再加一束花",
+        model: "gpt-image-2",
+        mode: "chat",
+        referenceImages: [],
+        count: 1,
+        aspectRatio: "1:1",
+        resolution: "1024x1024",
+        quality: "medium",
+        visibility: "private",
+        images: [{ id: "img-3", assetId: 103, revisedPrompt: "后续版本" }],
+        status: "success",
+        createdAt: "2026-05-15T00:02:30.000Z",
+      },
+    ],
+  };
+  const draft = {
+    prompt: "把杯子放到木桌上",
+    model: "gpt-image-2",
+    mode: "chat",
+    referenceImages: [],
+    count: 1,
+    aspectRatio: "1:1",
+    resolution: "1024x1024",
+    quality: "medium",
+    visibility: "private",
+  };
+
+  const request = buildImageJobRequest({
+    draft,
+    conversation,
+    referenceImages: [],
+    contextBeforeTurnId: "turn-2",
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(request.conversation_messages)), [
+    { role: "user", content: "画一个红色杯子" },
+    {
+      role: "assistant",
+      content: [
+        { type: "text", text: "Generated image: 红色陶瓷杯" },
+        { type: "image_asset", asset_id: 101 },
+      ],
+    },
+    { role: "user", content: "把杯子放到木桌上" },
   ]);
 });
 

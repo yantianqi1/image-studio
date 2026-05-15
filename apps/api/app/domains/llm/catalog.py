@@ -6,7 +6,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from apps.api.app.core.config import get_settings
-from apps.api.app.domains.llm.models import Provider, SellableModel
+from apps.api.app.domains.llm.channel_pricing import (
+    OFFICIAL_GPT_IMAGE_2_VARIANTS,
+    CatalogVariantSeed,
+    build_lowcost_image_variant_seeds,
+)
+from apps.api.app.domains.llm.models import ModelVariant, Provider, SellableModel
 from apps.api.app.domains.llm.provider_validation import (
     LOCAL_DEV_PROVIDER_TYPE,
     OPENAI_CHAT_COMPATIBLE_PROVIDER_TYPE,
@@ -41,7 +46,14 @@ def ensure_provider_catalog(session: Session) -> None:
     openai_provider = ensure_configured_openai_provider(session)
     if openai_provider is not None:
         ensure_catalog_model(session, provider=openai_provider, seed=build_chat_model_seed())
-        ensure_catalog_model(session, provider=openai_provider, seed=build_image_model_seed())
+        image_model = ensure_catalog_model(session, provider=openai_provider, seed=build_image_model_seed())
+        if image_model is not None:
+            ensure_model_variants(session, model=image_model, seeds=build_lowcost_image_variant_seeds())
+    official_provider = ensure_official_openai_provider(session)
+    if official_provider is not None:
+        official_model = ensure_catalog_model(session, provider=official_provider, seed=build_official_image_model_seed())
+        if official_model is not None:
+            ensure_model_variants(session, model=official_model, seeds=OFFICIAL_GPT_IMAGE_2_VARIANTS)
     session.flush()
 
 
@@ -114,6 +126,30 @@ def ensure_configured_openai_provider(session: Session) -> Provider | None:
     return provider
 
 
+def ensure_official_openai_provider(session: Session) -> Provider | None:
+    settings = get_settings()
+    validate_provider_config(
+        provider_type=settings.openai_official_provider_type,
+        base_url=settings.openai_official_provider_base_url,
+        api_key_env=settings.openai_official_provider_api_key_env,
+    )
+    provider = session.execute(
+        select(Provider).where(Provider.name == settings.openai_official_provider_name)
+    ).scalar_one_or_none()
+    if provider is not None and provider.status == DELETED_PROVIDER_STATUS:
+        return None
+    if provider is None:
+        provider = Provider(name=settings.openai_official_provider_name)
+        session.add(provider)
+    provider.type = settings.openai_official_provider_type.strip()
+    provider.base_url = settings.openai_official_provider_base_url.strip()
+    provider.api_key_env = settings.openai_official_provider_api_key_env.strip()
+    provider.default_model = settings.openai_official_provider_default_model.strip()
+    provider.status = "active"
+    session.flush()
+    return provider
+
+
 def build_chat_model_seed() -> CatalogModelSeed:
     settings = get_settings()
     return CatalogModelSeed(
@@ -140,7 +176,20 @@ def build_image_model_seed() -> CatalogModelSeed:
     )
 
 
-def ensure_catalog_model(session: Session, *, provider: Provider, seed: CatalogModelSeed) -> None:
+def build_official_image_model_seed() -> CatalogModelSeed:
+    settings = get_settings()
+    return CatalogModelSeed(
+        code=settings.openai_official_image_model_code,
+        display_name=settings.openai_official_image_model_display_name,
+        capability="image",
+        provider_model=settings.openai_official_image_model_provider_model,
+        member_price_cents=settings.openai_official_image_model_member_price_cents,
+        anonymous_price_cents=settings.openai_official_image_model_anonymous_price_cents,
+        public_enabled=True,
+    )
+
+
+def ensure_catalog_model(session: Session, *, provider: Provider, seed: CatalogModelSeed) -> SellableModel | None:
     validate_capability(seed.capability)
     model = session.execute(select(SellableModel).where(SellableModel.code == seed.code)).scalar_one_or_none()
     if model is None:
@@ -157,5 +206,42 @@ def ensure_catalog_model(session: Session, *, provider: Provider, seed: CatalogM
         )
         session.add(model)
     elif model.status == DELETED_MODEL_STATUS:
-        return
+        return None
     session.flush()
+    return model
+
+
+def ensure_model_variants(session: Session, *, model: SellableModel, seeds: list[CatalogVariantSeed] | tuple[CatalogVariantSeed, ...]) -> None:
+    existing = list(
+        session.execute(select(ModelVariant).where(ModelVariant.model_id == model.id)).scalars()
+    )
+    variants_by_key = {(variant.size, variant.quality): variant for variant in existing}
+    for seed in seeds:
+        variant = variants_by_key.get((seed.size, seed.quality))
+        if variant is None:
+            session.add(build_model_variant(model_id=model.id, seed=seed))
+            continue
+        update_catalog_variant(variant, seed=seed)
+    session.flush()
+
+
+def build_model_variant(*, model_id: int, seed: CatalogVariantSeed) -> ModelVariant:
+    return ModelVariant(
+        model_id=model_id,
+        size=seed.size,
+        quality=seed.quality,
+        upstream_provider_model=seed.upstream_provider_model,
+        member_price_cents=seed.member_price_cents,
+        anonymous_price_cents=seed.anonymous_price_cents,
+        price_manually_set=False,
+        status=seed.status,
+    )
+
+
+def update_catalog_variant(variant: ModelVariant, *, seed: CatalogVariantSeed) -> None:
+    if variant.price_manually_set:
+        return
+    variant.upstream_provider_model = seed.upstream_provider_model
+    variant.member_price_cents = seed.member_price_cents
+    variant.anonymous_price_cents = seed.anonymous_price_cents
+    variant.status = seed.status

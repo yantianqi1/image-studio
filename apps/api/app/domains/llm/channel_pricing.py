@@ -1,0 +1,40 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from apps.api.app.domains.llm.default_pricing import build_all_default_prices
+
+
+@dataclass(frozen=True)
+class CatalogVariantSeed:
+    size: str
+    quality: str
+    member_price_cents: int
+    anonymous_price_cents: int = 0
+    upstream_provider_model: str | None = None
+    status: str = "active"
+
+
+OFFICIAL_GPT_IMAGE_2_VARIANTS: tuple[CatalogVariantSeed, ...] = (
+    CatalogVariantSeed(size="1024x1024", quality="low", member_price_cents=20),
+    CatalogVariantSeed(size="1024x1024", quality="medium", member_price_cents=130),
+    CatalogVariantSeed(size="1024x1024", quality="high", member_price_cents=480),
+    CatalogVariantSeed(size="1024x1536", quality="low", member_price_cents=20),
+    CatalogVariantSeed(size="1024x1536", quality="medium", member_price_cents=100),
+    CatalogVariantSeed(size="1024x1536", quality="high", member_price_cents=370),
+    CatalogVariantSeed(size="1536x1024", quality="low", member_price_cents=20),
+    CatalogVariantSeed(size="1536x1024", quality="medium", member_price_cents=100),
+    CatalogVariantSeed(size="1536x1024", quality="high", member_price_cents=370),
+)
+
+
+def build_lowcost_image_variant_seeds() -> list[CatalogVariantSeed]:
+    return [
+        CatalogVariantSeed(
+            size=price.size,
+            quality=price.quality,
+            member_price_cents=price.price_cents,
+            anonymous_price_cents=0,
+        )
+        for price in build_all_default_prices()
+    ]

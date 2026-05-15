@@ -294,6 +294,61 @@ def test_gpt_image_two_job_reserves_configured_price(monkeypatch):
     assert locked_cents == 77
 
 
+def test_official_channel_variant_reserves_official_price(monkeypatch):
+    monkeypatch.setenv("SIGNUP_BONUS_CENTS", "1000")
+    client = build_client()
+    user = register_user(client, email="official-priced@example.com")
+
+    create_response = client.post(
+        "/api/public/image/jobs",
+        json={
+            "prompt": "Official priced image",
+            "model_code": "gpt-image-2-official",
+            "requested_count": 1,
+            "size": "1024x1024",
+            "quality": "medium",
+        },
+    )
+
+    assert create_response.status_code == 201
+    job = create_response.json()["data"]
+    assert job["charge_cents"] == 130
+    assert job["provider_model"] == "gpt-image-2"
+
+    balance_cents, locked_cents = load_wallet_balance(user["id"])
+    assert balance_cents == 1000
+    assert locked_cents == 130
+
+
+def test_reference_and_edit_variant_pricing_adds_surcharges(monkeypatch):
+    monkeypatch.setenv("SIGNUP_BONUS_CENTS", "1000")
+    client = build_client()
+    user = register_user(client, email="priced-edit@example.com")
+    upload_response = client.post(
+        "/api/public/image/uploads",
+        files={"file": ("source.png", b"source-image", "image/png")},
+    )
+
+    create_response = client.post(
+        "/api/public/image/jobs",
+        json={
+            "prompt": "turn it into a product photo",
+            "model_code": "gpt-image-2",
+            "requested_count": 1,
+            "mode": "edit",
+            "source_asset_id": upload_response.json()["data"]["id"],
+            "size": "1024x1024",
+            "quality": "medium",
+        },
+    )
+
+    assert create_response.status_code == 201
+    assert create_response.json()["data"]["charge_cents"] == 120
+    balance_cents, locked_cents = load_wallet_balance(user["id"])
+    assert balance_cents == 1000
+    assert locked_cents == 120
+
+
 def test_edit_job_records_uploaded_source_asset_and_passes_it_to_renderer(monkeypatch):
     client = build_client()
     register_user(client, email="edit-source@example.com")

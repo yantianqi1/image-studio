@@ -94,6 +94,15 @@ export type PublicModelSummary = Readonly<{
   capability: string;
   member_price_cents: number;
   anonymous_price_cents: number;
+  variants?: readonly PublicModelVariant[];
+}>;
+
+export type PublicModelVariant = Readonly<{
+  id: number;
+  size: string;
+  quality: string;
+  member_price_cents: number;
+  anonymous_price_cents: number;
 }>;
 
 export type PublicSiteSettings = Readonly<{

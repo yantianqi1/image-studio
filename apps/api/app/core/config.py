@@ -44,6 +44,16 @@ class AppSettings(BaseSettings):
     openai_image_model_provider_model: str = "gpt-image-2"
     openai_image_model_member_price_cents: int = 77
     openai_image_model_anonymous_price_cents: int = 0
+    openai_official_provider_name: str = "openai-official"
+    openai_official_provider_type: str = "openai-compatible"
+    openai_official_provider_base_url: str = "https://api.openai.com/v1"
+    openai_official_provider_api_key_env: str = "OPENAI_OFFICIAL_API_KEY"
+    openai_official_provider_default_model: str = "gpt-image-2"
+    openai_official_image_model_code: str = "gpt-image-2-official"
+    openai_official_image_model_display_name: str = "GPT Image 2 官方通道"
+    openai_official_image_model_provider_model: str = "gpt-image-2"
+    openai_official_image_model_member_price_cents: int = 130
+    openai_official_image_model_anonymous_price_cents: int = 0
 
     model_config = SettingsConfigDict(
         env_file=".env",

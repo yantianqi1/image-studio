@@ -85,6 +85,9 @@ def create_job(
         requested_count=requested_count,
         member_price_cents=variant.member_price_cents if variant else target.model.member_price_cents,
         anonymous_price_cents=variant.anonymous_price_cents if variant else target.model.anonymous_price_cents,
+        has_variant_pricing=variant is not None,
+        image_input_count=len(reference_assets) + (1 if source_asset else 0),
+        mode=mode,
     )
     job = build_image_job(
         owner=owner,

@@ -100,9 +100,14 @@ class BatchUpsertVariantsRequest(BaseModel):
 
 @public_router.get("/models")
 def get_models(session: Session = Depends(get_db_session)):
-    models = [sellable_model_payload(model) for model in list_public_models(session)]
+    models = list_public_models(session)
+    variants_by_model_id = list_public_model_variants(session, model_ids=[model.id for model in models])
+    payloads = [
+        sellable_model_payload(model, variants=variants_by_model_id.get(model.id, []))
+        for model in models
+    ]
     session.commit()
-    return api_ok(models)
+    return api_ok(payloads)
 
 
 @provider_admin_router.get("")
@@ -276,6 +281,7 @@ def update_model_variant(
     variant.member_price_cents = payload.member_price_cents
     variant.anonymous_price_cents = payload.anonymous_price_cents
     variant.status = payload.status
+    variant.price_manually_set = True
     session.flush()
     session.commit()
     return api_ok(variant_payload(variant))
@@ -513,8 +519,12 @@ def provider_payload(provider: Provider) -> dict[str, object]:
     }
 
 
-def sellable_model_payload(model: SellableModel) -> dict[str, object]:
-    return {
+def sellable_model_payload(
+    model: SellableModel,
+    *,
+    variants: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
+    payload = {
         "id": model.id,
         "code": model.code,
         "display_name": model.display_name,
@@ -524,6 +534,37 @@ def sellable_model_payload(model: SellableModel) -> dict[str, object]:
         "public_enabled": model.public_enabled,
         "member_price_cents": model.member_price_cents,
         "anonymous_price_cents": model.anonymous_price_cents,
+    }
+    if variants is not None:
+        payload["variants"] = variants
+    return payload
+
+
+def list_public_model_variants(
+    session: Session,
+    *,
+    model_ids: list[int],
+) -> dict[int, list[dict[str, object]]]:
+    if not model_ids:
+        return {}
+    statement = (
+        select(ModelVariant)
+        .where(ModelVariant.model_id.in_(model_ids), ModelVariant.status == "active")
+        .order_by(ModelVariant.model_id.asc(), ModelVariant.size.asc(), ModelVariant.quality.asc())
+    )
+    variants_by_model_id: dict[int, list[dict[str, object]]] = {model_id: [] for model_id in model_ids}
+    for variant in session.execute(statement).scalars():
+        variants_by_model_id.setdefault(variant.model_id, []).append(public_variant_payload(variant))
+    return variants_by_model_id
+
+
+def public_variant_payload(variant: ModelVariant) -> dict[str, object]:
+    return {
+        "id": variant.id,
+        "size": variant.size,
+        "quality": variant.quality,
+        "member_price_cents": variant.member_price_cents,
+        "anonymous_price_cents": variant.anonymous_price_cents,
     }
 
 

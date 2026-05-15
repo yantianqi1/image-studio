@@ -28,12 +28,19 @@ import {
 } from "react";
 
 import { cn } from "@/lib/cn";
+import { formatCurrency } from "@/lib/formatters";
 import { streamPromptCrafter } from "@/features/prompt-crafter/prompt-crafter-api";
 import {
   buildPromptComplianceInstruction,
   buildPromptOptimizationInstruction,
 } from "@/features/studio/studio-prompt-actions";
 import { ASPECT_RATIO_OPTIONS, QUALITY_OPTIONS } from "@/features/studio/studio-options";
+import {
+  buildModelAspectRatioOptions,
+  findModelVariant,
+  getModelQualityOptions,
+  getModelStartingPriceCents,
+} from "@/features/studio/studio-models";
 import {
   MAX_COUNT,
   MIN_COUNT,
@@ -53,6 +60,7 @@ type StudioComposerProps = Readonly<{
   count: number;
   referenceImages: readonly StoredReferenceImage[];
   modelsState: ResourceState<readonly PublicModelSummary[]>;
+  selectedModel: PublicModelSummary | null;
   isSubmitting: boolean;
   onModeChange: (mode: ComposerMode) => void;
   onPromptChange: (prompt: string) => void;
@@ -139,6 +147,7 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
     count,
     referenceImages,
     modelsState,
+    selectedModel,
     isSubmitting,
     onModeChange,
     onPromptChange,
@@ -175,8 +184,18 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
   const settingsContainerRef = useRef<HTMLDivElement>(null);
   useFixedComposerHeight(composerRootRef, onFixedHeightChange);
 
-  const activeRatio = ASPECT_RATIO_OPTIONS.find((o) => o.value === aspectRatio);
+  const modelAspectRatios = buildModelAspectRatioOptions(selectedModel);
+  const aspectRatioOptions = modelAspectRatios.length > 0 ? modelAspectRatios : ASPECT_RATIO_OPTIONS;
+  const activeRatio = aspectRatioOptions.find((o) => o.value === aspectRatio);
   const resolutions = activeRatio?.resolutions ?? [];
+  const modelQualityOptions = getModelQualityOptions(selectedModel, resolution);
+  const qualityOptions = modelQualityOptions.length > 0 ? modelQualityOptions : QUALITY_OPTIONS;
+  const activeVariant = findModelVariant(selectedModel, resolution, quality);
+  const activeBasePriceLabel = activeVariant
+    ? formatCurrency(activeVariant.member_price_cents / 100, "CNY")
+    : selectedModel
+      ? formatCurrency(selectedModel.member_price_cents / 100, "CNY")
+      : "";
   const isDisabled = isSubmitting || !prompt.trim() || modelsState.status !== "ready";
   const submitLabel = getSubmitLabel(mode, isSubmitting, referenceImages.length > 0);
 
@@ -514,12 +533,13 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
                     <div className="absolute bottom-[calc(100%+8px)] left-0 z-[80] max-h-[45dvh] w-[218px] overflow-y-auto rounded-2xl border border-gray-200 bg-white p-1.5 shadow-lg">
                       {modelsState.data.map((m) => {
                         const active = m.code === model;
+                        const priceLabel = formatCurrency(getModelStartingPriceCents(m) / 100, "CNY");
                         return (
                           <button
                             key={m.id}
                             type="button"
                             className={cn(
-                              "flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-gray-600 transition hover:bg-gray-100",
+                              "flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm text-gray-600 transition hover:bg-gray-100",
                               active && "bg-gray-100 font-medium text-gray-900",
                             )}
                             onClick={() => {
@@ -527,7 +547,10 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
                               setIsModelMenuOpen(false);
                             }}
                           >
-                            <span className="truncate">{m.display_name}</span>
+                            <span className="min-w-0">
+                              <span className="block truncate">{m.display_name}</span>
+                              <span className="block text-[11px] font-medium text-gray-400">基础 {priceLabel}/张起</span>
+                            </span>
                             {active && <Check className="size-4 shrink-0" />}
                           </button>
                         );
@@ -570,6 +593,9 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
                         quality={quality}
                         count={count}
                         resolutions={resolutions}
+                        aspectRatioOptions={aspectRatioOptions}
+                        qualityOptions={qualityOptions}
+                        priceLabel={activeBasePriceLabel}
                         onAspectRatioChange={onAspectRatioChange}
                         onResolutionChange={onResolutionChange}
                         onQualityChange={onQualityChange}
@@ -679,6 +705,9 @@ type ImageSettingsPopoverProps = Readonly<{
   quality: string;
   count: number;
   resolutions: readonly { value: string; label: string; pixels: string }[];
+  aspectRatioOptions: readonly { value: string; label: string }[];
+  qualityOptions: readonly { value: string; label: string }[];
+  priceLabel: string;
   onAspectRatioChange: (value: string) => void;
   onResolutionChange: (value: string) => void;
   onQualityChange: (value: string) => void;
@@ -691,6 +720,9 @@ function ImageSettingsPopover({
   quality,
   count,
   resolutions,
+  aspectRatioOptions,
+  qualityOptions,
+  priceLabel,
   onAspectRatioChange,
   onResolutionChange,
   onQualityChange,
@@ -702,7 +734,7 @@ function ImageSettingsPopover({
     >
       <div className="mb-3 flex items-center justify-between border-b border-gray-100 pb-2">
         <h2 className="text-sm font-semibold text-gray-900">图片参数</h2>
-        <span className="text-[11px] font-medium text-gray-400">当前设置</span>
+        <span className="text-[11px] font-medium text-gray-400">{priceLabel ? `基础 ${priceLabel}/张` : "当前设置"}</span>
       </div>
 
       <div className="space-y-3">
@@ -733,7 +765,7 @@ function ImageSettingsPopover({
 
         <SettingButtonGroup
           label="比例"
-          options={ASPECT_RATIO_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+          options={aspectRatioOptions.map((o) => ({ value: o.value, label: o.label }))}
           activeValue={aspectRatio}
           onSelect={onAspectRatioChange}
         />
@@ -749,7 +781,7 @@ function ImageSettingsPopover({
 
         <SettingButtonGroup
           label="质量"
-          options={QUALITY_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+          options={qualityOptions.map((o) => ({ value: o.value, label: o.label }))}
           activeValue={quality}
           onSelect={onQualityChange}
         />

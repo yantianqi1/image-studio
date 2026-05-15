@@ -9,7 +9,11 @@ import {
   waitForImageJobResults,
   type CompletedImageJob,
 } from "@/features/studio/studio-job-polling";
-import { resolveImageModel } from "@/features/studio/studio-models";
+import {
+  findModelAspectRatioOption,
+  resolveImageModel,
+  resolveModelParameterSelection,
+} from "@/features/studio/studio-models";
 import { AppShell } from "@/features/shell/app-shell";
 import { StudioComposer } from "@/features/studio/studio-composer";
 import { StudioPromptMarket } from "@/features/studio/studio-prompt-market";
@@ -70,6 +74,14 @@ type PollSubmittedImageJobInput = Readonly<{
   initialMessage?: string;
   jobId: number;
   startTime: number;
+  turnId: string;
+}>;
+
+type SubmitExistingTurnInput = Readonly<{
+  contextBeforeTurnId?: string;
+  conversation: StudioConversation | null;
+  conversationId: string;
+  draft: TurnDraft;
   turnId: string;
 }>;
 
@@ -201,6 +213,10 @@ export function StudioPage() {
   // --- Data ---
   const conversations = useStudioConversations();
   const modelsState = useApiResource(() => publicApi.getModels());
+  const selectedModel =
+    modelsState.status === "ready"
+      ? resolveImageModel(modelsState.data, model).selectedModel
+      : null;
 
   // --- Preset cards (random 4 from remote market, with valid preview images) ---
   type PresetCard = { id: string; title: string; hint: string; preview: string; aspectRatio: string; count: number; prompt: BananaPrompt };
@@ -259,6 +275,22 @@ export function StudioPage() {
   }, [aspectRatio, resolution, quality, count]);
 
   useEffect(() => {
+    if (modelsState.status !== "ready") return;
+    const resolved = resolveImageModel(modelsState.data, model);
+    if (resolved.resolvedModelCode && resolved.resolvedModelCode !== model) {
+      setModel(resolved.resolvedModelCode);
+    }
+    const next = resolveModelParameterSelection(resolved.selectedModel, {
+      aspectRatio,
+      resolution,
+      quality,
+    });
+    if (next.aspectRatio !== aspectRatio) setAspectRatio(next.aspectRatio);
+    if (next.resolution !== resolution) setResolution(next.resolution);
+    if (next.quality !== quality) setQuality(next.quality);
+  }, [aspectRatio, modelsState, model, quality, resolution]);
+
+  useEffect(() => {
     const queryPrompt = readGeneratePromptParam();
     if (queryPrompt) {
       window.setTimeout(() => {
@@ -305,11 +337,11 @@ export function StudioPage() {
 
   const handleAspectRatioChange = useCallback((ratio: string) => {
     setAspectRatio(ratio);
-    const option = findAspectRatio(ratio);
+    const option = findModelAspectRatioOption(selectedModel, ratio) ?? findAspectRatio(ratio);
     if (option && option.resolutions.length > 0) {
       setResolution(option.resolutions[0].value);
     }
-  }, []);
+  }, [selectedModel]);
 
   const markConversationSubmitting = useCallback((conversationId: string) => {
     setSubmittingConversationIds((prev) => new Set(prev).add(conversationId));
@@ -407,10 +439,8 @@ export function StudioPage() {
     }
   }, [conversations.conversations, conversations.hydrated, resumeImageJobPolling]);
 
-  const submitDraft = useCallback(async (draft: TurnDraft) => {
-    const { turnId, conversationId: convId } = conversations.addTurn(draft);
-    if (!convId || !turnId) return;
-
+  const submitExistingTurn = useCallback(async (input: SubmitExistingTurnInput) => {
+    const { contextBeforeTurnId, conversation, conversationId: convId, draft, turnId } = input;
     markConversationSubmitting(convId);
     const progressKey = turnProgressKey(convId, turnId);
     const abortController = new AbortController();
@@ -428,8 +458,9 @@ export function StudioPage() {
       setTurnProgress(progressKey, { message: "提交生成请求..." });
 
       const job = await publicApi.generateImage(buildImageJobRequest({
+        contextBeforeTurnId,
         draft,
-        conversation: conversations.activeConversation,
+        conversation,
         referenceImages: uploadedRefs,
       }));
       throwIfAborted(abortController.signal);
@@ -460,6 +491,18 @@ export function StudioPage() {
       clearConversationSubmitting(convId);
     }
   }, [clearConversationSubmitting, conversations, markConversationSubmitting, pollSubmittedImageJob]);
+
+  const submitDraft = useCallback(async (draft: TurnDraft) => {
+    const { turnId, conversationId: convId } = conversations.addTurn(draft);
+    if (!convId || !turnId) return;
+
+    await submitExistingTurn({
+      conversation: conversations.activeConversation,
+      conversationId: convId,
+      draft,
+      turnId,
+    });
+  }, [conversations, submitExistingTurn]);
 
   const handleSubmit = useCallback(() => {
     if (!prompt.trim() || isActiveConversationSubmitting) return;
@@ -527,7 +570,6 @@ export function StudioPage() {
     if (!conv || submittingConversationIds.has(conv.id)) return;
     const turn = conv.turns.find((t) => t.id === turnId);
     if (!turn) return;
-    conversations.removeTurn(conv.id, turnId);
     const draft: TurnDraft = {
       prompt: turn.prompt,
       model: turn.model,
@@ -539,8 +581,15 @@ export function StudioPage() {
       quality: turn.quality,
       visibility: turn.visibility,
     };
-    void submitDraft(draft);
-  }, [conversations, submittingConversationIds, submitDraft]);
+    conversations.retryTurn(conv.id, turnId);
+    void submitExistingTurn({
+      contextBeforeTurnId: turn.id,
+      conversation: conv,
+      conversationId: conv.id,
+      draft,
+      turnId,
+    });
+  }, [conversations, submittingConversationIds, submitExistingTurn]);
 
   const handleEditFromTurn = useCallback((_turnId: string, image: StoredImage) => {
     const ref: StoredReferenceImage = {
@@ -658,6 +707,7 @@ export function StudioPage() {
             count={count}
             referenceImages={referenceImages}
             modelsState={modelsState}
+            selectedModel={selectedModel}
             isSubmitting={isActiveConversationSubmitting}
             onModeChange={setMode}
             onPromptChange={setPrompt}

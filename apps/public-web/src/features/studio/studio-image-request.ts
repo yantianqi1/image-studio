@@ -15,11 +15,18 @@ import type {
 type BuildImageJobRequestInput = Readonly<{
   draft: TurnDraft;
   conversation: StudioConversation | null;
+  contextBeforeTurnId?: string;
   referenceImages: readonly StoredReferenceImage[];
 }>;
 
 type UploadImageAsset = (file: File) => Promise<UploadedImageAsset>;
 type FetchImage = (input: RequestInfo | URL) => Promise<Response>;
+type BuildImageConversationMessagesInput = Readonly<{
+  conversation: StudioConversation | null;
+  contextBeforeTurnId?: string;
+  draft: TurnDraft;
+  referenceImages: readonly StoredReferenceImage[];
+}>;
 
 const DEFAULT_REFERENCE_MIME_TYPE = "image/png";
 
@@ -38,12 +45,11 @@ export function buildImageJobRequest(input: BuildImageJobRequestInput): ImageGen
 }
 
 export function buildImageConversationMessages(
-  conversation: StudioConversation | null,
-  draft: TurnDraft,
-  referenceImages: readonly StoredReferenceImage[],
+  input: BuildImageConversationMessagesInput,
 ): readonly ImageConversationMessage[] {
-  const history = (conversation?.turns ?? []).flatMap(turnToConversationMessages);
-  return [...history, buildUserMessage(draft.prompt, referenceImages)];
+  const turns = getContextTurns(input.conversation, input.contextBeforeTurnId);
+  const history = turns.flatMap(turnToConversationMessages);
+  return [...history, buildUserMessage(input.draft.prompt, input.referenceImages)];
 }
 
 export async function uploadPendingReferenceImages(
@@ -67,8 +73,21 @@ function withOptionalImageFields(
     ...request,
     ...(input.draft.mode === "edit" && referenceAssetIds[0] ? { source_asset_id: referenceAssetIds[0] } : {}),
     ...(referenceAssetIds.length > 0 ? { reference_asset_ids: referenceAssetIds } : {}),
-    conversation_messages: buildImageConversationMessages(input.conversation, input.draft, input.referenceImages),
+    conversation_messages: buildImageConversationMessages(input),
   };
+}
+
+function getContextTurns(
+  conversation: StudioConversation | null,
+  contextBeforeTurnId: string | undefined,
+): readonly StudioTurn[] {
+  const turns = conversation?.turns ?? [];
+  if (!contextBeforeTurnId) return turns;
+  const index = turns.findIndex((turn) => turn.id === contextBeforeTurnId);
+  if (index < 0) {
+    throw new Error("重试消息不在当前对话上下文中");
+  }
+  return turns.slice(0, index);
 }
 
 function turnToConversationMessages(turn: StudioTurn): readonly ImageConversationMessage[] {

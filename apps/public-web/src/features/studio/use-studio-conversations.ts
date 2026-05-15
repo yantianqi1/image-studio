@@ -8,6 +8,8 @@ import {
   deleteConversation,
   getActiveConversationId,
   listConversations,
+  removeTurnFromConversation,
+  retryTurnInConversation,
   saveConversation,
   saveConversations,
   setActiveConversationId,
@@ -105,7 +107,18 @@ export function useStudioConversations() {
     setConversations((prev) => {
       const conv = prev.find((c) => c.id === conversationId);
       if (!conv) return prev;
-      const updated = { ...conv, turns: conv.turns.filter((t) => t.id !== turnId), updatedAt: new Date().toISOString() };
+      const updated = removeTurnFromConversation(conv, turnId);
+      if (!updated) return prev;
+      return saveConversation(prev, updated);
+    });
+  }, []);
+
+  const retryTurn = useCallback((conversationId: string, turnId: string) => {
+    setConversations((prev) => {
+      const conv = prev.find((c) => c.id === conversationId);
+      if (!conv) return prev;
+      const updated = retryTurnInConversation(conv, turnId);
+      if (!updated) return prev;
       return saveConversation(prev, updated);
     });
   }, []);
@@ -123,5 +136,6 @@ export function useStudioConversations() {
     addTurn,
     updateTurn,
     removeTurn,
+    retryTurn,
   } as const;
 }

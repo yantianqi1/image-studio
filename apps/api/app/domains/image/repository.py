@@ -16,6 +16,9 @@ from apps.api.app.infra.storage.asset_storage import AssetStorage
 from apps.api.app.infra.storage.factory import build_asset_storage
 
 IMAGE_JOB_FAILED_ERROR_CODE = "image_job_failed"
+REFERENCE_IMAGE_SURCHARGE_CENTS = 60
+EDIT_SURCHARGE_BASIS_POINTS = 5000
+BASIS_POINTS_DENOMINATOR = 10000
 
 
 def resolve_charge_cents(
@@ -25,10 +28,41 @@ def resolve_charge_cents(
     requested_count: int,
     member_price_cents: int,
     anonymous_price_cents: int,
+    has_variant_pricing: bool = False,
+    image_input_count: int = 0,
+    mode: str = "generate",
 ) -> int:
     if client_provider_config is not None:
         return 0
-    return member_price_cents * requested_count if owner.user_id is not None else anonymous_price_cents * requested_count
+    unit_price = member_price_cents if owner.user_id is not None else anonymous_price_cents
+    base_charge = unit_price * requested_count
+    if not has_variant_pricing or base_charge <= 0:
+        return base_charge
+    return base_charge + resolve_image_input_surcharge(
+        base_charge=base_charge,
+        image_input_count=image_input_count,
+        requested_count=requested_count,
+        mode=mode,
+    )
+
+
+def resolve_image_input_surcharge(
+    *,
+    base_charge: int,
+    image_input_count: int,
+    requested_count: int,
+    mode: str,
+) -> int:
+    reference_charge = image_input_count * REFERENCE_IMAGE_SURCHARGE_CENTS * requested_count
+    if mode != "edit":
+        return reference_charge
+    edit_charge = ceil_basis_points(base_charge, EDIT_SURCHARGE_BASIS_POINTS)
+    return reference_charge + edit_charge
+
+
+def ceil_basis_points(amount_cents: int, basis_points: int) -> int:
+    numerator = amount_cents * basis_points
+    return (numerator + BASIS_POINTS_DENOMINATOR - 1) // BASIS_POINTS_DENOMINATOR
 
 
 def resolve_source_asset(

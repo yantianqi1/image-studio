@@ -46,12 +46,14 @@ test("studio composer exposes compliance tooltip and prompt optimization action"
   assert.match(composerSource, /"优化"/);
 });
 
-test("studio turns can be deleted and retry removes the failed turn first", () => {
+test("studio turns can be deleted and retry reuses the original turn", () => {
   assert.match(resultsSource, /onDeleteTurn/);
   assert.match(resultsSource, /aria-label="删除记录"/);
   assert.match(pageSource, /handleDeleteTurn/);
   assert.match(pageSource, /conversations\.removeTurn\(conv\.id, turnId\)/);
-  assert.match(pageSource, /conversations\.removeTurn\(conv\.id, turnId\)[\s\S]*submitDraft\(draft\)/);
+  assert.match(pageSource, /conversations\.retryTurn\(conv\.id, turnId\)/);
+  assert.match(pageSource, /contextBeforeTurnId:\s*turn\.id/);
+  assert.doesNotMatch(pageSource, /conversations\.removeTurn\(conv\.id, turnId\)[\s\S]*submitDraft\(draft\)/);
 });
 
 test("studio request mode infers edit only when image workspace has references", () => {

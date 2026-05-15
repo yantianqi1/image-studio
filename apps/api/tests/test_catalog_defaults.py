@@ -75,6 +75,63 @@ def test_public_models_include_local_dev_image_for_local_development() -> None:
     assert model_codes[0] == DEFAULT_MODEL_CODE
     assert "gemini-3-flash-preview-low-search" not in model_codes
     assert "gpt-image-2" in model_codes
+    assert "gpt-image-2-official" in model_codes
+
+
+def test_public_models_include_channel_variant_prices() -> None:
+    client = build_client()
+
+    response = client.get("/api/public/models")
+
+    assert response.status_code == 200
+    models = response.json()["data"]
+    lowcost = next(item for item in models if item["code"] == "gpt-image-2")
+    official = next(item for item in models if item["code"] == "gpt-image-2-official")
+    lowcost_medium = find_variant(lowcost, size="1024x1024", quality="medium")
+    official_medium = find_variant(official, size="1024x1024", quality="medium")
+
+    assert lowcost_medium["member_price_cents"] == 40
+    assert official_medium["member_price_cents"] == 130
+    assert {variant["size"] for variant in official["variants"]} == {
+        "1024x1024",
+        "1024x1536",
+        "1536x1024",
+    }
+
+
+def test_admin_variant_update_survives_catalog_seed_refresh() -> None:
+    client = build_client()
+    seed_admin()
+    admin_login(client)
+    models_response = client.get("/api/admin/models")
+    official = next(item for item in models_response.json()["data"] if item["code"] == "gpt-image-2-official")
+    variants_response = client.get(f"/api/admin/models/{official['id']}/variants")
+    variant = find_variant(
+        {"variants": variants_response.json()["data"]},
+        size="1024x1024",
+        quality="low",
+    )
+
+    update_response = client.put(
+        f"/api/admin/models/{official['id']}/variants/{variant['id']}",
+        json={
+            "member_price_cents": 222,
+            "anonymous_price_cents": 0,
+            "status": "active",
+        },
+    )
+    refresh_response = client.get("/api/public/models")
+    variants_after_refresh = client.get(f"/api/admin/models/{official['id']}/variants")
+    updated = find_variant(
+        {"variants": variants_after_refresh.json()["data"]},
+        size="1024x1024",
+        quality="low",
+    )
+
+    assert update_response.status_code == 200
+    assert refresh_response.status_code == 200
+    assert updated["member_price_cents"] == 222
+    assert updated["price_manually_set"] is True
 
 
 def test_public_models_prioritize_local_dev_image_after_restore() -> None:
@@ -122,3 +179,13 @@ def test_extract_image_reference_accepts_markdown_image_url() -> None:
 
     assert reference.kind == "url"
     assert reference.value == "https://image2.mom/generated-images/dog.png"
+
+
+def find_variant(model: dict[str, object], *, size: str, quality: str) -> dict[str, object]:
+    variants = model["variants"]
+    assert isinstance(variants, list)
+    return next(
+        item
+        for item in variants
+        if item["size"] == size and item["quality"] == quality
+    )
