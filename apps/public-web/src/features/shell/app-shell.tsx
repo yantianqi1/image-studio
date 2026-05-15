@@ -143,7 +143,7 @@ function MobileNavLink(props: Readonly<{ active: boolean; item: (typeof APP_MOBI
 
 function AccountButton() {
   return (
-    <Link href="/login" className={styles.accountButton} aria-label="账号中心">
+    <Link href="/wallet" className={styles.accountButton} aria-label="账号中心">
       <span className={styles.accountAvatar} aria-hidden="true">我</span>
       <span className={styles.accountButtonText}>我的</span>
     </Link>

@@ -1,10 +1,15 @@
 from collections.abc import Iterator
+import base64
 import json
 
 import httpx
 
 from apps.api.app.core.errors import AppError
 from apps.api.app.domains.prompt_crafter import service as prompt_crafter_service
+
+VALID_PNG_BYTES = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
+)
 
 
 def test_prompt_crafter_system_prompt_loads_skill_and_patterns() -> None:
@@ -50,6 +55,50 @@ def test_prompt_crafter_stream_returns_text_chunks(client, monkeypatch) -> None:
     assert payload["messages"][0]["role"] == "system"
     assert "gpt-image-2-prompt-crafter" in payload["messages"][0]["content"]
     assert payload["messages"][1] == {"role": "user", "content": "咖啡包装海报"}
+
+
+def test_prompt_crafter_reverse_image_stream_uses_image_messages(client, monkeypatch) -> None:
+    captured: dict[str, object] = {}
+    register_response = client.post(
+        "/api/public/auth/register",
+        json={"email": "reverse-image@example.com", "password": "top-secret"},
+    )
+    upload_response = client.post(
+        "/api/public/image/uploads",
+        files={"file": ("reference.png", VALID_PNG_BYTES, "image/png")},
+    )
+
+    def fake_stream_chat_completion(*, target, payload) -> Iterator[str]:
+        captured["target"] = target
+        captured["payload"] = payload
+        yield "高细节图片反推提示词"
+
+    monkeypatch.setenv("OPENAI_PROVIDER_KEY", "sk-test")
+    monkeypatch.setattr(
+        prompt_crafter_service.openai_chat_stream,
+        "stream_chat_completion",
+        fake_stream_chat_completion,
+    )
+
+    response = client.post(
+        "/api/public/prompt-crafter/reverse-image/stream",
+        json={"asset_ids": [upload_response.json()["data"]["id"]], "note": "保留画面里的材质和文字"},
+    )
+
+    assert register_response.status_code == 201
+    assert upload_response.status_code == 201
+    assert response.status_code == 200
+    assert_sse_event(response.text, "chunk", {"content": "高细节图片反推提示词"})
+    payload = captured["payload"]
+    system_message = payload["messages"][0]
+    assert "图片反推提示词" in system_message["content"]
+    assert "三套备选提示词" not in system_message["content"]
+    user_content = payload["messages"][1]["content"]
+    assert user_content[0]["type"] == "text"
+    assert "保留画面里的材质和文字" in user_content[0]["text"]
+    assert user_content[1]["type"] == "image_url"
+    assert user_content[1]["image_url"]["url"].startswith("data:image/png;base64,")
+    assert payload["stream"] is True
 
 
 def test_prompt_crafter_provider_errors_surface_as_api_errors(client, monkeypatch) -> None:

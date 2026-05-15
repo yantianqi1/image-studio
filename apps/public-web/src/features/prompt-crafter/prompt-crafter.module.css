@@ -61,6 +61,66 @@
   gap: 0.7rem;
 }
 
+.reverseBox {
+  display: grid;
+  gap: 0.65rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fbfcfe;
+  padding: 0.85rem;
+}
+
+.reverseHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.reverseTitle {
+  color: #111827;
+  font-size: 0.9rem;
+  font-weight: 820;
+}
+
+.reverseMeta {
+  color: #6b7280;
+  font-size: 0.76rem;
+  font-weight: 760;
+}
+
+.noteInput {
+  min-height: 4.5rem;
+  resize: vertical;
+  border: 1px solid #d8dee4;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #111827;
+  font: inherit;
+  font-size: 0.86rem;
+  line-height: 1.55;
+  outline: none;
+  padding: 0.75rem;
+}
+
+.noteInput:focus {
+  border-color: #0969da;
+  box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.12);
+}
+
+.hiddenInput {
+  display: none;
+}
+
+.fileSummary {
+  margin: 0;
+  color: #57606a;
+  font-size: 0.78rem;
+  font-weight: 680;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
 .textarea {
   min-height: 12rem;
   resize: vertical;
@@ -88,6 +148,10 @@
 .primaryButton,
 .primarySmallButton,
 .secondaryButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
   min-height: 2.35rem;
   border-radius: 8px;
   cursor: pointer;

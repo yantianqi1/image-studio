@@ -1,13 +1,17 @@
-from typing import Literal
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from apps.api.app.core.deps import get_db_session
+from apps.api.app.domains.auth.ownership import ensure_anonymous_owner
 from apps.api.app.domains.llm.client_provider import read_client_provider_config
-from apps.api.app.domains.prompt_crafter.service import stream_prompt_crafter_sse_completion
+from apps.api.app.domains.prompt_crafter.service import (
+    stream_prompt_crafter_reverse_image_sse_completion,
+    stream_prompt_crafter_sse_completion,
+)
 
 public_router = APIRouter(prefix="/prompt-crafter", tags=["prompt-crafter-public"])
 PROMPT_CRAFTER_STREAM_HEADERS = {
@@ -25,6 +29,11 @@ class PromptCrafterStreamRequest(BaseModel):
     messages: list[PromptCrafterChatMessage] = Field(min_length=1)
 
 
+class PromptCrafterReverseImageStreamRequest(BaseModel):
+    asset_ids: list[Annotated[int, Field(ge=1)]] = Field(min_length=1)
+    note: str = ""
+
+
 @public_router.post("/chat/stream")
 def stream_prompt_crafter_chat(
     payload: PromptCrafterStreamRequest,
@@ -37,4 +46,23 @@ def stream_prompt_crafter_chat(
         messages=messages,
         client_provider_config=read_client_provider_config(request),
     )
+    return StreamingResponse(stream, media_type="text/event-stream", headers=PROMPT_CRAFTER_STREAM_HEADERS)
+
+
+@public_router.post("/reverse-image/stream")
+def stream_prompt_crafter_reverse_image(
+    payload: PromptCrafterReverseImageStreamRequest,
+    request: Request,
+    response: Response,
+    session: Session = Depends(get_db_session),
+):
+    owner = ensure_anonymous_owner(request, response, session)
+    stream = stream_prompt_crafter_reverse_image_sse_completion(
+        session,
+        owner=owner,
+        asset_ids=payload.asset_ids,
+        note=payload.note,
+        client_provider_config=read_client_provider_config(request),
+    )
+    session.commit()
     return StreamingResponse(stream, media_type="text/event-stream", headers=PROMPT_CRAFTER_STREAM_HEADERS)

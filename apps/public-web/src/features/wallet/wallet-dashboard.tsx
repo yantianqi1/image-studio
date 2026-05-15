@@ -35,10 +35,15 @@ export function WalletDashboard() {
     () => publicApi.getWalletLedger(),
     refreshKey,
   );
+  const userState = useApiResource(
+    () => publicApi.getCurrentUser(),
+    refreshKey,
+  );
 
   const currency = walletState.status === "ready"
     ? walletState.data.currency
     : "CNY";
+  const accountUnauthorized = userState.status === "error" && userState.statusCode === UNAUTHORIZED_STATUS;
   const walletUnauthorized = walletState.status === "error" && walletState.statusCode === UNAUTHORIZED_STATUS;
   const ledgerUnauthorized = ledgerState.status === "error" && ledgerState.statusCode === UNAUTHORIZED_STATUS;
   const canRedeem = !walletUnauthorized;
@@ -71,6 +76,31 @@ export function WalletDashboard() {
       <div className="grid gap-4 lg:grid-cols-[1fr_1.1fr]">
         {/* 左侧：余额 + 兑换 */}
         <div className="grid gap-4 content-start">
+          <SectionPanel title="账户概览">
+            {userState.status === "loading" ? (
+              <StatusCard title="账户加载中" description="正在读取当前登录账户..." tone="loading" />
+            ) : null}
+            {accountUnauthorized ? (
+              <StatusCard
+                title="未登录"
+                description="登录或注册后可以查看账户与独立额度。"
+                tone="neutral"
+              />
+            ) : null}
+            {userState.status === "error" && !accountUnauthorized ? (
+              <ErrorMessage message={userState.message} title="账户读取失败" />
+            ) : null}
+            {userState.status === "ready" ? (
+              <div className="list-card">
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">ACCOUNT</p>
+                <p className="mt-1 truncate text-base font-semibold text-gray-900">
+                  {userState.data.display_name || userState.data.email}
+                </p>
+                <p className="mt-0.5 truncate text-xs text-gray-500">{userState.data.email}</p>
+              </div>
+            ) : null}
+          </SectionPanel>
+
           <SectionPanel title="余额概览">
             {walletState.status === "loading" ? (
               <StatusCard

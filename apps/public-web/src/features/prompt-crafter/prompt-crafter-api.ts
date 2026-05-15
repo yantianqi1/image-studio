@@ -11,7 +11,15 @@ export type PromptCrafterStreamOptions = Readonly<{
   signal?: AbortSignal;
 }>;
 
+export type PromptCrafterReverseImageStreamOptions = Readonly<{
+  assetIds: readonly number[];
+  note?: string;
+  onChunk: (chunk: string) => void;
+  signal?: AbortSignal;
+}>;
+
 const PROMPT_CRAFTER_STREAM_ENDPOINT = "/api/public/prompt-crafter/chat/stream";
+const PROMPT_CRAFTER_REVERSE_IMAGE_STREAM_ENDPOINT = "/api/public/prompt-crafter/reverse-image/stream";
 const PROMPT_CRAFTER_SSE_SEPARATOR = "\n\n";
 
 type PromptCrafterSseEvent = Readonly<
@@ -24,11 +32,37 @@ export function buildPromptCrafterStreamPayload(messages: readonly PromptCrafter
   return { messages };
 }
 
+export function buildPromptCrafterReverseImageStreamPayload(options: Readonly<{
+  assetIds: readonly number[];
+  note?: string;
+}>) {
+  return { asset_ids: options.assetIds, note: options.note ?? "" };
+}
+
 export async function streamPromptCrafter(options: PromptCrafterStreamOptions): Promise<void> {
   const response = await fetch(PROMPT_CRAFTER_STREAM_ENDPOINT, {
     method: "POST",
     headers: buildPromptCrafterHeaders(),
     body: JSON.stringify(buildPromptCrafterStreamPayload(options.messages)),
+    cache: "no-store",
+    credentials: "same-origin",
+    signal: options.signal,
+  });
+
+  if (!response.ok) {
+    throw new Error(await readPromptCrafterErrorMessage(response));
+  }
+
+  await readPromptCrafterEventStream(response, options.onChunk);
+}
+
+export async function streamPromptCrafterReverseImage(
+  options: PromptCrafterReverseImageStreamOptions,
+): Promise<void> {
+  const response = await fetch(PROMPT_CRAFTER_REVERSE_IMAGE_STREAM_ENDPOINT, {
+    method: "POST",
+    headers: buildPromptCrafterHeaders(),
+    body: JSON.stringify(buildPromptCrafterReverseImageStreamPayload(options)),
     cache: "no-store",
     credentials: "same-origin",
     signal: options.signal,
