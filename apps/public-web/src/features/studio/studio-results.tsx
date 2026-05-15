@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useCallback, useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import {
   CircleStop,
   Clock3,
@@ -32,6 +33,7 @@ type PresetCard = Readonly<{
 type StudioResultsProps = Readonly<{
   conversation: StudioConversation | null;
   progressByTurnKey: ReadonlyMap<string, TurnProgress>;
+  bottomInset: number;
   presetCards: readonly PresetCard[];
   onRetryTurn: (turnId: string) => void;
   onEditFromTurn: (turnId: string, image: StoredImage) => void;
@@ -47,6 +49,7 @@ const MODE_LABELS: Record<string, { label: string; colorClass: string }> = {
   edit: { label: "生图", colorClass: "bg-blue-50 text-blue-600" },
   chat: { label: "对话", colorClass: "bg-emerald-50 text-emerald-700" },
 };
+const FIXED_COMPOSER_CLEARANCE = 16;
 
 function formatTurnTime(iso: string) {
   const date = new Date(iso);
@@ -81,6 +84,7 @@ function LiveTimer({ startMs }: { startMs: number }) {
 export const StudioResults = memo(function StudioResults({
   conversation,
   progressByTurnKey,
+  bottomInset,
   presetCards,
   onRetryTurn,
   onEditFromTurn,
@@ -92,6 +96,7 @@ export const StudioResults = memo(function StudioResults({
 }: StudioResultsProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const turnCountRef = useRef(0);
+  const viewportStyle = getResultsViewportStyle(bottomInset);
 
   useEffect(() => {
     const turns = conversation?.turns ?? [];
@@ -103,7 +108,7 @@ export const StudioResults = memo(function StudioResults({
 
   if (!conversation || conversation.turns.length === 0) {
     return (
-      <div className="flex flex-1 items-center justify-center overflow-y-auto p-4 scroll-smooth sm:p-6 [scrollbar-width:thin]">
+      <div className="flex flex-1 items-center justify-center overflow-y-auto p-4 scroll-smooth sm:p-6 [scrollbar-width:thin]" style={viewportStyle}>
         <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-5">
           <div className="mx-auto flex max-w-[640px] flex-col items-center text-center">
             <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
@@ -159,7 +164,7 @@ export const StudioResults = memo(function StudioResults({
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 scroll-smooth sm:p-6 [scrollbar-width:thin]" ref={viewportRef}>
+    <div className="flex-1 overflow-y-auto p-4 scroll-smooth sm:p-6 [scrollbar-width:thin]" ref={viewportRef} style={viewportStyle}>
       <div className="mx-auto flex w-full max-w-[980px] flex-col gap-5 sm:gap-6">
         {conversation.turns.map((turn) => (
           <TurnCard
@@ -178,6 +183,11 @@ export const StudioResults = memo(function StudioResults({
     </div>
   );
 });
+
+function getResultsViewportStyle(bottomInset: number): CSSProperties | undefined {
+  if (bottomInset <= 0) return undefined;
+  return { paddingBottom: bottomInset + FIXED_COMPOSER_CLEARANCE };
+}
 
 const TurnCard = memo(function TurnCard({
   turn,

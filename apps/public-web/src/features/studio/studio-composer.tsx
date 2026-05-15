@@ -63,6 +63,7 @@ type StudioComposerProps = Readonly<{
   onCountChange: (count: number) => void;
   onReferenceImagesChange: (images: readonly StoredReferenceImage[]) => void;
   onSubmit: () => void;
+  onFixedHeightChange: (height: number) => void;
   onOpenPromptMarket: () => void;
 }>;
 
@@ -91,6 +92,42 @@ function getSubmitLabel(mode: ComposerMode, isSubmitting: boolean, hasRefs: bool
   return "生成图片";
 }
 
+function useFixedComposerHeight(
+  composerRootRef: Readonly<{ current: HTMLDivElement | null }>,
+  onFixedHeightChange: (height: number) => void,
+) {
+  useEffect(() => {
+    const element = composerRootRef.current;
+    if (!element) return;
+    let frame = 0;
+
+    const updateFixedHeight = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        onFixedHeightChange(getFixedComposerHeight(element));
+      });
+    };
+
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(updateFixedHeight);
+    observer?.observe(element);
+    window.addEventListener("resize", updateFixedHeight);
+    updateFixedHeight();
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer?.disconnect();
+      window.removeEventListener("resize", updateFixedHeight);
+    };
+  }, [composerRootRef, onFixedHeightChange]);
+}
+
+function getFixedComposerHeight(element: HTMLElement) {
+  const style = window.getComputedStyle(element);
+  const rect = element.getBoundingClientRect();
+  const height = style.position === "fixed" ? Math.ceil(window.innerHeight - rect.top) : 0;
+  return Math.max(0, height);
+}
+
 export const StudioComposer = memo(function StudioComposer(props: StudioComposerProps) {
   const {
     mode,
@@ -112,10 +149,12 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
     onCountChange,
     onReferenceImagesChange,
     onSubmit,
+    onFixedHeightChange,
     onOpenPromptMarket,
   } = props;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const composerRootRef = useRef<HTMLDivElement>(null);
   const composerPanelRef = useRef<HTMLDivElement>(null);
   const composerToolbarRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -134,6 +173,7 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
   const optimizationAbortRef = useRef<AbortController | null>(null);
   const modelMenuRef = useRef<HTMLDivElement>(null);
   const settingsContainerRef = useRef<HTMLDivElement>(null);
+  useFixedComposerHeight(composerRootRef, onFixedHeightChange);
 
   const activeRatio = ASPECT_RATIO_OPTIONS.find((o) => o.value === aspectRatio);
   const resolutions = activeRatio?.resolutions ?? [];
@@ -331,7 +371,7 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
   }, [prompt, isOptimizationRunning, onPromptChange]);
 
   return (
-    <div className="fixed inset-x-3 bottom-3 z-30 mx-auto w-auto max-w-3xl shrink-0 px-0 pb-0 pt-1 sm:inset-x-4 sm:bottom-4 lg:static lg:w-full lg:px-4 lg:pb-4">
+    <div ref={composerRootRef} className="fixed inset-x-3 bottom-3 z-30 mx-auto w-auto max-w-3xl shrink-0 px-0 pb-0 pt-1 sm:inset-x-4 sm:bottom-4 lg:static lg:w-full lg:px-4 lg:pb-4">
       <input
         ref={fileInputRef}
         type="file"

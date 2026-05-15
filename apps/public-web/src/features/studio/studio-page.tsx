@@ -194,6 +194,7 @@ export function StudioPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed);
   const [mobileHistoryOpen, setMobileHistoryOpen] = useState(false);
   const [promptMarketOpen, setPromptMarketOpen] = useState(false);
+  const [composerBottomInset, setComposerBottomInset] = useState(0);
   const [progressMap, setProgressMap] = useState<ReadonlyMap<string, TurnProgress>>(new Map());
   const [submittingConversationIds, setSubmittingConversationIds] = useState<ReadonlySet<string>>(() => new Set());
 
@@ -595,6 +596,10 @@ export function StudioPage() {
     setReferenceImages([...images]);
   }, []);
 
+  const handleComposerFixedHeightChange = useCallback((height: number) => {
+    setComposerBottomInset((current) => (current === height ? current : height));
+  }, []);
+
   const [lightbox, setLightbox] = useState<{ images: readonly StoredImage[]; startIndex: number } | null>(null);
 
   const handleOpenLightbox = useCallback((images: readonly StoredImage[], startIndex: number) => {
@@ -633,6 +638,7 @@ export function StudioPage() {
           <StudioResults
             conversation={conversations.activeConversation}
             progressByTurnKey={progressMap}
+            bottomInset={composerBottomInset}
             presetCards={presetCards}
             onRetryTurn={handleRetryTurn}
             onEditFromTurn={handleEditFromTurn}
@@ -662,6 +668,7 @@ export function StudioPage() {
             onCountChange={setCount}
             onReferenceImagesChange={handleReferenceImagesChange}
             onSubmit={handleSubmit}
+            onFixedHeightChange={handleComposerFixedHeightChange}
             onOpenPromptMarket={() => setPromptMarketOpen(true)}
           />
         </main>

@@ -73,3 +73,12 @@ test("studio starts image polling without blocking new submissions", () => {
   assert.match(pageSource, /void pollSubmittedImageJob/);
   assert.doesNotMatch(pageSource, /await waitForImageJobResults\(publicApi, job\.id/);
 });
+
+test("studio results reserve space for the fixed mobile composer", () => {
+  assert.match(composerSource, /onFixedHeightChange/);
+  assert.match(composerSource, /style\.position === "fixed"/);
+  assert.match(pageSource, /composerBottomInset/);
+  assert.match(pageSource, /bottomInset=\{composerBottomInset\}/);
+  assert.match(resultsSource, /FIXED_COMPOSER_CLEARANCE/);
+  assert.match(resultsSource, /paddingBottom: bottomInset \+ FIXED_COMPOSER_CLEARANCE/);
+});
