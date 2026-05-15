@@ -351,6 +351,10 @@ export function StudioPage() {
 
       setTurnProgress(progressKey, { message: "提交生成请求..." });
 
+      const sourceAssetId = draft.mode === "edit" && referenceAssetIds.length > 0
+        ? referenceAssetIds[0]
+        : undefined;
+
       const job = await publicApi.generateImage({
         prompt: draft.prompt,
         model_code: draft.model,
@@ -358,6 +362,7 @@ export function StudioPage() {
         mode: draft.mode === "chat" ? undefined : draft.mode,
         size: draft.resolution === "auto" ? undefined : draft.resolution,
         quality: draft.quality,
+        source_asset_id: sourceAssetId,
         reference_asset_ids: referenceAssetIds.length > 0 ? referenceAssetIds : undefined,
         visibility: "private",
       });
