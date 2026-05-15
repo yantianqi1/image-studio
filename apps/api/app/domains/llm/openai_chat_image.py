@@ -19,7 +19,20 @@ from apps.api.app.infra.storage.factory import build_asset_storage
 OPENAI_CHAT_COMPLETIONS_ENDPOINT = "/chat/completions"
 CHAT_IMAGE_TEMPERATURE = 0.97
 CHAT_IMAGE_MAX_TOKENS = 50000
-CHAT_IMAGE_SYSTEM_PROMPT = "[Start a new Chat]"
+QUALITY_HINTS = {
+    "low": "画质使用 Low 档，优先更快出图，细节可以适度简化。",
+    "medium": "画质使用 Medium 档，在速度、细节和整体完成度之间保持平衡。",
+    "high": "画质使用 High 档，提升细节、纹理、光影和整体完成度。",
+}
+ASPECT_RATIO_HINTS = {
+    "1:1": "输出为 1:1 正方形构图，主体居中，适合正方形画幅。",
+    "3:2": "输出为 3:2 横版构图，适合摄影、产品展示和横向叙事画幅。",
+    "16:9": "输出为 16:9 横屏构图，适合宽画幅展示。",
+    "21:9": "输出为 21:9 超宽横版构图，适合电影感全景和宽银幕画幅。",
+    "9:16": "输出为 9:16 竖屏构图，适合竖版画幅展示。",
+    "4:3": "输出为 4:3 比例，兼顾宽度与高度，适合展示画面细节。",
+    "3:4": "输出为 3:4 比例，纵向构图，适合人物肖像或竖向场景。",
+}
 
 
 def render_openai_chat_compatible_image(
@@ -30,6 +43,8 @@ def render_openai_chat_compatible_image(
     provider_model: str,
     source_asset_id: int | None = None,
     reference_asset_ids: tuple[int, ...] = (),
+    size: str | None = None,
+    quality: str | None = None,
 ) -> RenderedImage:
     asset_ids = tuple(reference_asset_ids or ())
     if source_asset_id is not None:
@@ -40,7 +55,14 @@ def render_openai_chat_compatible_image(
     response = httpx.post(
         build_provider_url(provider.base_url),
         headers=build_auth_headers(provider),
-        json=build_chat_image_payload(prompt=prompt, provider_model=provider_model, assets=assets, storage=storage),
+        json=build_chat_image_payload(
+            prompt=prompt,
+            provider_model=provider_model,
+            assets=assets,
+            storage=storage,
+            size=size,
+            quality=quality,
+        ),
         timeout=timeout,
     )
     return parse_chat_image_response(response=response, provider=provider, prompt=prompt)
@@ -52,27 +74,67 @@ def build_chat_image_payload(
     provider_model: str,
     assets: list[Asset],
     storage: AssetStorage,
+    size: str | None = None,
+    quality: str | None = None,
 ) -> dict[str, object]:
-    return {
+    payload: dict[str, object] = {
         "model": provider_model,
-        "messages": build_chat_image_messages(prompt=prompt, assets=assets, storage=storage),
+        "messages": build_chat_image_messages(
+            prompt=build_chat_image_prompt(prompt, size=size, quality=quality),
+            assets=assets,
+            storage=storage,
+        ),
         "temperature": CHAT_IMAGE_TEMPERATURE,
         "max_tokens": CHAT_IMAGE_MAX_TOKENS,
         "stream": True,
         "presence_penalty": 0,
         "frequency_penalty": 0,
     }
+    return payload
+
+
+def build_chat_image_prompt(prompt: str, *, size: str | None, quality: str | None) -> str:
+    base_prompt = prompt.strip()
+    hints = [hint for hint in (build_size_hint(size), build_quality_hint(quality)) if hint]
+    if not hints:
+        return base_prompt
+    return f"{base_prompt}\n\n" + "\n".join(hints)
+
+
+def build_size_hint(size: str | None) -> str:
+    normalized = (size or "").strip()
+    if not normalized or normalized == "auto":
+        return ""
+    dimensions = parse_pixel_size(normalized)
+    if dimensions is not None:
+        width, height = dimensions
+        return f"输出图片目标分辨率为 {width} x {height} 像素，并严格按该尺寸对应的宽高比构图。"
+    if normalized in ASPECT_RATIO_HINTS:
+        return ASPECT_RATIO_HINTS[normalized]
+    return f"输出图片，目标尺寸或宽高比为 {normalized}。"
+
+
+def parse_pixel_size(size: str) -> tuple[int, int] | None:
+    parts = size.lower().split("x", 1)
+    if len(parts) != 2 or not parts[0].isdigit() or not parts[1].isdigit():
+        return None
+    width = int(parts[0])
+    height = int(parts[1])
+    if width <= 0 or height <= 0:
+        return None
+    return width, height
+
+
+def build_quality_hint(quality: str | None) -> str:
+    return QUALITY_HINTS.get((quality or "").strip().lower(), "")
 
 
 def build_chat_image_messages(*, prompt: str, assets: list[Asset], storage: AssetStorage) -> list[dict[str, object]]:
     if not assets:
-        return [
-            {"role": "system", "content": CHAT_IMAGE_SYSTEM_PROMPT},
-            {"role": "user", "content": prompt},
-        ]
+        return [{"role": "user", "content": prompt}]
     content: list[dict[str, object]] = [{"type": "text", "text": prompt}]
     content.extend(build_image_content(asset, storage=storage) for asset in assets)
-    return [{"role": "system", "content": CHAT_IMAGE_SYSTEM_PROMPT}, {"role": "user", "content": content}]
+    return [{"role": "user", "content": content}]
 
 
 def build_image_content(asset: Asset, *, storage: AssetStorage) -> dict[str, object]:

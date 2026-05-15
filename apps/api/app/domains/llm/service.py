@@ -252,6 +252,8 @@ def render_image(
             provider_model=provider_model,
             source_asset_id=source_asset_id,
             reference_asset_ids=reference_ids,
+            size=size,
+            quality=quality,
         )
     raise AppError(code="unsupported_provider_type", message="unsupported provider type", status_code=422)
 
@@ -289,6 +291,8 @@ def render_image_with_client_provider(
             provider_model=provider_model,
             source_asset_id=source_asset_id,
             reference_asset_ids=reference_ids,
+            size=size,
+            quality=quality,
         )
     raise AppError(code="unsupported_provider_type", message="unsupported provider type", status_code=422)
 
