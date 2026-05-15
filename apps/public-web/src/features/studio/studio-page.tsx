@@ -58,6 +58,8 @@ import {
 import { publicApi, type CharacterLibraryItem, type ImageAssetVisibility } from "@/lib/public-api";
 import { useApiResource } from "@/lib/use-api-resource";
 import { cn } from "@/lib/cn";
+import { streamPromptCrafter } from "@/features/prompt-crafter/prompt-crafter-api";
+import { buildPromptComplianceInstruction } from "@/features/studio/studio-prompt-actions";
 
 const SIDEBAR_COLLAPSED_KEY = "commercial_studio_sidebar_collapsed";
 const SETTINGS_KEY = "commercial_studio_image_settings";
@@ -615,6 +617,50 @@ export function StudioPage() {
     });
   }, [conversations, submittingConversationIds, submitExistingTurn]);
 
+  const handleComplianceRetryTurn = useCallback(async (turnId: string) => {
+    const conv = conversations.activeConversation;
+    if (!conv || submittingConversationIds.has(conv.id)) return;
+    const turn = conv.turns.find((t) => t.id === turnId);
+    if (!turn || !turn.prompt.trim()) return;
+
+    let compliantPrompt = turn.prompt;
+    try {
+      let result = "";
+      const controller = new AbortController();
+      await streamPromptCrafter({
+        messages: [{ role: "user", content: buildPromptComplianceInstruction(turn.prompt) }],
+        signal: controller.signal,
+        onChunk: (chunk) => { result += chunk; },
+      });
+      const trimmed = result.trim();
+      if (trimmed) compliantPrompt = trimmed;
+    } catch {
+      // Fall through with original prompt if compliance rewrite fails
+    }
+
+    const draft: TurnDraft = {
+      prompt: compliantPrompt,
+      model: turn.model,
+      mode: turn.mode,
+      referenceImages: turn.referenceImages,
+      characterLibraryIds: turn.characterLibraryIds ?? turn.characterReferences?.map((character) => character.id) ?? [],
+      characterReferences: turn.characterReferences ?? [],
+      count: turn.count,
+      aspectRatio: turn.aspectRatio,
+      resolution: turn.resolution,
+      quality: turn.quality,
+      visibility: turn.visibility,
+    };
+    conversations.retryTurn(conv.id, turnId);
+    void submitExistingTurn({
+      contextBeforeTurnId: turn.id,
+      conversation: conv,
+      conversationId: conv.id,
+      draft,
+      turnId,
+    });
+  }, [conversations, submittingConversationIds, submitExistingTurn]);
+
   const handleEditFromTurn = useCallback((_turnId: string, image: StoredImage) => {
     const ref: StoredReferenceImage = {
       name: "reference",
@@ -720,6 +766,7 @@ export function StudioPage() {
             presetCards={presetCards}
             isRefreshingPresets={isRefreshingPresets}
             onRetryTurn={handleRetryTurn}
+            onComplianceRetryTurn={handleComplianceRetryTurn}
             onEditFromTurn={handleEditFromTurn}
             onCancelTurn={handleCancelTurn}
             onDeleteTurn={handleDeleteTurn}

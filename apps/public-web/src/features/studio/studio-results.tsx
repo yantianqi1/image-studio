@@ -13,6 +13,7 @@ import {
   Plus,
   RefreshCw,
   RotateCcw,
+  ShieldCheck,
   Sparkles,
   Trash2,
 } from "lucide-react";
@@ -38,6 +39,7 @@ type StudioResultsProps = Readonly<{
   presetCards: readonly PresetCard[];
   isRefreshingPresets: boolean;
   onRetryTurn: (turnId: string) => void;
+  onComplianceRetryTurn: (turnId: string) => void;
   onEditFromTurn: (turnId: string, image: StoredImage) => void;
   onCancelTurn: (turnId: string) => void;
   onDeleteTurn: (turnId: string) => void;
@@ -90,6 +92,7 @@ export const StudioResults = memo(function StudioResults({
   presetCards,
   isRefreshingPresets,
   onRetryTurn,
+  onComplianceRetryTurn,
   onEditFromTurn,
   onCancelTurn,
   onDeleteTurn,
@@ -188,6 +191,7 @@ export const StudioResults = memo(function StudioResults({
             turn={turn}
             progress={progressByTurnKey.get(`${conversation.id}:${turn.id}`)}
             onRetry={() => onRetryTurn(turn.id)}
+            onComplianceRetry={() => onComplianceRetryTurn(turn.id)}
             onEditFromImage={(image) => onEditFromTurn(turn.id, image)}
             onCancel={() => onCancelTurn(turn.id)}
             onDelete={() => onDeleteTurn(turn.id)}
@@ -209,6 +213,7 @@ const TurnCard = memo(function TurnCard({
   turn,
   progress,
   onRetry,
+  onComplianceRetry,
   onEditFromImage,
   onCancel,
   onDelete,
@@ -218,6 +223,7 @@ const TurnCard = memo(function TurnCard({
   turn: StudioTurn;
   progress: TurnProgress | undefined;
   onRetry: () => void;
+  onComplianceRetry: () => void;
   onEditFromImage: (image: StoredImage) => void;
   onCancel: () => void;
   onDelete: () => void;
@@ -341,7 +347,15 @@ const TurnCard = memo(function TurnCard({
               <div className="flex min-h-0 flex-1 items-center justify-center px-4 py-3 text-center text-sm leading-6 text-red-600">
                 {turn.error || "生成失败"}
               </div>
-              <div className="flex justify-end border-t border-red-100 bg-white/70 px-3 py-2">
+              <div className="flex justify-end gap-2 border-t border-red-100 bg-white/70 px-3 py-2">
+                <button
+                  type="button"
+                  className="inline-flex h-7 items-center gap-1.5 rounded-full border border-blue-200 bg-white px-3 text-xs font-medium text-blue-600 transition hover:bg-blue-50"
+                  onClick={onComplianceRetry}
+                >
+                  <ShieldCheck className="size-3" />
+                  合规化重试
+                </button>
                 <button
                   type="button"
                   className="inline-flex h-7 items-center gap-1.5 rounded-full border border-red-200 bg-white px-3 text-xs font-medium text-red-600 transition hover:bg-red-50"
