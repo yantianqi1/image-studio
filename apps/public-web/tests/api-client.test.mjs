@@ -73,6 +73,27 @@ test("isUnauthorizedApiError detects API 401 responses", async () => {
   );
 });
 
+test("apiFetch preserves API envelope error codes on ApiError", async () => {
+  const { apiFetch } = loadApiClient(async () =>
+    Response.json(
+      {
+        data: null,
+        meta: {},
+        error: {
+          code: "anonymous_image_job_concurrency_limit",
+          message: "匿名生图任务最多 2 个同时处理中",
+        },
+      },
+      { status: 429 },
+    ),
+  );
+
+  await assert.rejects(
+    () => apiFetch("/image/jobs", { method: "POST", body: {} }),
+    (error) => error.code === "anonymous_image_job_concurrency_limit",
+  );
+});
+
 test("apiDownload returns binary responses with client provider headers", async () => {
   const captured = {};
   const { apiDownload } = loadApiClient(async (endpoint, init) => {

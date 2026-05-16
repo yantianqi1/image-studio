@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { History, MessageSquarePlus } from "lucide-react";
+import { History, MessageSquarePlus, X } from "lucide-react";
 
 import {
   imageJobResultsToHistoryImages,
@@ -56,6 +56,7 @@ import {
   readGeneratePromptParam,
 } from "@/features/prompt-crafter/use-prompt";
 import { publicApi, type CharacterLibraryItem, type ImageAssetVisibility } from "@/lib/public-api";
+import { ApiError } from "@/lib/api-client";
 import { useApiResource } from "@/lib/use-api-resource";
 import { cn } from "@/lib/cn";
 import { streamPromptCrafter } from "@/features/prompt-crafter/prompt-crafter-api";
@@ -63,6 +64,8 @@ import { buildPromptComplianceInstruction } from "@/features/studio/studio-promp
 
 const SIDEBAR_COLLAPSED_KEY = "commercial_studio_sidebar_collapsed";
 const SETTINGS_KEY = "commercial_studio_image_settings";
+const NOTICE_AUTO_DISMISS_MS = 6000;
+const ANONYMOUS_IMAGE_CONCURRENCY_LIMIT_ERROR = "anonymous_image_job_concurrency_limit";
 
 type PersistedSettings = {
   aspectRatio: string;
@@ -194,6 +197,10 @@ function throwIfAborted(signal: AbortSignal) {
   }
 }
 
+function isAnonymousImageConcurrencyLimit(error: unknown): boolean {
+  return error instanceof ApiError && error.code === ANONYMOUS_IMAGE_CONCURRENCY_LIMIT_ERROR;
+}
+
 export function StudioPage() {
   // --- Composer state ---
   const [mode, setMode] = useState<ComposerMode>("generate");
@@ -215,6 +222,7 @@ export function StudioPage() {
   const [composerBottomInset, setComposerBottomInset] = useState(0);
   const [progressMap, setProgressMap] = useState<ReadonlyMap<string, TurnProgress>>(new Map());
   const [submittingConversationIds, setSubmittingConversationIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [submissionNotice, setSubmissionNotice] = useState<string | null>(null);
 
   // --- Data ---
   const conversations = useStudioConversations();
@@ -287,6 +295,12 @@ export function StudioPage() {
       document.body.style.overflow = previousOverflow;
     };
   }, [mobileHistoryOpen]);
+
+  useEffect(() => {
+    if (!submissionNotice) return;
+    const timer = window.setTimeout(() => setSubmissionNotice(null), NOTICE_AUTO_DISMISS_MS);
+    return () => window.clearTimeout(timer);
+  }, [submissionNotice]);
 
   // --- Settings persistence ---
   useEffect(() => {
@@ -504,6 +518,9 @@ export function StudioPage() {
         conversations.updateTurn(convId, turnId, { status: "cancelled" });
       } else {
         const message = error instanceof Error ? error.message : "生成失败";
+        if (isAnonymousImageConcurrencyLimit(error)) {
+          setSubmissionNotice(message);
+        }
         conversations.updateTurn(convId, turnId, { status: "error", error: message });
       }
     } finally {
@@ -875,6 +892,12 @@ export function StudioPage() {
           onClose={() => setLightbox(null)}
         />
       )}
+      {submissionNotice && (
+        <SubmissionNotice
+          message={submissionNotice}
+          onClose={() => setSubmissionNotice(null)}
+        />
+      )}
     </AppShell>
   );
 }
@@ -957,6 +980,39 @@ function MobileStudioHistoryDrawer({
           onClearAll={onClearAll}
           onToggleCollapse={onClose}
         />
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function SubmissionNotice({
+  message,
+  onClose,
+}: Readonly<{
+  message: string;
+  onClose: () => void;
+}>) {
+  return createPortal(
+    <div
+      className="fixed top-4 left-1/2 z-[80] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 shadow-lg"
+      role="status"
+      aria-live="polite"
+    >
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold">温馨提醒</p>
+          <p className="mt-0.5 leading-5">{message}</p>
+        </div>
+        <button
+          type="button"
+          className="inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-white/80 text-amber-700 transition hover:bg-white"
+          onClick={onClose}
+          aria-label="关闭提醒"
+          title="关闭"
+        >
+          <X className="size-3.5" />
+        </button>
       </div>
     </div>,
     document.body,

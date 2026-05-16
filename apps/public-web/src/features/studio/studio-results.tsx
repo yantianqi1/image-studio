@@ -551,16 +551,16 @@ function ImageCell({
             >
               <Plus className="size-3.5" />
             </button>
-            {image.url && (
-              <button
-                type="button"
-                onClick={() => downloadImage(image.url!, turn.prompt)}
+            {image.assetId != null && (
+              <a
+                href={buildAssetDownloadUrl(image.assetId)}
+                download={downloadFileName(turn.prompt, image.assetId)}
                 className="inline-flex size-7 items-center justify-center rounded-full bg-white/95 text-gray-800 shadow-sm transition hover:bg-white"
                 aria-label="下载"
                 title="下载"
               >
                 <Download className="size-3.5" />
-              </button>
+              </a>
             )}
           </div>
           <div className="absolute right-2 bottom-2 z-10 flex items-center gap-1">
@@ -694,20 +694,11 @@ function getAspectPadding(aspectRatio: string, resolution: string): string {
   return ratio ? `${ratio * 100}%` : "100%";
 }
 
-async function downloadImage(url: string, prompt: string) {
-  const name = prompt.slice(0, 20).replace(/[^\w一-鿿]/g, "_") || "image";
-  try {
-    const res = await fetch(url);
-    const blob = await res.blob();
-    const blobUrl = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = blobUrl;
-    a.download = `${name}.png`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(blobUrl);
-  } catch {
-    window.open(url, "_blank");
-  }
+function buildAssetDownloadUrl(assetId: number): string {
+  return `/api/public/image/assets/${assetId}/download`;
+}
+
+function downloadFileName(prompt: string, assetId: number): string {
+  const name = prompt.slice(0, 20).replace(/[^\w一-鿿]/g, "_");
+  return name || `generated-image-${assetId}`;
 }

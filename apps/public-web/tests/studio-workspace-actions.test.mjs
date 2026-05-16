@@ -99,6 +99,13 @@ test("studio starts image polling without blocking new submissions", () => {
   assert.doesNotMatch(pageSource, /await waitForImageJobResults\(publicApi, job\.id/);
 });
 
+test("studio surfaces anonymous image concurrency limit as a dismissible notice", () => {
+  assert.match(pageSource, /anonymous_image_job_concurrency_limit/);
+  assert.match(pageSource, /SubmissionNotice/);
+  assert.match(pageSource, /submissionNotice/);
+  assert.match(pageSource, /role="status"/);
+});
+
 test("studio results reserve space for the fixed mobile composer", () => {
   assert.match(composerSource, /onFixedHeightChange/);
   assert.match(composerSource, /style\.position === "fixed"/);

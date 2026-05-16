@@ -14,6 +14,7 @@ from apps.api.app.domains.image.assets import (
     resolve_asset_public_urls,
     resolve_thumbnail_content,
 )
+from apps.api.app.domains.image.concurrency import enforce_image_job_submission_limit
 from apps.api.app.domains.image.gallery import (
     delete_asset_by_admin,
     delete_owned_asset,
@@ -57,6 +58,8 @@ def create_image_job(
         require_anonymous_image_enabled(session)
     if payload.mode == "edit" or payload.reference_asset_ids or payload.character_library_ids:
         require_uploads_enabled(session)
+    source = resolve_image_job_source(owner=owner, has_client_provider=client_config is not None)
+    enforce_image_job_submission_limit(session, owner=owner, source=source)
     character_bundle = resolve_character_reference_bundle(
         session,
         owner=owner,
@@ -67,7 +70,7 @@ def create_image_job(
     job = create_job(
         session,
         owner=owner,
-        source=resolve_image_job_source(owner=owner, has_client_provider=client_config is not None),
+        source=source,
         title=title,
         prompt=character_bundle.prompt,
         model_code=payload.model_code,
@@ -148,6 +151,17 @@ def get_image_asset(asset_id: int, request: Request, session: Session = Depends(
     asset = get_asset_for_read(session, asset_id, resolve_request_owner(request, session))
     content, media_type = resolve_asset_content(asset, build_asset_storage())
     return Response(content=content, media_type=media_type, headers=ASSET_CACHE_HEADERS)
+
+
+@public_router.get("/assets/{asset_id}/download")
+def download_image_asset(asset_id: int, request: Request, session: Session = Depends(get_db_session)):
+    asset = get_asset_for_read(session, asset_id, resolve_request_owner(request, session))
+    content, media_type = resolve_asset_content(asset, build_asset_storage())
+    headers = {
+        **ASSET_CACHE_HEADERS,
+        "Content-Disposition": build_asset_download_disposition(asset.id, media_type),
+    }
+    return Response(content=content, media_type=media_type, headers=headers)
 
 
 @public_router.get("/assets/{asset_id}/thumbnail")
@@ -367,6 +381,19 @@ def resolve_job_client_provider_base_url(job) -> str | None:
         return None
     base_url = config.get("base_url")
     return base_url if isinstance(base_url, str) and base_url.strip() else None
+
+
+ASSET_DOWNLOAD_EXTENSIONS = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/svg+xml": ".svg",
+    "image/webp": ".webp",
+}
+
+
+def build_asset_download_disposition(asset_id: int, media_type: str) -> str:
+    extension = ASSET_DOWNLOAD_EXTENSIONS.get(media_type.split(";")[0].strip().lower(), ".bin")
+    return f'attachment; filename="generated-image-{asset_id}{extension}"'
 
 
 def result_payload(result, *, asset=None, storage=None) -> dict[str, object]:

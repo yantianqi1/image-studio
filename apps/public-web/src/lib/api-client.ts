@@ -12,12 +12,14 @@ export type ApiRequestOptions = Readonly<{
 export class ApiError extends Error {
   readonly status: number;
   readonly endpoint: string;
+  readonly code: string | null;
 
-  constructor(message: string, status: number, endpoint: string) {
+  constructor(message: string, status: number, endpoint: string, code: string | null = null) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.endpoint = endpoint;
+    this.code = code;
   }
 }
 
@@ -107,10 +109,17 @@ function unwrapApiEnvelope<T>(payload: unknown, endpoint: string, status: number
   }
 
   if (payload.error) {
-    throw new ApiError(payload.error.message, status, endpoint);
+    throw new ApiError(payload.error.message, status, endpoint, payload.error.code);
   }
 
   return payload.data as T;
+}
+
+function buildApiError(payload: unknown, fallback: string, status: number, endpoint: string): ApiError {
+  if (isApiEnvelope(payload) && payload.error) {
+    return new ApiError(payload.error.message, status, endpoint, payload.error.code);
+  }
+  return new ApiError(formatApiError(payload, fallback), status, endpoint);
 }
 
 export async function apiFetch<T>(
@@ -130,10 +139,7 @@ export async function apiFetch<T>(
   const payload = await readResponsePayload(response);
 
   if (!response.ok) {
-    const message = isApiEnvelope(payload)
-      ? payload.error?.message ?? `Request failed: ${response.status}`
-      : formatApiError(payload, `Request failed: ${response.status}`);
-    throw new ApiError(message, response.status, endpoint);
+    throw buildApiError(payload, `Request failed: ${response.status}`, response.status, endpoint);
   }
 
   return unwrapApiEnvelope<T>(payload, endpoint, response.status);
@@ -161,10 +167,7 @@ export async function apiDownload(
 
   if (!response.ok) {
     const payload = await readResponsePayload(response);
-    const message = isApiEnvelope(payload)
-      ? payload.error?.message ?? `Request failed: ${response.status}`
-      : formatApiError(payload, `Request failed: ${response.status}`);
-    throw new ApiError(message, response.status, endpoint);
+    throw buildApiError(payload, `Request failed: ${response.status}`, response.status, endpoint);
   }
 
   return response.blob();
@@ -194,10 +197,7 @@ export async function apiUpload<T>(
   const payload = await readResponsePayload(response);
 
   if (!response.ok) {
-    const message = isApiEnvelope(payload)
-      ? payload.error?.message ?? `Request failed: ${response.status}`
-      : formatApiError(payload, `Request failed: ${response.status}`);
-    throw new ApiError(message, response.status, endpoint);
+    throw buildApiError(payload, `Request failed: ${response.status}`, response.status, endpoint);
   }
 
   return unwrapApiEnvelope<T>(payload, endpoint, response.status);

@@ -9,12 +9,17 @@ from apps.api.app.domains.image import service as image_service
 from apps.api.app.domains.image.models import ImageJob
 from apps.api.app.infra.db.session import session_scope
 from apps.worker.worker import main as worker_main
-from apps.api.tests.test_image_jobs import build_client, build_rendered_image, create_image_job
+from apps.api.tests.test_image_jobs import build_client, build_rendered_image, register_user
 
 
 def test_worker_run_once_processes_three_image_jobs_concurrently(monkeypatch) -> None:
+    monkeypatch.setenv("SIGNUP_BONUS_CENTS", "1000")
     client = build_client()
-    job_ids = [create_image_job(client, prompt=f"Concurrent image {index}")["id"] for index in range(1, 4)]
+    register_user(client, email="worker-concurrency@example.com")
+    job_ids = [
+        create_member_job(client, prompt=f"Concurrent image {index}")["id"]
+        for index in range(1, 4)
+    ]
     tracker = RenderConcurrencyTracker()
     monkeypatch.setattr(image_service, "render_image", tracker.render, raising=False)
 
@@ -41,3 +46,12 @@ class RenderConcurrencyTracker:
         with self.lock:
             self.active -= 1
         return build_rendered_image(prompt=kwargs["prompt"], model_code=kwargs["model_code"])
+
+
+def create_member_job(client, *, prompt: str) -> dict[str, object]:
+    response = client.post(
+        "/api/public/image/jobs",
+        json={"prompt": prompt, "model_code": "gpt-image-2", "requested_count": 1},
+    )
+    assert response.status_code == 201
+    return response.json()["data"]
