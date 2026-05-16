@@ -1,5 +1,5 @@
-import { LoginPanel } from "@/features/auth/login-panel";
+import { WalletDashboard } from "@/features/wallet/wallet-dashboard";
 
 export default function LoginPage() {
-  return <LoginPanel />;
+  return <WalletDashboard />;
 }
