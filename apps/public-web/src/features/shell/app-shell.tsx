@@ -10,7 +10,6 @@ import { ViewTransitionLink } from "@/features/shell/view-transition-link";
 import { GlobalPromptCrafter } from "@/features/prompt-crafter/global-prompt-crafter";
 import { ProviderSettingsPopover } from "@/features/shell/provider-settings-popover";
 import { PublicQuotaStatusBadge } from "@/features/shell/public-quota-status";
-import { WelcomeAccountDialog } from "@/features/shell/welcome-account-dialog";
 import styles from "./app-header.module.css";
 
 type AppShellProps = Readonly<{
@@ -51,7 +50,6 @@ export function AppShell({
       </main>
 
       <GlobalPromptCrafter />
-      {workspaceMode ? null : <WelcomeAccountDialog />}
     </div>
   );
 }

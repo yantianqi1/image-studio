@@ -15,6 +15,10 @@ import {
   resolveModelParameterSelection,
 } from "@/features/studio/studio-models";
 import { AppShell } from "@/features/shell/app-shell";
+import {
+  shouldShowWelcomeAccountDialog,
+  WelcomeAccountDialog,
+} from "@/features/shell/welcome-account-dialog";
 import { StudioComposer } from "@/features/studio/studio-composer";
 import { StudioCharacterLibrary } from "@/features/studio/studio-character-library";
 import { StudioPromptMarket } from "@/features/studio/studio-prompt-market";
@@ -201,6 +205,10 @@ function isAnonymousImageConcurrencyLimit(error: unknown): boolean {
   return error instanceof ApiError && error.code === ANONYMOUS_IMAGE_CONCURRENCY_LIMIT_ERROR;
 }
 
+function getWelcomeAccountGateErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "账户状态读取失败";
+}
+
 export function StudioPage() {
   // --- Composer state ---
   const [mode, setMode] = useState<ComposerMode>("generate");
@@ -223,6 +231,10 @@ export function StudioPage() {
   const [progressMap, setProgressMap] = useState<ReadonlyMap<string, TurnProgress>>(new Map());
   const [submittingConversationIds, setSubmittingConversationIds] = useState<ReadonlySet<string>>(() => new Set());
   const [submissionNotice, setSubmissionNotice] = useState<string | null>(null);
+  const [welcomeAccountDialogOpen, setWelcomeAccountDialogOpen] = useState(false);
+  const [welcomeAccountDialogError, setWelcomeAccountDialogError] = useState("");
+  const [welcomeAccountGateChecking, setWelcomeAccountGateChecking] = useState(false);
+  const pendingWelcomeDraftRef = useRef<TurnDraft | null>(null);
 
   // --- Data ---
   const conversations = useStudioConversations();
@@ -547,19 +559,20 @@ export function StudioPage() {
     });
   }, [conversations, submitExistingTurn]);
 
-  const handleSubmit = useCallback(() => {
-    if (!prompt.trim() || isActiveConversationSubmitting) return;
+  const createCurrentDraft = useCallback((): TurnDraft | null => {
+    const trimmedPrompt = prompt.trim();
+    if (!trimmedPrompt) return null;
 
     const resolvedModel =
       modelsState.status === "ready"
         ? resolveImageModel(modelsState.data, model).resolvedModelCode
         : model;
 
-    const draft: TurnDraft = {
-      prompt: prompt.trim(),
+    return {
+      prompt: trimmedPrompt,
       model: resolvedModel,
       mode: resolveStudioDraftMode({ composerMode: mode, referenceCount: referenceImages.length }),
-      referenceImages,
+      referenceImages: [...referenceImages],
       characterLibraryIds: selectedCharacter ? [selectedCharacter.id] : [],
       characterReferences: selectedCharacter
         ? [{ id: selectedCharacter.id, name: selectedCharacter.name, thumbnailUrl: selectedCharacter.thumbnail_url }]
@@ -570,14 +583,8 @@ export function StudioPage() {
       quality,
       visibility: "private",
     };
-
-    setPrompt("");
-    setReferenceImages([]);
-    setSelectedCharacter(null);
-    void submitDraft(draft);
   }, [
     prompt,
-    isActiveConversationSubmitting,
     modelsState,
     model,
     mode,
@@ -587,8 +594,65 @@ export function StudioPage() {
     aspectRatio,
     resolution,
     quality,
+  ]);
+
+  const submitPreparedDraft = useCallback((draft: TurnDraft) => {
+    if (isActiveConversationSubmitting) return;
+    setPrompt("");
+    setReferenceImages([]);
+    setSelectedCharacter(null);
+    void submitDraft(draft);
+  }, [
+    isActiveConversationSubmitting,
     submitDraft,
   ]);
+
+  const openWelcomeAccountDialog = useCallback((draft: TurnDraft, errorMessage = "") => {
+    pendingWelcomeDraftRef.current = draft;
+    setWelcomeAccountDialogError(errorMessage);
+    setWelcomeAccountDialogOpen(true);
+  }, []);
+
+  const handleSubmit = useCallback(() => {
+    const draft = createCurrentDraft();
+    if (!draft || isActiveConversationSubmitting || welcomeAccountGateChecking) return;
+
+    setWelcomeAccountGateChecking(true);
+    void shouldShowWelcomeAccountDialog()
+      .then((shouldShowDialog) => {
+        if (shouldShowDialog) {
+          openWelcomeAccountDialog(draft);
+          return;
+        }
+        submitPreparedDraft(draft);
+      })
+      .catch((error: unknown) => {
+        openWelcomeAccountDialog(draft, getWelcomeAccountGateErrorMessage(error));
+      })
+      .finally(() => setWelcomeAccountGateChecking(false));
+  }, [
+    createCurrentDraft,
+    isActiveConversationSubmitting,
+    openWelcomeAccountDialog,
+    submitPreparedDraft,
+    welcomeAccountGateChecking,
+  ]);
+
+  const handleWelcomeAccountDialogOpenChange = useCallback((open: boolean) => {
+    setWelcomeAccountDialogOpen(open);
+    if (open) return;
+    pendingWelcomeDraftRef.current = null;
+    setWelcomeAccountDialogError("");
+  }, []);
+
+  const handleAnonymousWelcomeUse = useCallback(() => {
+    const pendingDraft = pendingWelcomeDraftRef.current;
+    pendingWelcomeDraftRef.current = null;
+    setWelcomeAccountDialogError("");
+    if (pendingDraft) {
+      submitPreparedDraft(pendingDraft);
+    }
+  }, [submitPreparedDraft]);
 
   const handleCancelTurn = useCallback((turnId: string) => {
     const convId = conversations.activeId;
@@ -846,7 +910,7 @@ export function StudioPage() {
             selectedCharacter={selectedCharacter}
             modelsState={modelsState}
             selectedModel={selectedModel}
-            isSubmitting={isActiveConversationSubmitting}
+            isSubmitting={isActiveConversationSubmitting || welcomeAccountGateChecking}
             onModeChange={setMode}
             onPromptChange={setPrompt}
             onModelChange={setModel}
@@ -898,6 +962,12 @@ export function StudioPage() {
           onClose={() => setSubmissionNotice(null)}
         />
       )}
+      <WelcomeAccountDialog
+        errorMessage={welcomeAccountDialogError}
+        open={welcomeAccountDialogOpen}
+        onAnonymousReady={handleAnonymousWelcomeUse}
+        onOpenChange={handleWelcomeAccountDialogOpenChange}
+      />
     </AppShell>
   );
 }

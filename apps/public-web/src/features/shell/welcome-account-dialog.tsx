@@ -7,56 +7,75 @@ import { ErrorMessage } from "@/features/ui/error-message";
 import { isUnauthorizedApiError } from "@/lib/api-client";
 import { publicApi } from "@/lib/public-api";
 
-const WELCOME_DISMISSED_KEY = "commercial-studio:welcome-account-dismissed";
+const WELCOME_ACCOUNT_GATE_KEY = "commercial-studio:welcome-account-gate-accepted";
 
-export function WelcomeAccountDialog() {
-  const [state, setState] = useState<"checking" | "open" | "closed" | "submitting">("checking");
+type WelcomeAccountDialogProps = Readonly<{
+  errorMessage?: string;
+  onAnonymousReady?: () => void;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+}>;
+
+export async function shouldShowWelcomeAccountDialog() {
+  if (hasWelcomeAccountGateAccepted()) return false;
+
+  try {
+    await publicApi.getCurrentUser();
+    markWelcomeAccountGateAccepted();
+    return false;
+  } catch (error: unknown) {
+    if (isUnauthorizedApiError(error)) {
+      return true;
+    }
+    throw error;
+  }
+}
+
+export function markWelcomeAccountGateAccepted() {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(WELCOME_ACCOUNT_GATE_KEY, "1");
+}
+
+function hasWelcomeAccountGateAccepted() {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem(WELCOME_ACCOUNT_GATE_KEY) === "1";
+}
+
+export function WelcomeAccountDialog(props: WelcomeAccountDialogProps) {
+  const [isSubmitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
-    if (localStorage.getItem(WELCOME_DISMISSED_KEY) === "1") {
-      setState("closed");
+    if (!props.open) {
+      setSubmitting(false);
+      setErrorMessage("");
       return;
     }
-    publicApi.getCurrentUser()
-      .then(() => dismiss())
-      .catch((error: unknown) => {
-        if (isUnauthorizedApiError(error)) {
-          setState("open");
-          return;
-        }
-        setState("open");
-        setErrorMessage(error instanceof Error ? error.message : "账户状态读取失败");
-      });
-  }, []);
+    setErrorMessage(props.errorMessage ?? "");
+  }, [props.errorMessage, props.open]);
 
-  if (state === "checking" || state === "closed") {
-    return null;
-  }
+  if (!props.open) return null;
 
   async function continueAnonymously() {
-    setState("submitting");
+    setSubmitting(true);
     setErrorMessage("");
     try {
       await publicApi.ensureAnonymousSession();
-      dismiss();
+      markWelcomeAccountGateAccepted();
+      props.onAnonymousReady?.();
+      props.onOpenChange(false);
     } catch (error: unknown) {
-      setState("open");
+      setSubmitting(false);
       setErrorMessage(error instanceof Error ? error.message : "匿名会话创建失败");
     }
-  }
-
-  function dismiss() {
-    localStorage.setItem(WELCOME_DISMISSED_KEY, "1");
-    setState("closed");
   }
 
   return (
     <WelcomeDialogBody
       errorMessage={errorMessage}
-      isSubmitting={state === "submitting"}
+      isSubmitting={isSubmitting}
       onAnonymous={continueAnonymously}
-      onDismiss={dismiss}
+      onNavigate={() => props.onOpenChange(false)}
     />
   );
 }
@@ -65,7 +84,7 @@ function WelcomeDialogBody(props: Readonly<{
   errorMessage: string;
   isSubmitting: boolean;
   onAnonymous: () => void;
-  onDismiss: () => void;
+  onNavigate: () => void;
 }>) {
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 px-4 py-6 backdrop-blur-sm">
@@ -76,8 +95,8 @@ function WelcomeDialogBody(props: Readonly<{
           你可以注册账户同步额度和任务记录，也可以登录已有账户，或先匿名使用网站。
         </p>
         <div className="mt-4 grid gap-2 sm:grid-cols-3">
-          <Link className="primary-button text-center" href="/login?mode=register" onClick={props.onDismiss}>注册</Link>
-          <Link className="secondary-button text-center" href="/login" onClick={props.onDismiss}>登录</Link>
+          <Link className="primary-button text-center" href="/login?mode=register" onClick={props.onNavigate}>注册</Link>
+          <Link className="secondary-button text-center" href="/login" onClick={props.onNavigate}>登录</Link>
           <button className="secondary-button" type="button" onClick={props.onAnonymous} disabled={props.isSubmitting}>
             {props.isSubmitting ? "进入中..." : "匿名使用"}
           </button>
