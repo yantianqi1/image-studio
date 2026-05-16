@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from apps.api.app.core.config import get_settings
 from apps.api.app.core.errors import AppError
+from apps.api.app.domains.billing.credits import cents_to_price_credits
 from apps.api.app.domains.billing.models import Wallet, WalletLedger, WalletReservation
 
 
@@ -159,7 +160,9 @@ def wallet_payload(wallet: Wallet) -> dict[str, object]:
     return {
         "user_id": wallet.user_id,
         "balance_cents": wallet.balance_cents,
+        "balance_credits": cents_to_price_credits(wallet.balance_cents),
         "locked_cents": wallet.locked_cents,
+        "locked_credits": cents_to_price_credits(wallet.locked_cents),
         "currency": wallet.currency,
     }
 
@@ -168,7 +171,9 @@ def ledger_payload(entry: WalletLedger) -> dict[str, object]:
     return {
         "id": entry.id,
         "amount_cents": entry.amount_cents,
+        "amount_credits": cents_to_price_credits(entry.amount_cents),
         "balance_after_cents": entry.balance_after_cents,
+        "balance_after_credits": cents_to_price_credits(entry.balance_after_cents),
         "reason": entry.reason,
         "reference_type": entry.reference_type,
         "reference_id": entry.reference_id,

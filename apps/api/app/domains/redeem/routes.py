@@ -5,6 +5,7 @@ from apps.api.app.core.config import get_settings
 from apps.api.app.core.deps import get_db_session
 from apps.api.app.core.response import api_ok
 from apps.api.app.domains.auth.service import get_user_by_token, require_admin
+from apps.api.app.domains.billing.credits import cents_to_price_credits
 from apps.api.app.domains.billing.service import wallet_payload
 from apps.api.app.domains.redeem.schemas import CreateBatchRequest, RedeemRequest
 from apps.api.app.domains.redeem.service import create_batch, list_codes, redeem_code
@@ -31,7 +32,12 @@ def create_code_batch(payload: CreateBatchRequest, request: Request, session: Se
         codes=payload.codes,
     )
     session.commit()
-    return api_ok({"id": batch.id, "name": batch.name, "credit_amount_cents": batch.credit_amount_cents})
+    return api_ok({
+        "id": batch.id,
+        "name": batch.name,
+        "credit_amount_cents": batch.credit_amount_cents,
+        "credit_amount_credits": cents_to_price_credits(batch.credit_amount_cents),
+    })
 
 
 @admin_router.get("/codes")
@@ -44,6 +50,7 @@ def get_codes(request: Request, session: Session = Depends(get_db_session)):
                 "id": row.id,
                 "code": row.code,
                 "credit_amount_cents": row.credit_amount_cents,
+                "credit_amount_credits": cents_to_price_credits(row.credit_amount_cents),
                 "status": row.status,
                 "redeemed_by_user_id": row.redeemed_by_user_id,
                 "redeemed_at": row.redeemed_at.isoformat() if row.redeemed_at else None,

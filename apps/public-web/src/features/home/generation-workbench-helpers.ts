@@ -10,11 +10,10 @@ import {
   type ImageFormState,
   type ImageQuality,
 } from "@/features/home/generation-workbench.types";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCredits } from "@/lib/formatters";
 import type { PublicModelSummary, WalletSummary } from "@/lib/public-api";
 import type { ResourceState } from "@/lib/use-api-resource";
 
-const CURRENCY_CODE = "CNY";
 const UNAUTHORIZED_STATUS = 401;
 export const SIDEBAR_COLLAPSED_STORAGE_KEY = "commercial_studio_history_sidebar_collapsed";
 
@@ -90,7 +89,7 @@ export function getWalletLabel(walletState: ResourceState<WalletSummary>) {
     return "余额 --";
   }
 
-  return formatCurrency(walletState.data.balance_cents / 100, walletState.data.currency || CURRENCY_CODE);
+  return formatCredits(walletState.data.balance_credits);
 }
 
 export function getStateFromHistory(history: GenerationHistoryItem | null): GenerationState {

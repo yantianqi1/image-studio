@@ -1,12 +1,15 @@
-"""Default pricing for gpt-image-2 model variants.
-
-Price matrix: 1 credit = 1 RMB. Values already include cost + 10% markup.
-"""
+"""Default cost matrix for gpt-image-2 model variants."""
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 
+from apps.api.app.domains.billing.credits import (
+    DEFAULT_PROFIT_MARGIN_BASIS_POINTS,
+    SITE_CREDIT_CENTS,
+    apply_profit_margin,
+    cents_to_price_credits,
+    price_credits_to_cents,
+)
 from apps.api.app.domains.llm.variant_matrix import ALL_SIZES, SizeDefinition
 
 
@@ -47,10 +50,6 @@ def get_default_price_credits(aspect_ratio: str, tier: str, quality: str) -> flo
     is_square = aspect_ratio == "1:1"
     table = _SQUARE_PRICES if is_square else _NON_SQUARE_PRICES
     return table[tier][quality]
-
-
-def price_credits_to_cents(credits: float) -> int:
-    return math.ceil(credits * 100)
 
 
 def build_all_default_prices() -> list[VariantDefaultPrice]:

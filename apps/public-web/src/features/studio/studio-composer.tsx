@@ -29,7 +29,7 @@ import {
 } from "react";
 
 import { cn } from "@/lib/cn";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCredits } from "@/lib/formatters";
 import { streamPromptCrafter } from "@/features/prompt-crafter/prompt-crafter-api";
 import {
   buildPromptComplianceInstruction,
@@ -197,9 +197,9 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
   const qualityOptions = modelQualityOptions.length > 0 ? modelQualityOptions : QUALITY_OPTIONS;
   const activeVariant = findModelVariant(selectedModel, resolution, quality);
   const activeBasePriceLabel = activeVariant
-    ? formatCurrency(activeVariant.member_price_cents / 100, "CNY")
+    ? formatCredits(activeVariant.member_price_cents / 10)
     : selectedModel
-      ? formatCurrency(selectedModel.member_price_cents / 100, "CNY")
+      ? formatCredits(selectedModel.member_price_cents / 10)
       : "";
   const isDisabled = isSubmitting || !prompt.trim() || modelsState.status !== "ready";
   const submitLabel = getSubmitLabel("generate", isSubmitting, referenceImages.length > 0);
@@ -531,7 +531,7 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
                     <div className="absolute bottom-[calc(100%+8px)] left-0 z-[80] max-h-[45dvh] w-[218px] overflow-y-auto rounded-2xl border border-gray-200 bg-white p-1.5 shadow-lg">
                       {modelsState.data.map((m) => {
                         const active = m.code === model;
-                        const priceLabel = formatCurrency(getModelStartingPriceCents(m) / 100, "CNY");
+                        const priceLabel = formatCredits(getModelStartingPriceCents(m) / 10);
                         return (
                           <button
                             key={m.id}

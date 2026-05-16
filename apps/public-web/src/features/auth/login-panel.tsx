@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { AppShell } from "@/features/shell/app-shell";
@@ -19,7 +20,9 @@ type LoginState =
 type AuthMode = "login" | "register";
 
 export function LoginPanel() {
-  const [authMode, setAuthMode] = useState<AuthMode>("login");
+  const searchParams = useSearchParams();
+  const initialMode = searchParams.get("mode") === "register" ? "register" : "login";
+  const [authMode, setAuthMode] = useState<AuthMode>(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [state, setState] = useState<LoginState>({ status: "idle" });

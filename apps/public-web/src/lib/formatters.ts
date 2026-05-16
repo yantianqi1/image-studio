@@ -8,6 +8,12 @@ export function formatCurrency(amount: number, currency: string) {
   }).format(amount);
 }
 
+export function formatCredits(value: number) {
+  return `${new Intl.NumberFormat(CURRENCY_LOCALE, {
+    maximumFractionDigits: 2,
+  }).format(value)} 额度`;
+}
+
 export function formatDateTime(value: string) {
   const date = new Date(value);
 

@@ -100,6 +100,7 @@ type RedeemCode = {
   id: number;
   code: string;
   credit_amount_cents: number;
+  credit_amount_credits: number;
   status: string;
   redeemed_by_user_id: number | null;
   redeemed_at: string | null;

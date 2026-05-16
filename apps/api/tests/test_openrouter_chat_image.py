@@ -71,13 +71,13 @@ def test_openrouter_catalog_seed_exposes_image_channel(monkeypatch) -> None:
     openrouter_model = next(item for item in models if item["code"] == "gpt-image-2-openrouter")
     assert openrouter_model["display_name"] == "GPT Image 2 OpenRouter"
     assert openrouter_model["provider_model"] == "openai/gpt-5.4-image-2"
-    assert find_variant(openrouter_model, size="1024x1024", quality="medium")["member_price_cents"] == 150
+    assert find_variant(openrouter_model, size="1024x1024", quality="medium")["member_price_cents"] == 195
     assert find_variant(openrouter_model, size="1184x864", quality="medium")["aspect_ratio"] == "4:3"
     assert find_variant(openrouter_model, size="1344x768", quality="medium")["aspect_ratio"] == "16:9"
     assert find_variant(openrouter_model, size="1536x672", quality="medium")["aspect_ratio"] == "21:9"
-    assert find_variant(openrouter_model, size="768x1344", quality="high")["member_price_cents"] == 300
-    assert find_variant(openrouter_model, size="896x1152", quality="low")["member_price_cents"] == 80
-    assert find_variant(openrouter_model, size="1152x896", quality="low")["member_price_cents"] == 80
+    assert find_variant(openrouter_model, size="768x1344", quality="high")["member_price_cents"] == 390
+    assert find_variant(openrouter_model, size="896x1152", quality="low")["member_price_cents"] == 104
+    assert find_variant(openrouter_model, size="1152x896", quality="low")["member_price_cents"] == 104
 
 
 def test_openrouter_image_config_uses_documented_aspect_ratio_mapping() -> None:
@@ -112,7 +112,7 @@ def test_openrouter_job_routes_payload_and_records_usage(monkeypatch) -> None:
     channel_cost = load_openrouter_channel_cost(client)
 
     assert create_response.status_code == 201
-    assert create_response.json()["data"]["charge_cents"] == 150
+    assert create_response.json()["data"]["charge_cents"] == 195
     assert processed_job_id == job_id
     assert_openrouter_request_payload(captured)
     assert captured["download_url"] == "https://cdn.example.test/or.png"
@@ -201,9 +201,9 @@ def assert_openrouter_usage(job: dict[str, object], channel_cost: dict[str, obje
     assert job["raw_provider_cost_cents"] == 10
     assert job["provider_fee_cents"] == 3
     assert job["internal_cost_cents"] == 13
-    assert channel_cost["revenue_cents"] == 150
+    assert channel_cost["revenue_cents"] == 195
     assert channel_cost["internal_cost_cents"] == 13
-    assert channel_cost["gross_margin_cents"] == 137
+    assert channel_cost["gross_margin_cents"] == 182
 
 
 def test_openrouter_variant_price_adds_reference_and_edit_surcharges(monkeypatch) -> None:
@@ -230,7 +230,7 @@ def test_openrouter_variant_price_adds_reference_and_edit_surcharges(monkeypatch
     )
 
     assert create_response.status_code == 201
-    assert create_response.json()["data"]["charge_cents"] == 285
+    assert create_response.json()["data"]["charge_cents"] == 353
     with session_scope() as session:
         job = session.execute(select(ImageJob).where(ImageJob.id == create_response.json()["data"]["id"])).scalar_one()
         assert job.provider_model == "openai/gpt-5.4-image-2"

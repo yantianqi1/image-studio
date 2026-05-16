@@ -2,13 +2,15 @@
 
 import { useCallback, useReducer, useState } from "react";
 
-import { BatchToolbar, MemoAspectRatioGroup } from "@/features/providers/variant-matrix-editor";
+import { BatchToolbar } from "@/features/providers/variant-matrix-batch-toolbar";
+import { MemoAspectRatioGroup } from "@/features/providers/variant-matrix-editor";
 import { adminApi, type BatchVariantInput, type VariantMatrix } from "@/lib/admin-api";
 
 import type { EditableSlot, SlotsState, UpstreamModel } from "./variant-editor-types";
 
 type SellableModel = Awaited<ReturnType<typeof adminApi.models>>[number];
 type Provider = Awaited<ReturnType<typeof adminApi.providers>>[number];
+const DEFAULT_PROFIT_MARGIN_BASIS_POINTS = 3000;
 
 type SlotsAction =
   | { type: "load"; slots: SlotsState }
@@ -154,7 +156,11 @@ function buildSlot(size: string, variant: VariantMatrix["groups"][number]["tiers
     size,
     quality: variant.quality,
     upstream_provider_model: variant.upstream_provider_model,
+    upstream_cost_credits: variant.upstream_cost_credits,
+    upstream_cost_cents: variant.upstream_cost_cents,
+    profit_margin_basis_points: variant.profit_margin_basis_points ?? DEFAULT_PROFIT_MARGIN_BASIS_POINTS,
     member_price_cents: variant.member_price_cents ?? 0,
+    member_price_credits: variant.member_price_credits,
     anonymous_price_cents: variant.anonymous_price_cents ?? 0,
     status: variant.status ?? "disabled",
     dirty: false,
@@ -192,6 +198,9 @@ function buildVariantInput(slot: EditableSlot): BatchVariantInput {
     size: slot.size,
     quality: slot.quality,
     upstream_provider_model: slot.upstream_provider_model || undefined,
+    upstream_cost_credits: slot.upstream_cost_credits,
+    upstream_cost_cents: slot.upstream_cost_cents,
+    profit_margin_basis_points: slot.profit_margin_basis_points,
     member_price_cents: slot.member_price_cents,
     anonymous_price_cents: slot.anonymous_price_cents,
     status: slot.status,

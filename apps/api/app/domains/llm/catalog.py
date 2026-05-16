@@ -8,11 +8,14 @@ from sqlalchemy.orm import Session
 from apps.api.app.core.config import get_settings
 from apps.api.app.domains.llm.channel_pricing import (
     OFFICIAL_GPT_IMAGE_2_VARIANTS,
-    CatalogVariantSeed,
     build_lowcost_image_variant_seeds,
     build_openrouter_image_variant_seeds,
 )
-from apps.api.app.domains.llm.models import ModelVariant, Provider, SellableModel
+from apps.api.app.domains.llm.catalog_variants import (
+    ensure_model_variants,
+    sync_existing_model_variants,
+)
+from apps.api.app.domains.llm.models import Provider, SellableModel
 from apps.api.app.domains.llm.provider_validation import (
     LOCAL_DEV_PROVIDER_TYPE,
     OPENAI_CHAT_COMPATIBLE_PROVIDER_TYPE,
@@ -61,6 +64,7 @@ def ensure_provider_catalog(session: Session) -> None:
         openrouter_model = ensure_catalog_model(session, provider=openrouter_provider, seed=build_openrouter_image_model_seed())
         if openrouter_model is not None:
             ensure_model_variants(session, model=openrouter_model, seeds=build_openrouter_image_variant_seeds())
+    sync_existing_canonical_model_variants(session)
     session.flush()
 
 
@@ -254,37 +258,19 @@ def ensure_catalog_model(session: Session, *, provider: Provider, seed: CatalogM
     return model
 
 
-def ensure_model_variants(session: Session, *, model: SellableModel, seeds: list[CatalogVariantSeed] | tuple[CatalogVariantSeed, ...]) -> None:
-    existing = list(
-        session.execute(select(ModelVariant).where(ModelVariant.model_id == model.id)).scalars()
+def sync_existing_canonical_model_variants(session: Session) -> None:
+    sync_existing_model_variants(
+        session,
+        model_code=build_image_model_seed().code,
+        seeds=build_lowcost_image_variant_seeds(),
     )
-    variants_by_key = {(variant.size, variant.quality): variant for variant in existing}
-    for seed in seeds:
-        variant = variants_by_key.get((seed.size, seed.quality))
-        if variant is None:
-            session.add(build_model_variant(model_id=model.id, seed=seed))
-            continue
-        update_catalog_variant(variant, seed=seed)
-    session.flush()
-
-
-def build_model_variant(*, model_id: int, seed: CatalogVariantSeed) -> ModelVariant:
-    return ModelVariant(
-        model_id=model_id,
-        size=seed.size,
-        quality=seed.quality,
-        upstream_provider_model=seed.upstream_provider_model,
-        member_price_cents=seed.member_price_cents,
-        anonymous_price_cents=seed.anonymous_price_cents,
-        price_manually_set=False,
-        status=seed.status,
+    sync_existing_model_variants(
+        session,
+        model_code=build_official_image_model_seed().code,
+        seeds=OFFICIAL_GPT_IMAGE_2_VARIANTS,
     )
-
-
-def update_catalog_variant(variant: ModelVariant, *, seed: CatalogVariantSeed) -> None:
-    if variant.price_manually_set:
-        return
-    variant.upstream_provider_model = seed.upstream_provider_model
-    variant.member_price_cents = seed.member_price_cents
-    variant.anonymous_price_cents = seed.anonymous_price_cents
-    variant.status = seed.status
+    sync_existing_model_variants(
+        session,
+        model_code=build_openrouter_image_model_seed().code,
+        seeds=build_openrouter_image_variant_seeds(),
+    )

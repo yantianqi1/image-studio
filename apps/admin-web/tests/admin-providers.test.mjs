@@ -52,11 +52,12 @@ test("admin API applies default variant pricing", async () => {
     apiUpload: unexpectedApiUpload,
   });
 
-  const result = await adminProviderApi.applyDefaultPricing(7, { force: true });
+  const result = await adminProviderApi.applyDefaultPricing(7, { force: true, profit_margin_basis_points: 3000 });
 
   assert.equal(calls[0].path, "/api/admin/models/7/variants/apply-default-pricing");
   assert.equal(calls[0].options.method, "POST");
   assert.equal(JSON.parse(calls[0].options.body).force, true);
+  assert.equal(JSON.parse(calls[0].options.body).profit_margin_basis_points, 3000);
   assert.equal(result.updated, 84);
 });
 
@@ -67,6 +68,7 @@ test("providers page exposes model pricing overview and quick actions", () => {
   assert.match(modelPanelsSource, /VariantQuickActions/);
   assert.match(quickActionsSource, /应用推荐价/);
   assert.match(quickActionsSource, /强制重算/);
+  assert.match(quickActionsSource, /默认利润率 30%/);
 });
 
 function unexpectedApiUpload() {

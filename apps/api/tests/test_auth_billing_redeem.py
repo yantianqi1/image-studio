@@ -59,6 +59,8 @@ def test_register_login_me_and_wallet_signup_bonus():
     assert me_response.json()["data"]["email"] == "alice@example.com"
     assert wallet_response.status_code == 200
     assert wallet_response.json()["data"]["balance_cents"] == 100
+    assert wallet_response.json()["data"]["balance_credits"] == 10
+    assert wallet_response.json()["data"]["locked_credits"] == 0
 
     logout_response = client.post("/api/public/auth/logout")
     relogin_response = client.post(
@@ -149,6 +151,7 @@ def test_redeem_code_credits_wallet_and_redeem_twice_fails():
 
     assert redeem_response.status_code == 200
     assert wallet_response.json()["data"]["balance_cents"] == 350
+    assert wallet_response.json()["data"]["balance_credits"] == 35
     assert second_redeem_response.status_code == 409
 
 
@@ -168,6 +171,7 @@ def test_reservation_commit_writes_ledger_and_updates_balance():
     assert reserve_response.status_code == 201
     assert commit_response.status_code == 200
     assert wallet_response.json()["data"]["balance_cents"] == 70
+    assert wallet_response.json()["data"]["balance_credits"] == 7
 
     with session_scope() as session:
         ledger_rows = session.scalars(
@@ -177,6 +181,9 @@ def test_reservation_commit_writes_ledger_and_updates_balance():
 
     assert [row.amount_cents for row in ledger_rows] == [100, -30]
     assert reservation.status == "committed"
+
+    ledger_response = client.get("/api/public/billing/wallets/me/ledger")
+    assert [item["amount_credits"] for item in ledger_response.json()["data"]] == [10, -3]
 
 
 def test_reservation_release_keeps_balance_and_does_not_write_ledger():

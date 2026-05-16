@@ -50,6 +50,7 @@ export type ImageGenerationResponse = Readonly<{
   title?: string | null;
   visibility?: ImageAssetVisibility;
   charge_cents: number;
+  charge_credits: number;
   provider_input_tokens?: number | null;
   provider_output_tokens?: number | null;
   provider_total_tokens?: number | null;
@@ -118,6 +119,7 @@ export type PublicModelSummary = Readonly<{
   code: string;
   display_name: string;
   capability: string;
+  member_price_credits?: number;
   member_price_cents: number;
   anonymous_price_cents: number;
   variants?: readonly PublicModelVariant[];
@@ -128,8 +130,12 @@ export type PublicModelVariant = Readonly<{
   size: string;
   aspect_ratio?: string;
   quality: string;
+  upstream_cost_credits?: number | null;
+  upstream_cost_cents?: number | null;
+  member_price_credits?: number | null;
   member_price_cents: number;
   anonymous_price_cents: number;
+  profit_margin_basis_points?: number | null;
 }>;
 
 export type PublicSiteSettings = Readonly<{
@@ -153,13 +159,18 @@ export type PublicQuotaStatus = Readonly<{
 
 export type WalletSummary = Readonly<{
   balance_cents: number;
+  balance_credits: number;
   locked_cents: number;
+  locked_credits: number;
   currency: string;
 }>;
 
 export type WalletLedgerItem = Readonly<{
   id: number;
   amount_cents: number;
+  amount_credits: number;
+  balance_after_cents?: number;
+  balance_after_credits?: number;
   reason: string;
   created_at: string;
 }>;

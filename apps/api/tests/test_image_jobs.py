@@ -418,12 +418,12 @@ def test_official_channel_variant_reserves_official_price(monkeypatch):
 
     assert create_response.status_code == 201
     job = create_response.json()["data"]
-    assert job["charge_cents"] == 130
+    assert job["charge_cents"] == 169
     assert job["provider_model"] == "gpt-image-2"
 
     balance_cents, locked_cents = load_wallet_balance(user["id"])
     assert balance_cents == 1000
-    assert locked_cents == 130
+    assert locked_cents == 169
 
 
 def test_reference_and_edit_variant_pricing_adds_surcharges(monkeypatch):
@@ -449,10 +449,10 @@ def test_reference_and_edit_variant_pricing_adds_surcharges(monkeypatch):
     )
 
     assert create_response.status_code == 201
-    assert create_response.json()["data"]["charge_cents"] == 120
+    assert create_response.json()["data"]["charge_cents"] == 69
     balance_cents, locked_cents = load_wallet_balance(user["id"])
     assert balance_cents == 1000
-    assert locked_cents == 120
+    assert locked_cents == 69
 
 
 def test_edit_job_records_uploaded_source_asset_and_passes_it_to_renderer(monkeypatch):

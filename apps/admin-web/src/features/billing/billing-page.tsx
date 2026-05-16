@@ -9,7 +9,9 @@ import { useToast } from "@/lib/toast-context";
 
 type WalletState = Readonly<{
   balance_cents: number;
+  balance_credits: number;
   locked_cents: number;
+  locked_credits: number;
   currency: string;
 }>;
 
@@ -50,7 +52,7 @@ export function BillingPage() {
       const reason = String(formData.get("reason") ?? "");
       await adminApi.adjustWallet(currentUserId, { amount_cents: amountCents, reason });
       await refresh(currentUserId);
-      toast.success(`已为用户 ${currentUserId} 写入调账 ${amountCents} cents`);
+      toast.success(`已为用户 ${currentUserId} 写入调账 ${amountCents / 10} 额度`);
     } catch (nextError) {
       toast.error(nextError instanceof Error ? nextError.message : "调账失败");
     }
@@ -68,11 +70,11 @@ export function BillingPage() {
             <div className="mt-3 grid grid-cols-3 gap-2">
               <div className="admin-card text-center">
                 <p className="text-xs text-gray-400">余额</p>
-                <p className="text-sm font-semibold mt-0.5">{wallet.balance_cents}</p>
+                <p className="text-sm font-semibold mt-0.5">{wallet.balance_credits} 额度</p>
               </div>
               <div className="admin-card text-center">
                 <p className="text-xs text-gray-400">冻结</p>
-                <p className="text-sm font-semibold mt-0.5">{wallet.locked_cents}</p>
+                <p className="text-sm font-semibold mt-0.5">{wallet.locked_credits} 额度</p>
               </div>
               <div className="admin-card text-center">
                 <p className="text-xs text-gray-400">币种</p>
@@ -84,7 +86,7 @@ export function BillingPage() {
 
         <Panel title="管理员调账" description="正数加款，负数扣款">
           <form className="grid gap-3" action={handleAdjust}>
-            <input className="admin-input" name="amount_cents" placeholder="例如 100 或 -50" type="number" />
+            <input className="admin-input" name="amount_cents" placeholder="例如 100 或 -50 分，10 额度 = 100 分" type="number" />
             <input className="admin-input" name="reason" placeholder="manual_credit / manual_debit" />
             <button className="admin-button" type="submit" disabled={!currentUserId}>写入调账</button>
           </form>
@@ -103,7 +105,7 @@ export function BillingPage() {
                 <div key={item.id} className="admin-card flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="font-semibold text-sm truncate">
-                      {item.reason} · <span className={item.amount_cents >= 0 ? "text-emerald-600" : "text-red-600"}>{item.amount_cents >= 0 ? "+" : ""}{item.amount_cents} cents</span>
+                      {item.reason} · <span className={item.amount_cents >= 0 ? "text-emerald-600" : "text-red-600"}>{item.amount_cents >= 0 ? "+" : ""}{item.amount_credits} 额度</span>
                     </p>
                     <p className="text-xs text-gray-400 mt-0.5">
                       {item.reference_type}:{item.reference_id}

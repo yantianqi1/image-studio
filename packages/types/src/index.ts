@@ -50,7 +50,9 @@ export interface AuthSession {
 export interface Wallet {
   userId: number;
   balanceCents: number;
+  balanceCredits: number;
   lockedCents: number;
+  lockedCredits: number;
   currency: "CNY" | "USD";
 }
 
@@ -58,7 +60,9 @@ export interface WalletLedgerEntry {
   id: number;
   userId: number;
   deltaCents: number;
+  deltaCredits: number;
   balanceAfterCents: number;
+  balanceAfterCredits: number;
   reason: string;
   referenceType: string;
   referenceId: string;
@@ -91,6 +95,7 @@ export interface SellableModel {
   providerId: number;
   providerModel: string;
   publicEnabled: boolean;
+  memberPriceCredits: number;
   memberPriceCents: number;
   anonymousPriceCents: number;
   variants?: SellableModelVariant[];
@@ -101,8 +106,12 @@ export interface SellableModelVariant {
   size: string;
   aspectRatio?: string;
   quality: string;
+  upstreamCostCredits?: number | null;
+  upstreamCostCents?: number | null;
+  memberPriceCredits?: number | null;
   memberPriceCents: number;
   anonymousPriceCents: number;
+  profitMarginBasisPoints?: number | null;
 }
 
 export interface ImageJob {
@@ -120,6 +129,7 @@ export interface ImageJob {
   attemptCount: number;
   maxAttempts: number;
   chargeCents: number;
+  chargeCredits: number;
   errorCode: string | null;
   errorMessage: string | null;
   createdAt: string;

@@ -1,15 +1,14 @@
 """Tests for default pricing of gpt-image-2 model variants."""
 from __future__ import annotations
 
-import math
-
-import pytest
 from fastapi.testclient import TestClient
 
 from apps.api.app.domains.llm.default_pricing import (
+    DEFAULT_PROFIT_MARGIN_BASIS_POINTS,
     SURCHARGE_EDIT_CREDITS,
     SURCHARGE_PARTIAL_PREVIEW_CREDITS,
     SURCHARGE_REFERENCE_IMAGE_CREDITS,
+    apply_profit_margin,
     build_all_default_prices,
     get_default_price_credits,
     price_credits_to_cents,
@@ -84,22 +83,35 @@ class TestBuildAllDefaultPrices:
                 expected = get_default_price_credits(p.aspect_ratio, p.tier, p.quality)
                 assert p.price_credits == expected
 
-    def test_price_cents_equals_ceil_credits_times_100(self):
+    def test_price_cents_uses_site_credit_conversion(self):
         prices = build_all_default_prices()
         for p in prices:
-            assert p.price_cents == math.ceil(p.price_credits * 100)
+            assert p.price_cents == price_credits_to_cents(p.price_credits)
 
 
 class TestPriceCreditsToCents:
+    def test_site_credits_use_ten_credits_per_yuan(self):
+        assert price_credits_to_cents(10) == 100
+        assert price_credits_to_cents(0.5) == 5
+
     def test_exact_values(self):
-        assert price_credits_to_cents(0.05) == 5
-        assert price_credits_to_cents(0.40) == 40
-        assert price_credits_to_cents(1.58) == 158
-        assert price_credits_to_cents(6.32) == 632
+        assert price_credits_to_cents(0.05) == 1
+        assert price_credits_to_cents(0.40) == 4
+        assert price_credits_to_cents(1.58) == 16
+        assert price_credits_to_cents(6.32) == 64
 
     def test_rounds_up(self):
         assert price_credits_to_cents(0.001) == 1
-        assert price_credits_to_cents(0.011) == 2
+        assert price_credits_to_cents(0.011) == 1
+
+
+class TestProfitMargin:
+    def test_default_margin_is_30_percent(self):
+        assert DEFAULT_PROFIT_MARGIN_BASIS_POINTS == 3000
+
+    def test_applies_margin_with_integer_rounding(self):
+        assert apply_profit_margin(40, DEFAULT_PROFIT_MARGIN_BASIS_POINTS) == 52
+        assert apply_profit_margin(5, DEFAULT_PROFIT_MARGIN_BASIS_POINTS) == 7
 
 
 class TestSurcharges:
@@ -131,10 +143,13 @@ class TestApplyDefaultPricingEndpoint:
         model_id = setup_admin_and_model(client)
         resp = client.post(f"/api/admin/models/{model_id}/variants/apply-default-pricing", json={"force": False})
         variants = resp.json()["data"]["variants"]
-        # Find 4096x4096 high (square, 4k, high) -> 6.32 credits, 632 cents
+        # Find 4096x4096 high (square, 4k, high) -> 6.32 credits, 64 cost cents, 84 sale cents.
         v = next(v for v in variants if v["size"] == "4096x4096" and v["quality"] == "high")
-        assert v["member_price_credits"] == 6.32
-        assert v["member_price_cents"] == 632
+        assert v["upstream_cost_credits"] == 6.32
+        assert v["upstream_cost_cents"] == 64
+        assert v["member_price_cents"] == 84
+        assert v["member_price_credits"] == 8.4
+        assert v["profit_margin_basis_points"] == 3000
 
     def test_force_false_does_not_overwrite_manual_price(self, client):
         model_id = setup_admin_and_model(client)
@@ -161,9 +176,11 @@ class TestApplyDefaultPricingEndpoint:
         data = resp.json()["data"]
         assert data["skipped"] == 0
         v = next(v for v in data["variants"] if v["size"] == "1024x1024" and v["quality"] == "low")
-        # square, standard, low -> 0.05 credits, 5 cents
-        assert v["member_price_credits"] == 0.05
-        assert v["member_price_cents"] == 5
+        # square, standard, low -> 0.05 credits, 1 cost cent, 2 sale cents.
+        assert v["upstream_cost_credits"] == 0.05
+        assert v["upstream_cost_cents"] == 1
+        assert v["member_price_cents"] == 2
+        assert v["member_price_credits"] == 0.2
 
     def test_all_variants_are_active(self, client):
         model_id = setup_admin_and_model(client)

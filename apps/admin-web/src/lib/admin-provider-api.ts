@@ -6,9 +6,12 @@ export type ModelVariant = Readonly<{
   size: string;
   quality: string;
   upstream_provider_model: string | null;
+  upstream_cost_credits: number | null;
+  upstream_cost_cents: number | null;
   member_price_credits: number | null;
   member_price_cents: number;
   anonymous_price_cents: number;
+  profit_margin_basis_points: number;
   price_manually_set: boolean;
   status: string;
   created_at: string | null;
@@ -18,8 +21,12 @@ export type VariantSlot = Readonly<{
   quality: string;
   id: number | null;
   upstream_provider_model: string | null;
+  upstream_cost_credits: number | null;
+  upstream_cost_cents: number | null;
+  member_price_credits: number | null;
   member_price_cents: number | null;
   anonymous_price_cents: number | null;
+  profit_margin_basis_points: number | null;
   status: string | null;
 }>;
 
@@ -43,6 +50,9 @@ export type BatchVariantInput = {
   size: string;
   quality: string;
   upstream_provider_model?: string | null;
+  upstream_cost_credits?: number | null;
+  upstream_cost_cents?: number | null;
+  profit_margin_basis_points: number;
   member_price_cents: number;
   anonymous_price_cents: number;
   status: string;
@@ -119,7 +129,7 @@ export const adminProviderApi = {
       body: JSON.stringify(input),
     });
   },
-  applyDefaultPricing(modelId: number, input: { force: boolean }) {
+  applyDefaultPricing(modelId: number, input: { force: boolean; profit_margin_basis_points?: number }) {
     return apiFetch<ApplyDefaultPricingResult>(`/api/admin/models/${modelId}/variants/apply-default-pricing`, {
       method: "POST",
       body: JSON.stringify(input),
@@ -165,6 +175,7 @@ type SellableModelPayload = Readonly<{
   provider_id: number;
   provider_model: string;
   public_enabled: boolean;
+  member_price_credits?: number;
   member_price_cents: number;
   anonymous_price_cents: number;
 }>;
@@ -187,12 +198,18 @@ type CreateModelVariantInput = Readonly<{
   size: string;
   quality: string;
   upstream_provider_model?: string;
+  upstream_cost_credits?: number | null;
+  upstream_cost_cents?: number | null;
+  profit_margin_basis_points?: number;
   member_price_cents: number;
   anonymous_price_cents: number;
 }>;
 
 type UpdateModelVariantInput = Readonly<{
   upstream_provider_model?: string | null;
+  upstream_cost_credits?: number | null;
+  upstream_cost_cents?: number | null;
+  profit_margin_basis_points?: number;
   member_price_cents: number;
   anonymous_price_cents: number;
   status: string;

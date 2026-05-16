@@ -22,14 +22,18 @@ export type AdminUsersQuery = Readonly<{
 
 export type AdminWallet = Readonly<{
   balance_cents: number;
+  balance_credits: number;
   locked_cents: number;
+  locked_credits: number;
   currency: string;
 }>;
 
 export type AdminWalletLedgerEntry = Readonly<{
   id: number;
   amount_cents: number;
+  amount_credits: number;
   balance_after_cents: number;
+  balance_after_credits: number;
   reason: string;
   reference_type: string;
   reference_id: string;

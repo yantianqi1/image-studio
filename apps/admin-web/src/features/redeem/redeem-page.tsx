@@ -27,7 +27,7 @@ export function RedeemPage() {
               try {
                 const batch = await adminApi.createRedeemBatch({
                   name: String(formData.get("name") ?? ""),
-                  credit_amount_cents: Number(formData.get("amount") ?? "0"),
+                  credit_amount_cents: Number(formData.get("amount_credits") ?? "0") * 10,
                   codes: String(formData.get("codes") ?? "")
                     .split(",")
                     .map((item) => item.trim())
@@ -47,8 +47,8 @@ export function RedeemPage() {
             <input className="admin-input" name="name" placeholder="批次名称" />
             <input
               className="admin-input"
-              name="amount"
-              placeholder="额度（cents）"
+              name="amount_credits"
+              placeholder="额度（10 额度 = 1 元）"
               type="number"
               min="1"
             />
@@ -82,7 +82,7 @@ export function RedeemPage() {
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-xs font-semibold">{code.credit_amount_cents} cents</span>
+                  <span className="text-xs font-semibold">{code.credit_amount_credits} 额度</span>
                   <span className={`text-xs px-2 py-0.5 rounded-full ${code.status === "redeemed" ? "bg-emerald-50 text-emerald-600" : "bg-gray-100 text-gray-500"}`}>
                     {code.status}
                   </span>

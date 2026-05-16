@@ -101,7 +101,7 @@ export const adminApi = {
     );
   },
   createRedeemBatch(input: { name: string; credit_amount_cents: number; codes: string[] }) {
-    return apiFetch<{ id: number; name: string; credit_amount_cents: number }>("/api/admin/redeem/batches", {
+    return apiFetch<{ id: number; name: string; credit_amount_cents: number; credit_amount_credits: number }>("/api/admin/redeem/batches", {
       method: "POST",
       body: JSON.stringify(input),
     });
@@ -112,6 +112,7 @@ export const adminApi = {
         id: number;
         code: string;
         credit_amount_cents: number;
+        credit_amount_credits: number;
         status: string;
         redeemed_by_user_id: number | null;
         redeemed_at: string | null;

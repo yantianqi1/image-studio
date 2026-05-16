@@ -5,8 +5,8 @@ from sqlalchemy import select
 
 from apps.api.app.core.config import get_settings
 from apps.api.app.domains.auth.service import create_admin_account
-from apps.api.app.domains.llm.catalog import DEFAULT_MODEL_CODE
-from apps.api.app.domains.llm.models import SellableModel
+from apps.api.app.domains.llm.catalog import DEFAULT_MODEL_CODE, ensure_provider_catalog
+from apps.api.app.domains.llm.models import ModelVariant, Provider, SellableModel
 from apps.api.app.domains.llm.service import extract_image_reference
 from apps.api.app.infra.db.session import initialize_database, session_scope
 from apps.api.app.main import create_app
@@ -90,13 +90,66 @@ def test_public_models_include_channel_variant_prices() -> None:
     lowcost_medium = find_variant(lowcost, size="1024x1024", quality="medium")
     official_medium = find_variant(official, size="1024x1024", quality="medium")
 
-    assert lowcost_medium["member_price_cents"] == 40
-    assert official_medium["member_price_cents"] == 130
+    assert lowcost_medium["upstream_cost_cents"] == 4
+    assert lowcost_medium["member_price_cents"] == 6
+    assert lowcost_medium["member_price_credits"] == 0.6
+    assert lowcost_medium["profit_margin_basis_points"] == 3000
+    assert official_medium["upstream_cost_cents"] == 130
+    assert official_medium["member_price_cents"] == 169
     assert {variant["size"] for variant in official["variants"]} == {
         "1024x1024",
         "1024x1536",
         "1536x1024",
     }
+
+
+def test_catalog_syncs_existing_canonical_model_when_configured_provider_deleted(monkeypatch) -> None:
+    monkeypatch.setenv("OPENAI_PROVIDER_NAME", "opcl")
+    monkeypatch.setenv("OPENAI_PROVIDER_TYPE", "openai-compatible")
+    monkeypatch.setenv("OPENAI_PROVIDER_BASE_URL", "https://api.opcl.cloud/v1")
+    monkeypatch.setenv("OPENAI_PROVIDER_API_KEY_ENV", "OPENAI_PROVIDER_KEY")
+    get_settings.cache_clear()
+    initialize_database()
+    with session_scope() as session:
+        deleted_provider = Provider(
+            name="opcl",
+            type="openai-compatible",
+            base_url="https://api.opcl.cloud/v1",
+            api_key_env="OPENAI_PROVIDER_KEY",
+            status="deleted",
+        )
+        active_provider = Provider(name="image2", type="openai-compatible", status="active")
+        session.add_all([deleted_provider, active_provider])
+        session.flush()
+        model = SellableModel(
+            code="gpt-image-2",
+            display_name="GPT Image 2",
+            capability="image",
+            provider_id=active_provider.id,
+            provider_model="gpt-image-2",
+            public_enabled=True,
+            member_price_cents=77,
+            anonymous_price_cents=0,
+        )
+        session.add(model)
+        session.flush()
+        variant = ModelVariant(
+            model_id=model.id,
+            size="1024x1024",
+            quality="medium",
+            member_price_cents=40,
+            anonymous_price_cents=0,
+            price_manually_set=False,
+        )
+        session.add(variant)
+        session.flush()
+
+        ensure_provider_catalog(session)
+
+        assert variant.upstream_cost_cents == 4
+        assert variant.member_price_cents == 6
+        assert variant.member_price_credits == 0.6
+        assert variant.profit_margin_basis_points == 3000
 
 
 def test_admin_variant_update_survives_catalog_seed_refresh() -> None:
