@@ -10,7 +10,7 @@ from apps.api.app.core.errors import AppError
 from apps.api.app.domains.auth.ownership import OwnerContext
 from apps.api.app.domains.billing.models import WalletReservation
 from apps.api.app.domains.billing.service import commit_reservation, create_reservation, release_reservation
-from apps.api.app.domains.image.assets import delete_asset_objects
+from apps.api.app.domains.image.asset_deletion import delete_asset_objects
 from apps.api.app.domains.image.models import Asset, ImageJob, ImageJobReferenceAsset, ImageJobResult
 from apps.api.app.infra.storage.asset_storage import AssetStorage
 from apps.api.app.infra.storage.factory import build_asset_storage

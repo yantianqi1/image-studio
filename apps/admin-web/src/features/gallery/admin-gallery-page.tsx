@@ -1,42 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import Image from "next/image";
+import { useState } from "react";
 
 import { AdminShell } from "@/features/shell/admin-shell";
 import { ErrorBox } from "@/features/ui/error-box";
 import { adminApi, type AdminGalleryItem } from "@/lib/admin-api";
-
-type GalleryData = Readonly<{
-  items: readonly AdminGalleryItem[];
-  total: number;
-  page: number;
-  page_size: number;
-}>;
+import { useAdminGallery } from "@/lib/use-admin-data";
 
 export function AdminGalleryPage() {
-  const [data, setData] = useState<GalleryData | null>(null);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [pendingSearch, setPendingSearch] = useState("");
-
-  const fetchGallery = useCallback(async (p: number, q: string) => {
-    setLoading(true);
-    setError("");
-    try {
-      const result = await adminApi.gallery({ page: p, page_size: 50, q: q || undefined });
-      setData(result);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "加载失败");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void fetchGallery(page, search);
-  }, [fetchGallery, page, search]);
+  const { data, error, isLoading, mutate } = useAdminGallery({ page, page_size: 50, q: search || undefined });
+  const errorMessage = error instanceof Error ? error.message : error ? "加载失败" : "";
 
   function handleSearch() {
     setPage(1);
@@ -51,12 +28,12 @@ export function AdminGalleryPage() {
           onSearchChange={setPendingSearch}
           onSearch={handleSearch}
           total={data?.total ?? 0}
-          loading={loading}
+          loading={isLoading}
         />
-        {error && <ErrorBox message={error} />}
+        {errorMessage && <ErrorBox message={errorMessage} />}
         {data && (
           <>
-            <GalleryGrid items={data.items} onRefresh={() => void fetchGallery(page, search)} />
+            <GalleryGrid items={data.items} onRefresh={() => void mutate()} />
             <GalleryPagination page={page} total={data.total} pageSize={data.page_size} onPageChange={setPage} />
           </>
         )}
@@ -148,11 +125,14 @@ function GalleryCard({
 
   return (
     <div className="admin-card group relative overflow-hidden p-0">
-      <img
+      <Image
         src={item.thumbnail_url}
         alt={item.prompt || `图片 ${item.asset_id}`}
         className="aspect-square w-full object-cover"
+        height={320}
         loading="lazy"
+        unoptimized
+        width={320}
       />
       <div className="absolute inset-0 flex flex-col justify-between bg-black/0 opacity-0 transition-opacity group-hover:bg-black/40 group-hover:opacity-100">
         <div className="p-2">

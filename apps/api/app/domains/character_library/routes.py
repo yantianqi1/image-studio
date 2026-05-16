@@ -8,6 +8,7 @@ from apps.api.app.core.deps import get_db_session
 from apps.api.app.core.response import api_ok
 from apps.api.app.domains.auth.ownership import resolve_request_owner
 from apps.api.app.domains.auth.service import get_user_by_token, require_admin
+from apps.api.app.domains.character_library.admin_service import update_public_character_by_admin
 from apps.api.app.domains.character_library.service import (
     admin_character_payload,
     character_payload,
@@ -106,6 +107,29 @@ def delete_admin_character(character_id: int, request: Request, session: Session
     )
     session.commit()
     return api_ok({"deleted": True, "id": character_id})
+
+
+@admin_router.patch("/{character_id}")
+async def update_admin_character(
+    character_id: int,
+    request: Request,
+    name: str | None = Form(None),
+    file: UploadFile | None = File(None),
+    session: Session = Depends(get_db_session),
+):
+    require_admin(request, session)
+    content = await file.read() if file is not None else None
+    entry = update_public_character_by_admin(
+        session,
+        storage=build_asset_storage(),
+        character_id=character_id,
+        name=name,
+        content=content,
+        filename=file.filename if file is not None else None,
+        mime_type=file.content_type if file is not None else None,
+    )
+    session.commit()
+    return api_ok(admin_character_list_payload(session, [entry])[0])
 
 
 def character_list_payload(session: Session, entries) -> list[dict[str, object]]:

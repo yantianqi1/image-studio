@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import base64
 from datetime import datetime
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
+from apps.api.app.core.config import get_settings
 from apps.api.app.domains.auth.service import create_admin_account
 from apps.api.app.domains.character_library.models import CharacterLibraryEntry
 from apps.api.app.domains.character_library.service import character_payload
@@ -186,6 +188,53 @@ def test_admin_can_delete_public_character_entry_and_asset() -> None:
     with session_scope() as session:
         assert session.get(CharacterLibraryEntry, character["id"]) is None
         assert session.get(Asset, character["asset_id"]) is None
+
+
+def test_admin_can_delete_public_character_when_storage_object_is_missing() -> None:
+    admin = build_client()
+    seed_admin()
+    admin_login(admin)
+    character = upload_character(admin, "/api/admin/character-library", "缺失文件形象")
+    with session_scope() as session:
+        asset = session.get(Asset, character["asset_id"])
+        assert asset is not None
+        storage_path = asset.storage_path
+    asset_path = Path(get_settings().generated_assets_dir) / storage_path
+    assert asset_path.is_file()
+    asset_path.unlink()
+
+    response = admin.delete(f"/api/admin/character-library/{character['id']}")
+
+    assert response.status_code == 200
+    with session_scope() as session:
+        assert session.get(CharacterLibraryEntry, character["id"]) is None
+        assert session.get(Asset, character["asset_id"]) is None
+
+
+def test_admin_can_update_public_character_name_and_image() -> None:
+    admin = build_client()
+    seed_admin()
+    admin_login(admin)
+    character = upload_character(admin, "/api/admin/character-library", "旧形象")
+
+    response = admin.patch(
+        f"/api/admin/character-library/{character['id']}",
+        data={"name": "新形象"},
+        files={"file": ("updated.png", VALID_PNG_BYTES, "image/png")},
+    )
+
+    assert response.status_code == 200
+    updated = response.json()["data"]
+    assert updated["id"] == character["id"]
+    assert updated["name"] == "新形象"
+    assert updated["asset_id"] != character["asset_id"]
+    image_response = admin.get(updated["asset_url"])
+    assert image_response.status_code == 200
+    with session_scope() as session:
+        entry = session.get(CharacterLibraryEntry, character["id"])
+        assert entry is not None
+        assert entry.name == "新形象"
+        assert entry.asset_id == updated["asset_id"]
 
 
 def test_image_job_with_character_library_adds_reference_asset_and_prompt_instruction() -> None:

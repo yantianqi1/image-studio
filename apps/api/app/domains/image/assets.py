@@ -261,17 +261,6 @@ def api_thumbnail_url(asset: Asset) -> str:
     return f"/api/public/image/assets/{asset.id}/thumbnail"
 
 
-def resolve_existing_asset_path(storage_path: str) -> Path:
-    source_path = Path(storage_path)
-    if not source_path.is_file():
-        raise AppError(code="asset_file_missing", message="asset file missing", status_code=500)
-    return source_path
-
-
-def thumbnail_asset_path(source_path: Path) -> Path:
-    return source_path.with_name(f"{source_path.stem}{THUMBNAIL_SUFFIX}")
-
-
 def thumbnail_asset_key(asset_key: str) -> str:
     source_key = PurePosixPath(asset_key)
     return str(source_key.with_name(f"{source_key.stem}{THUMBNAIL_SUFFIX}"))
@@ -302,10 +291,3 @@ def convert_thumbnail_to_rgb(image: Image.Image) -> Image.Image:
     if image.mode == "P":
         return convert_thumbnail_to_rgb(image.convert("RGBA"))
     return image.convert("RGB")
-
-
-def delete_asset_objects(asset: Asset, storage: AssetStorage) -> None:
-    storage.delete(asset.storage_path)
-    thumbnail_key = thumbnail_asset_key(asset.storage_path)
-    if storage.exists(thumbnail_key):
-        storage.delete(thumbnail_key)

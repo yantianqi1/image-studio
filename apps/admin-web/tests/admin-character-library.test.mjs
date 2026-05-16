@@ -34,6 +34,7 @@ function loadAdminApi(apiClient) {
     require: (path) => {
       if (path === "@/lib/api-client") return apiClient;
       if (path === "@/lib/admin-image-job-types") return {};
+      if (path === "@/lib/admin-provider-api") return { adminProviderApi: {} };
       if (path === "@/lib/admin-users") return { buildUsersSearch: () => "" };
       throw new Error(`Unexpected require: ${path}`);
     },
@@ -95,9 +96,32 @@ test("admin API deletes a public character by entry id", async () => {
   assert.deepEqual(result, { deleted: true, id: 2 });
 });
 
+test("admin API updates public character as multipart patch", async () => {
+  const calls = [];
+  const file = new File(["png"], "updated.png", { type: "image/png" });
+  const { adminApi } = loadAdminApi({
+    apiFetch: unexpectedApiFetch,
+    apiUpload: async (path, body, options) => {
+      calls.push({ path, body, options });
+      return { id: 2, name: "新形象" };
+    },
+  });
+
+  const item = await adminApi.updateCharacterLibraryItem(2, { name: "新形象", file });
+
+  assert.equal(calls[0].path, "/api/admin/character-library/2");
+  assert.equal(calls[0].options.method, "PATCH");
+  assert.equal(calls[0].body.get("name"), "新形象");
+  assert.equal(calls[0].body.get("file"), file);
+  assert.equal(item.name, "新形象");
+});
+
 test("admin character library page renders thumbnails and delete action", () => {
   assert.match(routeSource, /AdminCharacterLibraryPage/);
   assert.match(pageSource, /src=\{item\.thumbnail_url\}/);
+  assert.match(pageSource, /object-contain/);
+  assert.match(pageSource, /submitCharacterUpdate/);
+  assert.match(pageStateSource, /adminApi\.updateCharacterLibraryItem/);
   assert.match(pageStateSource, /adminApi\.deleteCharacterLibraryItem/);
   assert.match(pageStateSource, /删除公共形象/);
 });

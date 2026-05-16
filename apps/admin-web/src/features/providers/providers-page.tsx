@@ -2,6 +2,7 @@
 
 import { ModelCreatePanel, ModelListPanel } from "@/features/providers/model-panels";
 import { ProviderCreatePanel, ProviderListPanel } from "@/features/providers/provider-panels";
+import { ProviderOverview } from "@/features/providers/provider-overview";
 import { UpstreamModelImportPanel } from "@/features/providers/upstream-model-import-panel";
 import { AdminShell } from "@/features/shell/admin-shell";
 import { ErrorBox } from "@/features/ui/error-box";
@@ -63,6 +64,7 @@ export function ProvidersPage() {
       <div className="col-span-12 grid gap-4">
         <TabBar active={activeTab} onChange={setActiveTab} />
         {error ? <ErrorBox message={error instanceof Error ? error.message : "读取供应商配置失败"} /> : null}
+        <ProviderOverview models={models} providers={providers} />
 
         {activeTab === "providers" && (
           <div className="grid gap-4">

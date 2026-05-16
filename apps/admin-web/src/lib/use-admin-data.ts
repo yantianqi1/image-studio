@@ -23,19 +23,26 @@ type PaginatedJobs = {
   page_size: number;
 };
 
+const IMAGE_JOBS_REFRESH_INTERVAL_MS = 5000;
+const WORKER_SUMMARY_REFRESH_INTERVAL_MS = 15000;
+
 export function useAdminJobs(params: { page?: number; page_size?: number; status?: string } = {}) {
   const search = buildSearch({ ...params, paginated: 1 });
-  return useSWR<PaginatedJobs>(`/api/admin/image/jobs${search}`);
+  return useSWR<PaginatedJobs>(`/api/admin/image/jobs${search}`, {
+    refreshInterval: IMAGE_JOBS_REFRESH_INTERVAL_MS,
+  });
 }
 
 export function useWorkerSummary() {
   return useSWR<WorkerSummary>("/api/admin/ops/worker-summary", {
-    refreshInterval: 15000,
+    refreshInterval: WORKER_SUMMARY_REFRESH_INTERVAL_MS,
   });
 }
 
 export function useAdminStats() {
-  return useSWR<ImageJobStats>("/api/admin/image/stats");
+  return useSWR<ImageJobStats>("/api/admin/image/stats", {
+    refreshInterval: IMAGE_JOBS_REFRESH_INTERVAL_MS,
+  });
 }
 
 export function useAdminUsers(query: AdminUsersQuery = {}) {

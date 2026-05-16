@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type Dispatch, type FormEvent, type SetStateAction } from "react";
 
-import { adminApi, type AdminCharacterLibraryItem } from "@/lib/admin-api";
+import { adminApi, type AdminCharacterLibraryItem, type AdminCharacterLibraryUpdateInput } from "@/lib/admin-api";
 
 export type UploadState = Readonly<{
   file: File | null;
@@ -21,6 +21,7 @@ export function useAdminCharacterLibrary() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [updatingId, setUpdatingId] = useState<number | null>(null);
   const refresh = useCallback(
     () => loadAdminCharacters({ setError, setItems, setLoading }),
     [],
@@ -42,9 +43,17 @@ export function useAdminCharacterLibrary() {
     item,
     setDeletingId,
     setError,
-    setItems,
+      setItems,
   });
-  return { deletingId, error, handleDelete, handleSubmit, items, loading, refresh, setUpload, submitting, upload };
+  const handleUpdate = (item: AdminCharacterLibraryItem, input: AdminCharacterLibraryUpdateInput) => updateAdminCharacter({
+    input,
+    item,
+    setError,
+    setItems,
+    setUpdatingId,
+    updatingId,
+  });
+  return { deletingId, error, handleDelete, handleSubmit, handleUpdate, items, loading, refresh, setUpload, submitting, updatingId, upload };
 }
 
 async function loadAdminCharacters(options: { setError: StringSetter; setItems: ItemsSetter; setLoading: BoolSetter }) {
@@ -104,5 +113,26 @@ async function deleteAdminCharacter(options: {
     options.setError(err instanceof Error ? err.message : "删除失败");
   } finally {
     options.setDeletingId(null);
+  }
+}
+
+async function updateAdminCharacter(options: {
+  input: AdminCharacterLibraryUpdateInput;
+  item: AdminCharacterLibraryItem;
+  setError: StringSetter;
+  setItems: ItemsSetter;
+  setUpdatingId: IdSetter;
+  updatingId: number | null;
+}) {
+  if (options.updatingId !== null) return;
+  options.setUpdatingId(options.item.id);
+  options.setError("");
+  try {
+    const item = await adminApi.updateCharacterLibraryItem(options.item.id, options.input);
+    options.setItems((current) => current.map((entry) => (entry.id === item.id ? item : entry)));
+  } catch (err) {
+    options.setError(err instanceof Error ? err.message : "更新失败");
+  } finally {
+    options.setUpdatingId(null);
   }
 }

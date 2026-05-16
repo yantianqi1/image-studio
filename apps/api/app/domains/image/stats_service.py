@@ -54,17 +54,21 @@ def _overview_stats(session: Session, *, today_start: datetime, week_ago: dateti
 
 
 def _avg_duration(session: Session) -> float | None:
-    stmt = session.query(
-        func.avg(func.julianday(ImageJob.finished_at) - func.julianday(ImageJob.started_at))
-    ).filter(
-        ImageJob.status == "succeeded",
-        ImageJob.started_at.is_not(None),
-        ImageJob.finished_at.is_not(None),
-    )
-    result = stmt.scalar()
-    if result is None:
+    rows = session.execute(
+        select(ImageJob.started_at, ImageJob.finished_at).where(
+            ImageJob.status == "succeeded",
+            ImageJob.started_at.is_not(None),
+            ImageJob.finished_at.is_not(None),
+        )
+    ).all()
+    durations = [
+        (finished_at - started_at).total_seconds()
+        for started_at, finished_at in rows
+        if finished_at >= started_at
+    ]
+    if not durations:
         return None
-    return round(float(result) * 86400, 1)
+    return round(sum(durations) / len(durations), 1)
 
 
 def _group_count(session: Session, column) -> list[dict]:

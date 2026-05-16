@@ -8,8 +8,8 @@ from sqlalchemy.orm import Session
 from apps.api.app.core.errors import AppError
 from apps.api.app.domains.auth.ownership import OwnerContext
 from apps.api.app.domains.character_library.models import CharacterLibraryEntry
+from apps.api.app.domains.image.asset_deletion import delete_asset_objects
 from apps.api.app.domains.image.assets import (
-    delete_asset_objects,
     detect_image_mime_type,
     persist_uploaded_asset,
     resolve_asset_public_urls,

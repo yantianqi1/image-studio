@@ -1,16 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import "@/features/jobs/image-jobs.css";
-import "@/features/jobs/image-job-results.css";
 import { AdminShell } from "@/features/shell/admin-shell";
 import { ErrorBox } from "@/features/ui/error-box";
 import { useAdminJobs, useWorkerSummary } from "@/lib/use-admin-data";
 
-import { ImageJobDetail } from "./image-job-detail";
-import { ImageJobResults } from "./image-job-results";
-import { ImageJobSidebar } from "./image-job-sidebar";
+import { ImageJobLogList } from "./image-job-log-list";
 import { ImageJobStatsPanel } from "./image-job-stats";
 
 type Tab = "logs" | "stats";
@@ -26,7 +23,6 @@ const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
 
 export function ImageJobsPage() {
   const [activeTab, setActiveTab] = useState<Tab>("logs");
-  const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("");
   const [page, setPage] = useState(1);
 
@@ -41,17 +37,12 @@ export function ImageJobsPage() {
   const totalJobs = jobsData?.total ?? 0;
   const totalPages = Math.ceil(totalJobs / 50);
 
-  const selectedJob = useMemo(
-    () => jobs.find((job) => job.id === selectedJobId) ?? null,
-    [jobs, selectedJobId],
-  );
-
   const error = jobsError instanceof Error ? jobsError.message : jobsError ? "读取图片任务失败" : "";
 
   return (
     <AdminShell
       title="图片任务"
-      description="按任务索引、完整提示词和结果图拆分视图，便于快速审阅生成记录。"
+      description="按提示词、参数扣费和结果图逐条审阅生成记录。"
       actions={<RefreshButton loading={jobsLoading} onRefresh={() => mutateJobs()} />}
     >
       <div className="col-span-12 grid gap-4">
@@ -61,17 +52,7 @@ export function ImageJobsPage() {
         {activeTab === "logs" && (
           <>
             <StatusFilterBar active={statusFilter} onChange={(s) => { setStatusFilter(s); setPage(1); }} />
-            <div className="image-jobs-workbench">
-              <ImageJobSidebar
-                jobs={jobs}
-                loading={jobsLoading}
-                selectedJobId={selectedJobId}
-                summary={summary ?? null}
-                onSelectJob={setSelectedJobId}
-              />
-              <ImageJobDetail job={selectedJob} />
-              <ImageJobResults job={selectedJob} />
-            </div>
+            <ImageJobLogList jobs={jobs} loading={jobsLoading} summary={summary ?? null} />
             {totalPages > 1 && (
               <div className="flex items-center justify-center gap-2">
                 <button className="admin-button" type="button" disabled={page <= 1} onClick={() => setPage(page - 1)}>上一页</button>
@@ -137,8 +118,11 @@ function RefreshButton({ loading, onRefresh }: Readonly<{
   onRefresh: () => void;
 }>) {
   return (
-    <button className="admin-button image-jobs-toolbar" disabled={loading} type="button" onClick={onRefresh}>
-      {loading ? "刷新中" : "刷新"}
-    </button>
+    <div className="image-jobs-toolbar">
+      <span>自动刷新 5s</span>
+      <button className="admin-button" disabled={loading} type="button" onClick={onRefresh}>
+        {loading ? "刷新中" : "刷新"}
+      </button>
+    </div>
   );
 }

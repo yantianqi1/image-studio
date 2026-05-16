@@ -76,7 +76,7 @@ def normalize_gallery_scope(value: str) -> str:
 
 
 def delete_owned_asset(session: Session, *, asset_id: int, owner: OwnerContext) -> None:
-    from apps.api.app.domains.image.assets import delete_asset_objects
+    from apps.api.app.domains.image.asset_deletion import delete_asset_objects
     from apps.api.app.infra.storage.factory import build_asset_storage
 
     asset = get_asset(session, asset_id)
@@ -91,7 +91,7 @@ def delete_asset_by_admin(session: Session, *, asset_id: int) -> None:
 
 
 def _remove_asset_and_references(session: Session, asset: Asset) -> None:
-    from apps.api.app.domains.image.assets import delete_asset_objects
+    from apps.api.app.domains.image.asset_deletion import delete_asset_objects
     from apps.api.app.infra.storage.factory import build_asset_storage
 
     results = list(session.execute(
