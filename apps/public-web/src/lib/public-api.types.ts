@@ -41,6 +41,7 @@ export type ImageConversationMessage = Readonly<{
 
 export type ImageAssetVisibility = "private" | "public";
 export type ImageGalleryScope = "mine" | "public";
+export type ImageTaggingStatus = "pending" | "queued" | "running" | "succeeded" | "failed";
 
 export type ImageGenerationResponse = Readonly<{
   id: number;
@@ -112,6 +113,8 @@ export type ImageGalleryItem = Readonly<{
   result_index: number;
   prompt: string;
   revised_prompt: string | null;
+  tags: readonly string[];
+  tagging_status: ImageTaggingStatus;
 }>;
 
 export type PublicModelSummary = Readonly<{

@@ -14,7 +14,7 @@ from apps.api.app.domains.image.storage_migration import (
 )
 from apps.api.app.infra.db.session import get_engine, get_session_factory, initialize_database
 
-HEAD_REVISION = "20260516_000022"
+HEAD_REVISION = "20260516_000024"
 REPO_ROOT = Path(__file__).resolve().parents[3]
 IMAGE_JOB_PROVIDER_USAGE_COLUMNS = {
     "provider_input_tokens",
@@ -61,10 +61,15 @@ def assert_core_schema(inspector) -> None:
     assert inspector.has_table("character_library_entries")
     assert inspector.has_table("anonymous_sessions")
     assert inspector.has_table("site_settings")
+    assert inspector.has_table("llm_purpose_model_settings")
+    assert inspector.has_table("image_asset_tagging_jobs")
+    assert inspector.has_table("image_asset_tags")
     assert_site_settings_schema(inspector)
+    assert_llm_purpose_model_settings_schema(inspector)
     assert_sellable_model_schema(inspector)
     assert_image_job_schema(inspector)
     assert_asset_schema(inspector)
+    assert_image_asset_tagging_schema(inspector)
     assert_owner_schema(inspector)
     assert_reference_asset_schema(inspector)
     assert_character_library_schema(inspector)
@@ -74,6 +79,11 @@ def assert_core_schema(inspector) -> None:
 def assert_site_settings_schema(inspector) -> None:
     site_settings_columns = {column["name"] for column in inspector.get_columns("site_settings")}
     assert "client_provider_url_pool" in site_settings_columns
+
+
+def assert_llm_purpose_model_settings_schema(inspector) -> None:
+    columns = {column["name"] for column in inspector.get_columns("llm_purpose_model_settings")}
+    assert {"purpose", "model_code", "updated_at"} <= columns
 
 
 def assert_sellable_model_schema(inspector) -> None:
@@ -106,6 +116,27 @@ def assert_asset_schema(inspector) -> None:
     assert {"owner_user_id", "owner_anonymous_session_id", "visibility", "published_at"} <= asset_columns
     asset_indexes = {index["name"] for index in inspector.get_indexes("assets")}
     assert "ix_assets_visibility" in asset_indexes
+
+
+def assert_image_asset_tagging_schema(inspector) -> None:
+    job_columns = {column["name"] for column in inspector.get_columns("image_asset_tagging_jobs")}
+    assert {
+        "asset_id",
+        "status",
+        "attempt_count",
+        "max_attempts",
+        "model_code",
+        "provider_model",
+        "error_code",
+        "error_message",
+        "available_at",
+        "started_at",
+        "finished_at",
+    } <= job_columns
+    tag_columns = {column["name"] for column in inspector.get_columns("image_asset_tags")}
+    assert {"asset_id", "tag", "normalized_tag", "sort_order", "created_at"} <= tag_columns
+    tag_indexes = {index["name"] for index in inspector.get_indexes("image_asset_tags")}
+    assert {"ix_image_asset_tags_asset_id", "ix_image_asset_tags_normalized_tag"} <= tag_indexes
 
 
 def assert_owner_schema(inspector) -> None:

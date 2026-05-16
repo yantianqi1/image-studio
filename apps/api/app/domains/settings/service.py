@@ -6,6 +6,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from apps.api.app.core.errors import AppError
+from apps.api.app.domains.llm.purpose_models import (
+    llm_purpose_model_codes_payload,
+    llm_purpose_models_payload,
+    update_llm_purpose_model_codes,
+)
 from apps.api.app.domains.settings.models import DEFAULT_CLIENT_PROVIDER_URL_POOL, SiteSettings
 from apps.api.app.domains.settings.schemas import SettingsUpdateRequest
 
@@ -27,6 +32,8 @@ def update_settings_record(session: Session, payload: SettingsUpdateRequest) -> 
     record.uploads_enabled = payload.uploads_enabled
     if payload.client_provider_url_pool is not None:
         record.client_provider_url_pool = payload.client_provider_url_pool.strip()
+    if payload.llm_purpose_model_codes is not None:
+        update_llm_purpose_model_codes(session, payload.llm_purpose_model_codes)
     update_public_quota_settings(record, payload)
     record.updated_at = datetime.utcnow()
     session.flush()
@@ -69,7 +76,12 @@ def get_client_provider_url_pool(session: Session) -> tuple[str, ...]:
     )
 
 
-def settings_payload(record: SiteSettings, *, include_admin_fields: bool = False) -> dict[str, object]:
+def settings_payload(
+    record: SiteSettings,
+    *,
+    include_admin_fields: bool = False,
+    session: Session | None = None,
+) -> dict[str, object]:
     payload: dict[str, object] = {
         "site_title": record.site_title,
         "allow_public_signup": record.allow_public_signup,
@@ -82,4 +94,7 @@ def settings_payload(record: SiteSettings, *, include_admin_fields: bool = False
     }
     if include_admin_fields:
         payload["client_provider_url_pool"] = record.client_provider_url_pool
+        if session is not None:
+            payload["llm_purpose_model_codes"] = llm_purpose_model_codes_payload(session)
+            payload["llm_purpose_models"] = llm_purpose_models_payload(session)
     return payload

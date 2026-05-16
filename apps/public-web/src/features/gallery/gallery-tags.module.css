@@ -1,0 +1,67 @@
+.tagFilter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  min-width: 0;
+  margin-top: -0.15rem;
+}
+
+.tagChip,
+.tileTag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 720;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.tagChip {
+  min-height: 2rem;
+  background: rgba(248, 250, 252, 0.86);
+  color: #4b5563;
+  padding: 0 0.76rem;
+  transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.tagChip:hover {
+  border-color: rgba(20, 86, 240, 0.28);
+  color: #101116;
+}
+
+.tagChipActive {
+  border-color: rgba(20, 86, 240, 0.24);
+  background: #ffffff;
+  color: #101116;
+  box-shadow: 0 8px 18px rgba(24, 40, 72, 0.08);
+}
+
+.tileTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.34rem;
+  min-width: 0;
+}
+
+.tileTag {
+  min-height: 1.5rem;
+  max-width: 100%;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.12);
+  color: #f8fafc;
+  padding: 0 0.52rem;
+  text-overflow: ellipsis;
+}
+
+.tileTagStatus {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(11, 18, 30, 0.42);
+}
+
+.tileTagError {
+  border-color: rgba(248, 113, 113, 0.28);
+  background: rgba(127, 29, 29, 0.66);
+}

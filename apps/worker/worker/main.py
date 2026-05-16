@@ -7,6 +7,7 @@ from apps.api.app.infra.db.session import initialize_database
 from apps.worker.worker.config import get_settings
 from apps.worker.worker.tasks.comic_orchestration import run_next_comic_orchestration
 from apps.worker.worker.tasks.comic_tasks import run_next_comic_task
+from apps.worker.worker.tasks.gallery_tagging import run_next_gallery_tagging_job
 from apps.worker.worker.tasks.image_jobs import run_next_image_jobs
 
 
@@ -27,6 +28,9 @@ def run_once() -> str:
         return f"Processed image job {image_job_ids[0]}."
     if len(image_job_ids) > 1:
         return f"Processed image jobs {', '.join(str(job_id) for job_id in image_job_ids)}."
+    gallery_tagging_job_id = run_next_gallery_tagging_job()
+    if gallery_tagging_job_id is not None:
+        return f"Processed gallery tagging job {gallery_tagging_job_id}."
     return "No claimable comic tasks or image jobs."
 
 

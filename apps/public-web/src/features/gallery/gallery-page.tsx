@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import useSWR from "swr";
 
 import { GalleryMasonry } from "@/features/gallery/gallery-masonry";
+import { GalleryTagFilter, buildGalleryTagOptions, filterGalleryItemsByTag } from "@/features/gallery/gallery-tags";
 import { AppShell } from "@/features/shell/app-shell";
 import { ErrorMessage } from "@/features/ui/error-message";
 import { ImagePreviewDialog, type ImagePreviewDialogImage } from "@/features/ui/image-preview-dialog";
@@ -37,14 +38,21 @@ export function GalleryPage({
   initialScope = "mine",
 }: GalleryPageProps = {}) {
   const [scope, setScope] = useState<ImageGalleryScope>(initialScope);
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<ImagePreviewDialogImage | null>(null);
   const { galleryState, mutate } = useGalleryData(scope);
+  const filteredState = useMemo(() => filterGalleryState(galleryState, selectedTag), [galleryState, selectedTag]);
+  const tagOptions = useMemo(() => resolveGalleryTagOptions(galleryState), [galleryState]);
 
   return (
     <AppShell activeHref={activeHref} headerTitle="图库">
       <div className={styles.page}>
-        <GalleryHeader scope={scope} state={galleryState} onScopeChange={setScope} />
-        <GalleryContent state={galleryState} scope={scope} onPreview={setPreviewImage} onMutate={mutate} />
+        <GalleryHeader scope={scope} state={filteredState} onScopeChange={(nextScope) => {
+          setScope(nextScope);
+          setSelectedTag(null);
+        }} />
+        <GalleryTagFilter tags={tagOptions} selectedTag={selectedTag} onTagChange={setSelectedTag} />
+        <GalleryContent state={filteredState} scope={scope} selectedTag={selectedTag} onPreview={setPreviewImage} onMutate={mutate} />
       </div>
       <ImagePreviewDialog image={previewImage} onClose={() => setPreviewImage(null)} />
     </AppShell>
@@ -125,11 +133,13 @@ function ScopeSegmentedControl({
 function GalleryContent({
   state,
   scope,
+  selectedTag,
   onPreview,
   onMutate,
 }: Readonly<{
   state: GalleryState;
   scope: ImageGalleryScope;
+  selectedTag: string | null;
   onPreview: (image: ImagePreviewDialogImage) => void;
   onMutate: () => void;
 }>) {
@@ -140,7 +150,7 @@ function GalleryContent({
     return <GalleryError state={state} scope={scope} />;
   }
   if (state.data.length === 0) {
-    return <StatusCard title="暂无图片" description={getEmptyDescription(scope)} tone="empty" />;
+    return <StatusCard title="暂无图片" description={getEmptyDescription(scope, selectedTag)} tone="empty" />;
   }
 
   return <GalleryMasonry items={state.data} scope={scope} onPreview={onPreview} onMutate={onMutate} />;
@@ -176,7 +186,10 @@ function getGallerySummary(
   return `${getScopeLabel(scope)} · ${getGalleryCountLabel(state)}`;
 }
 
-function getEmptyDescription(scope: ImageGalleryScope) {
+function getEmptyDescription(scope: ImageGalleryScope, selectedTag: string | null) {
+  if (selectedTag) {
+    return "没有匹配该标签的图片。";
+  }
   return scope === "public"
     ? "还没有公开展示的图片。"
     : "生成图片后会出现在这里。";
@@ -184,4 +197,18 @@ function getEmptyDescription(scope: ImageGalleryScope) {
 
 function getScopeLabel(scope: ImageGalleryScope) {
   return scope === "public" ? "公开图库" : "个人图库";
+}
+
+function filterGalleryState(state: GalleryState, selectedTag: string | null): GalleryState {
+  if (state.status !== "ready") {
+    return state;
+  }
+  return { status: "ready", data: filterGalleryItemsByTag(state.data, selectedTag) };
+}
+
+function resolveGalleryTagOptions(state: GalleryState): readonly string[] {
+  if (state.status !== "ready") {
+    return [];
+  }
+  return buildGalleryTagOptions(state.data);
 }

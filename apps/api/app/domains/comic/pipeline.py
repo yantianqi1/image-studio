@@ -39,6 +39,7 @@ from apps.api.app.domains.comic.story_segments import build_story_segments, pars
 from apps.api.app.domains.comic.style_presets import DEFAULT_STYLE_PRESET_ID, normalize_style_preset_id
 from apps.api.app.domains.llm import openai_chat
 from apps.api.app.domains.llm.client_provider import ClientProviderConfig, client_provider_config_from_mapping
+from apps.api.app.domains.llm.purpose_models import LLM_PURPOSE_COMIC_CHARACTER_BIBLE, LLM_PURPOSE_COMIC_STORY_ANALYSIS, LLM_PURPOSE_COMIC_STORYBOARD, resolve_llm_purpose_chat_target
 
 COMIC_LLM_SCHEMA_INVALID_ERROR_CODE = "comic_llm_schema_invalid"
 COMIC_LLM_NOT_CONFIGURED_ERROR_CODE = "comic_llm_not_configured"
@@ -124,6 +125,7 @@ def run_story_analysis(session: Session, *, task: ComicTask, inputs: PipelineInp
         system_prompt=STORY_ANALYZER_SYSTEM_PROMPT,
         user_payload={"source_text": inputs.source_text},
         client_provider_config=inputs.client_provider_config,
+        purpose=LLM_PURPOSE_COMIC_STORY_ANALYSIS,
     )
     analysis = ComicStoryAnalysis(task_id=task.id, project_id=task.project_id, source_text_hash=inputs.source_text_hash, **payload.model_dump())
     return create_story_analysis(session, analysis=analysis)
@@ -138,6 +140,7 @@ def run_character_bible(session: Session, *, task: ComicTask, inputs: PipelineIn
         system_prompt=CHARACTER_DESIGNER_SYSTEM_PROMPT,
         user_payload={"story_analysis": serialize_analysis(analysis), "source_text": inputs.source_text},
         client_provider_config=inputs.client_provider_config,
+        purpose=LLM_PURPOSE_COMIC_CHARACTER_BIBLE,
     )
     cards = [build_character_card(task=task, character=character.model_dump()) for character in bible.characters]
     create_character_cards(session, cards=cards)
@@ -146,7 +149,7 @@ def run_character_bible(session: Session, *, task: ComicTask, inputs: PipelineIn
 
 def run_storyboard(session: Session, *, task: ComicTask, inputs: PipelineInputs, analysis: ComicStoryAnalysis, bible: CharacterBible) -> ComicStoryboard:
     publish_task_stage(session, task=task, stage="storyboarding", progress_percent=60)
-    chat_target = openai_chat.resolve_chat_target_for_config(session, inputs.client_provider_config)
+    chat_target = resolve_llm_purpose_chat_target(session, purpose=LLM_PURPOSE_COMIC_STORYBOARD, client_provider_config=inputs.client_provider_config)
     context = build_storyboard_generation_context(inputs=inputs, analysis=analysis, bible=bible)
     storyboard = generate_storyboard_pages(
         context=context,
@@ -159,6 +162,7 @@ def run_storyboard(session: Session, *, task: ComicTask, inputs: PipelineInputs,
             client_provider_config=inputs.client_provider_config,
             payload_defaults={"style_preset": inputs.style_preset, "panels_per_image": inputs.panels_per_image},
             chat_target=chat_target,
+            purpose=LLM_PURPOSE_COMIC_STORYBOARD,
         ),
     )
     validate_storyboard_image_count(storyboard, expected_image_count=inputs.target_image_count)
@@ -186,10 +190,12 @@ def call_structured_llm(
     system_prompt: str,
     user_payload: dict,
     client_provider_config: ClientProviderConfig | None,
+    purpose: str,
     payload_defaults: dict | None = None,
     chat_target: openai_chat.ChatTarget | None = None,
 ):
     try:
+        target = chat_target or resolve_llm_purpose_chat_target(session, purpose=purpose, client_provider_config=client_provider_config)
         payload = openai_chat.generate_structured_chat(
             session,
             system_prompt=system_prompt,
@@ -197,7 +203,7 @@ def call_structured_llm(
             schema_name=schema_name,
             response_schema=schema.model_json_schema(),
             client_provider_config=client_provider_config,
-            chat_target=chat_target,
+            chat_target=target,
         )
         return schema.model_validate(apply_payload_defaults(payload, payload_defaults))
     except AppError as exc:

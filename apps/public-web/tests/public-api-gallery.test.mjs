@@ -48,6 +48,23 @@ test("publicApi reads image gallery by scope", async () => {
   assert.equal(items[0].asset_id, 12);
 });
 
+test("publicApi can filter image gallery by tag", async () => {
+  const calls = [];
+  const { publicApi } = loadPublicApi({
+    apiFetch: async (path) => {
+      calls.push(path);
+      return [{ asset_id: 12, tags: ["霓虹街道"] }];
+    },
+    apiUpload: unexpectedApiUpload,
+    apiDownload: unexpectedApiDownload,
+  });
+
+  const items = await publicApi.getImageGallery("public", "霓虹街道");
+
+  assert.deepEqual(calls, ["/image/gallery?scope=public&tag=%E9%9C%93%E8%99%B9%E8%A1%97%E9%81%93"]);
+  assert.equal(items[0].tags[0], "霓虹街道");
+});
+
 test("publicApi updates image asset visibility", async () => {
   const calls = [];
   const { publicApi } = loadPublicApi({

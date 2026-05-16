@@ -35,6 +35,7 @@ from apps.api.app.domains.image.service import (
     list_job_results_for_owner,
     list_jobs_for_owner,
 )
+from apps.api.app.domains.image.tagging import load_asset_tagging_states
 from apps.api.app.domains.image.title_generation import generate_image_job_title
 from apps.api.app.domains.llm.client_provider import CLIENT_PROVIDER_SOURCE, read_client_provider_config
 from apps.api.app.domains.public_quota.constants import PUBLIC_QUOTA_FEATURE_IMAGE
@@ -106,12 +107,17 @@ def get_image_gallery(
     request: Request,
     response: Response,
     scope: str = Query(default="mine"),
+    tag: str = Query(default=""),
     session: Session = Depends(get_db_session),
 ):
     owner = resolve_gallery_owner(request=request, response=response, session=session, scope=scope)
     storage = build_asset_storage()
-    items = list_gallery_items(session, owner=owner, scope=scope)
-    return api_ok([gallery_item_payload(result, job=job, asset=asset, storage=storage) for result, job, asset in items])
+    items = list_gallery_items(session, owner=owner, scope=scope, tag=tag or None)
+    tagging_states = load_asset_tagging_states(session, [asset.id for _result, _job, asset in items])
+    return api_ok([
+        gallery_item_payload(result, job=job, asset=asset, storage=storage, tagging=tagging_states.get(asset.id))
+        for result, job, asset in items
+    ])
 
 
 @public_router.get("/jobs")

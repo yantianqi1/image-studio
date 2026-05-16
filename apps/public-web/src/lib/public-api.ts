@@ -109,8 +109,9 @@ export const publicApi = {
   getImageJobResults(jobId: number, options: Pick<ApiRequestOptions, "signal"> = {}) {
     return apiFetch<readonly ImageJobResult[]>(`/image/jobs/${jobId}/results`, options);
   },
-  getImageGallery(scope: ImageGalleryScope) {
-    return apiFetch<readonly ImageGalleryItem[]>(`/image/gallery?scope=${scope}`);
+  getImageGallery(scope: ImageGalleryScope, tag?: string) {
+    const tagQuery = tag ? `&tag=${encodeURIComponent(tag)}` : "";
+    return apiFetch<readonly ImageGalleryItem[]>(`/image/gallery?scope=${scope}${tagQuery}`);
   },
   updateImageAssetVisibility(assetId: number, visibility: ImageAssetVisibility) {
     return apiFetch<ImageGalleryItem>(`/image/assets/${assetId}/visibility`, {

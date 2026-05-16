@@ -32,6 +32,23 @@ const masonrySource = readFileSync(
   "utf8",
 );
 
+const tileActionsSource = readFileSync(
+  new URL("../src/features/gallery/gallery-tile-actions.tsx", import.meta.url),
+  "utf8",
+);
+
+const galleryTagsSource = readFileSync(
+  new URL("../src/features/gallery/gallery-tags.tsx", import.meta.url),
+  "utf8",
+);
+
+const galleryTagsStylesUrl = new URL(
+  "../src/features/gallery/gallery-tags.module.css",
+  import.meta.url,
+);
+
+const galleryTagsStylesSource = readFileSync(galleryTagsStylesUrl, "utf8");
+
 const galleryActionsStylesUrl = new URL(
   "../src/features/gallery/gallery-actions.module.css",
   import.meta.url,
@@ -110,12 +127,13 @@ test("gallery header keeps title and controls compact on desktop", () => {
 });
 
 test("gallery cards expose hover actions for prompt reuse and download", () => {
-  assert.match(masonrySource, /复制/);
-  assert.match(masonrySource, /复用/);
-  assert.match(masonrySource, /下载/);
-  assert.match(masonrySource, /navigator\.clipboard\.writeText/);
-  assert.match(masonrySource, /\/generate\?prompt=/);
-  assert.match(masonrySource, /download=/);
+  assert.match(masonrySource, /GalleryTileActions/);
+  assert.match(tileActionsSource, /复制/);
+  assert.match(tileActionsSource, /复用/);
+  assert.match(tileActionsSource, /下载/);
+  assert.match(tileActionsSource, /navigator\.clipboard\.writeText/);
+  assert.match(tileActionsSource, /\/generate\?prompt=/);
+  assert.match(tileActionsSource, /download=/);
   assert.match(galleryActionsStylesSource, /actionBar/);
   assert.match(galleryActionsStylesSource, /actionTile:hover/);
 });
@@ -124,7 +142,21 @@ test("gallery stream loads thumbnails and keeps original assets for preview and 
   assert.match(publicApiTypesSource, /thumbnail_url: string/);
   assert.match(masonrySource, /src={item\.thumbnail_url}/);
   assert.match(masonrySource, /onPreview\(\{ src: item\.asset_url/);
-  assert.match(masonrySource, /href={item\.asset_url}/);
+  assert.match(tileActionsSource, /href={item\.asset_url}/);
+});
+
+test("gallery exposes generated tags and tag filters", () => {
+  assert.match(publicApiTypesSource, /tags: readonly string\[\]/);
+  assert.match(publicApiTypesSource, /tagging_status:/);
+  assert.match(galleryTagsSource, /filterGalleryItemsByTag/);
+  assert.match(galleryTagsSource, /buildGalleryTagOptions/);
+  assert.match(galleryTagsSource, /GalleryTagFilter/);
+  assert.match(galleryTagsSource, /GalleryTileTags/);
+  assert.match(galleryTagsStylesSource, /tagFilter/);
+  assert.match(galleryTagsStylesSource, /tagChip/);
+  assert.match(masonrySource, /GalleryTileTags/);
+  assert.match(gallerySource, /GalleryTagFilter/);
+  assert.match(gallerySource, /filterGalleryState/);
 });
 
 test("gallery batches image measurements to avoid per-image masonry reflows", () => {

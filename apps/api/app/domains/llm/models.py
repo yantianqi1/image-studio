@@ -54,3 +54,11 @@ class ModelVariant(Base):
     price_manually_set: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     status: Mapped[str] = mapped_column(String(32), default="active", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class LlmPurposeModelSetting(Base):
+    __tablename__ = "llm_purpose_model_settings"
+
+    purpose: Mapped[str] = mapped_column(String(64), primary_key=True)
+    model_code: Mapped[str] = mapped_column(String(128), ForeignKey("sellable_models.code"), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

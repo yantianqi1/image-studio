@@ -20,3 +20,4 @@ class SettingsUpdateRequest(BaseModel):
     public_quota_daily_global_limit: Optional[int] = Field(default=None, ge=1)
     public_quota_per_ip_limit: Optional[int] = Field(default=None, ge=1)
     client_provider_url_pool: Optional[str] = Field(default=None, max_length=CLIENT_PROVIDER_URL_POOL_MAX_LENGTH)
+    llm_purpose_model_codes: Optional[dict[str, str]] = None

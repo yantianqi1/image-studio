@@ -209,6 +209,9 @@ def clear_job_outputs(session: Session, *, job_id: int, storage: AssetStorage | 
         session.delete(result)
     session.flush()
     if asset_ids:
+        from apps.api.app.domains.image.tagging import delete_asset_tagging_state
+
+        delete_asset_tagging_state(session, asset_ids=asset_ids)
         asset_storage = storage or build_asset_storage()
         assets = list(session.execute(select(Asset).where(Asset.id.in_(asset_ids))).scalars())
         for asset in assets:

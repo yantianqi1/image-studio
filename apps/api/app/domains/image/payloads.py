@@ -1,5 +1,6 @@
 from apps.api.app.domains.billing.credits import cents_to_price_credits
 from apps.api.app.domains.image.assets import resolve_asset_public_urls
+from apps.api.app.domains.image.tagging import GalleryTaggingState, GALLERY_TAGGING_STATUS_PENDING
 
 
 def admin_job_payload(job, *, results) -> dict[str, object]:
@@ -113,18 +114,20 @@ def asset_payload(asset, *, storage=None) -> dict[str, object]:
     }
 
 
-def gallery_item_payload(result, *, job, asset, storage=None) -> dict[str, object]:
+def gallery_item_payload(result, *, job, asset, storage=None, tagging: GalleryTaggingState | None = None) -> dict[str, object]:
     payload = asset_payload(asset, storage=storage)
     payload.update({
         "job_id": job.id,
         "result_index": result.result_index,
         "prompt": job.prompt,
         "revised_prompt": result.revised_prompt,
+        "tags": list(tagging.tags) if tagging else [],
+        "tagging_status": tagging.status if tagging else GALLERY_TAGGING_STATUS_PENDING,
     })
     return payload
 
 
-def admin_gallery_item_payload(result, *, job, asset, storage=None) -> dict[str, object]:
+def admin_gallery_item_payload(result, *, job, asset, storage=None, tagging: GalleryTaggingState | None = None) -> dict[str, object]:
     payload = asset_payload(asset, storage=storage)
     payload.update({
         "job_id": job.id,
@@ -133,5 +136,9 @@ def admin_gallery_item_payload(result, *, job, asset, storage=None) -> dict[str,
         "revised_prompt": result.revised_prompt,
         "owner_user_id": asset.owner_user_id,
         "owner_anonymous_session_id": asset.owner_anonymous_session_id,
+        "tags": list(tagging.tags) if tagging else [],
+        "tagging_status": tagging.status if tagging else GALLERY_TAGGING_STATUS_PENDING,
+        "tagging_error_code": tagging.error_code if tagging else None,
+        "tagging_error_message": tagging.error_message if tagging else None,
     })
     return payload

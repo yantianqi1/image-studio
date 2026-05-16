@@ -20,6 +20,7 @@ from apps.api.app.domains.image.payloads import (
 )
 from apps.api.app.domains.image.schemas import UpdateAssetVisibilityRequest
 from apps.api.app.domains.image.stats_service import get_image_job_stats
+from apps.api.app.domains.image.tagging import load_asset_tagging_states
 from apps.api.app.infra.storage.factory import build_asset_storage
 
 admin_router = APIRouter(tags=["image-admin"])
@@ -82,8 +83,12 @@ def get_admin_gallery(
     require_admin(request, session)
     storage = build_asset_storage()
     items, total = list_admin_gallery_items(session, page=page, page_size=page_size, query=q or None)
+    tagging_states = load_asset_tagging_states(session, [asset.id for _result, _job, asset in items])
     return api_ok({
-        "items": [admin_gallery_item_payload(result, job=job, asset=asset, storage=storage) for result, job, asset in items],
+        "items": [
+            admin_gallery_item_payload(result, job=job, asset=asset, storage=storage, tagging=tagging_states.get(asset.id))
+            for result, job, asset in items
+        ],
         "total": total,
         "page": page,
         "page_size": page_size,

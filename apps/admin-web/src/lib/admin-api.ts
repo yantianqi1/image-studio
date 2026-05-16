@@ -192,6 +192,14 @@ export const adminApi = {
       public_quota_daily_global_limit: number;
       public_quota_per_ip_limit: number;
       client_provider_url_pool: string;
+      llm_purpose_model_codes: Record<string, string>;
+      llm_purpose_models: readonly {
+        purpose: string;
+        label: string;
+        description: string;
+        model_code: string;
+        default_model_code: string;
+      }[];
     }>("/api/admin/settings");
   },
   updateSettings(input: {
@@ -203,6 +211,7 @@ export const adminApi = {
     public_quota_daily_global_limit: number;
     public_quota_per_ip_limit: number;
     client_provider_url_pool: string;
+    llm_purpose_model_codes: Record<string, string>;
   }) {
     return apiFetch<{
       site_title: string;
@@ -213,6 +222,14 @@ export const adminApi = {
       public_quota_daily_global_limit: number;
       public_quota_per_ip_limit: number;
       client_provider_url_pool: string;
+      llm_purpose_model_codes: Record<string, string>;
+      llm_purpose_models: readonly {
+        purpose: string;
+        label: string;
+        description: string;
+        model_code: string;
+        default_model_code: string;
+      }[];
     }>("/api/admin/settings", {
       method: "PATCH",
       body: JSON.stringify(input),

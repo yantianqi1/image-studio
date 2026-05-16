@@ -76,7 +76,7 @@ type Provider = {
   status: string;
 };
 
-type SellableModel = {
+export type SellableModel = {
   id: number;
   code: string;
   display_name: string;
@@ -119,6 +119,16 @@ type SiteSettings = {
   public_quota_daily_global_limit: number;
   public_quota_per_ip_limit: number;
   client_provider_url_pool: string;
+  llm_purpose_model_codes: Record<string, string>;
+  llm_purpose_models: readonly LlmPurposeModelSetting[];
+};
+
+export type LlmPurposeModelSetting = {
+  purpose: string;
+  label: string;
+  description: string;
+  model_code: string;
+  default_model_code: string;
 };
 
 export function useAdminSettings() {

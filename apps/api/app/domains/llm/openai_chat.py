@@ -84,11 +84,11 @@ def resolve_chat_target(session: Session, *, model_code: str | None = None) -> C
     return build_chat_target(provider=provider, provider_model=model.provider_model or provider.default_model)
 
 
-def resolve_client_chat_target(config: ClientProviderConfig) -> ChatTarget:
+def resolve_client_chat_target(config: ClientProviderConfig, provider_model: str | None = None) -> ChatTarget:
     settings = get_settings()
     provider = build_runtime_provider(config)
-    provider_model = settings.openai_chat_model_provider_model or settings.openai_chat_model_code
-    return build_chat_target(provider=provider, provider_model=provider_model)
+    resolved_model = provider_model or settings.openai_chat_model_provider_model or settings.openai_chat_model_code
+    return build_chat_target(provider=provider, provider_model=resolved_model)
 
 
 def build_chat_target(*, provider: Provider, provider_model: str | None) -> ChatTarget:

@@ -7,8 +7,9 @@ import { ErrorBox } from "@/features/ui/error-box";
 import { Panel } from "@/features/ui/panel";
 import { SubmitButton } from "@/features/ui/submit-button";
 import { adminApi } from "@/lib/admin-api";
-import { useAdminSettings } from "@/lib/use-admin-data";
+import { useAdminSettings, useModels, type LlmPurposeModelSetting, type SellableModel } from "@/lib/use-admin-data";
 import { useToast } from "@/lib/toast-context";
+import { LlmPurposeModelFields } from "./settings-llm-purpose-models";
 
 type SettingsState = Readonly<{
   site_title: string;
@@ -19,10 +20,14 @@ type SettingsState = Readonly<{
   public_quota_daily_global_limit: number;
   public_quota_per_ip_limit: number;
   client_provider_url_pool: string;
+  llm_purpose_model_codes: Record<string, string>;
+  llm_purpose_models: readonly LlmPurposeModelSetting[];
 }>;
+type SettingsUpdatePayload = Omit<SettingsState, "llm_purpose_models">;
 
 export function SettingsPage() {
   const { data: settings, error: loadError, mutate } = useAdminSettings();
+  const { data: models = [], error: modelsError } = useModels();
   const [error, setError] = useState("");
   const toast = useToast();
 
@@ -43,19 +48,20 @@ export function SettingsPage() {
       title="站点设置"
       description="公开注册、匿名生图和公开共享额度已经在 API 入口真实生效。"
     >
-      {loadError ? <div className="col-span-12"><ErrorBox message={loadError instanceof Error ? loadError.message : "读取设置失败"} /></div> : null}
-      {settings ? <SettingsPanel error={error} onSave={handleSave} settings={settings} /> : null}
+      {loadError || modelsError ? <div className="col-span-12"><ErrorBox message={readLoadError(loadError || modelsError)} /></div> : null}
+      {settings ? <SettingsPanel error={error} models={models} onSave={handleSave} settings={settings} /> : null}
     </AdminShell>
   );
 }
 
 type SettingsPanelProps = Readonly<{
   error: string;
+  models: readonly SellableModel[];
   onSave: (formData: FormData) => Promise<void>;
   settings: SettingsState;
 }>;
 
-function SettingsPanel({ error, onSave, settings }: SettingsPanelProps) {
+function SettingsPanel({ error, models, onSave, settings }: SettingsPanelProps) {
   return (
     <div className="col-span-12 lg:col-span-7">
       <Panel title="公开体验设置" description="提交 /api/admin/settings">
@@ -63,6 +69,7 @@ function SettingsPanel({ error, onSave, settings }: SettingsPanelProps) {
           <SiteTitleField siteTitle={settings.site_title} />
           <RuntimeSwitches settings={settings} />
           <ClientProviderUrlPoolField value={settings.client_provider_url_pool} />
+          <LlmPurposeModelFields models={models} purposes={settings.llm_purpose_models} />
           <PublicQuotaModeSelector mode={settings.public_quota_mode} />
           <PublicQuotaLimitInputs settings={settings} />
           <SubmitButton pendingText="保存中...">保存设置</SubmitButton>
@@ -164,7 +171,7 @@ function QuotaLimitInput(props: Readonly<{ hint: string; label: string; name: st
 
 type PublicQuotaMode = SettingsState["public_quota_mode"];
 
-function buildSettingsPayload(formData: FormData, settings: SettingsState): SettingsState {
+function buildSettingsPayload(formData: FormData, settings: SettingsState): SettingsUpdatePayload {
   return {
     site_title: String(formData.get("site_title") ?? ""),
     allow_public_signup: formData.get("allow_public_signup") === "on",
@@ -174,6 +181,7 @@ function buildSettingsPayload(formData: FormData, settings: SettingsState): Sett
     public_quota_daily_global_limit: readQuotaLimit(formData, "public_quota_daily_global_limit", settings.public_quota_daily_global_limit),
     public_quota_per_ip_limit: readQuotaLimit(formData, "public_quota_per_ip_limit", settings.public_quota_per_ip_limit),
     client_provider_url_pool: String(formData.get("client_provider_url_pool") ?? ""),
+    llm_purpose_model_codes: readLlmPurposeModelCodes(formData, settings.llm_purpose_models),
   };
 }
 
@@ -196,5 +204,22 @@ function settingsFormKey(settings: SettingsState): string {
     String(settings.public_quota_daily_global_limit),
     String(settings.public_quota_per_ip_limit),
     settings.client_provider_url_pool,
+    JSON.stringify(settings.llm_purpose_model_codes),
   ].join(":");
+}
+
+function readLlmPurposeModelCodes(
+  formData: FormData,
+  purposes: readonly LlmPurposeModelSetting[],
+): Record<string, string> {
+  return Object.fromEntries(
+    purposes.map((purpose) => [
+      purpose.purpose,
+      String(formData.get(`llm_purpose_model:${purpose.purpose}`) ?? ""),
+    ]),
+  );
+}
+
+function readLoadError(error: unknown): string {
+  return error instanceof Error ? error.message : "读取设置失败";
 }

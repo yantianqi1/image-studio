@@ -8,8 +8,9 @@ from sqlalchemy.orm import Session
 from apps.api.app.core.errors import AppError
 from apps.api.app.domains.auth.models import User
 from apps.api.app.domains.auth.ownership import OwnerContext
-from apps.api.app.domains.image.models import Asset, ImageJob, ImageJobResult
+from apps.api.app.domains.image.models import Asset, ImageAssetTag, ImageJob, ImageJobResult
 from apps.api.app.domains.image.repository import asset_access_allowed, get_asset
+from apps.api.app.domains.image.tagging import delete_asset_tagging_state, normalize_gallery_tag
 
 ASSET_VISIBILITY_PRIVATE = "private"
 ASSET_VISIBILITY_PUBLIC = "public"
@@ -46,8 +47,15 @@ def update_owned_asset_visibility(session: Session, *, asset_id: int, owner: Own
     return asset
 
 
-def list_gallery_items(session: Session, *, owner: OwnerContext, scope: str) -> list[tuple[ImageJobResult, ImageJob, Asset]]:
+def list_gallery_items(
+    session: Session,
+    *,
+    owner: OwnerContext,
+    scope: str,
+    tag: str | None = None,
+) -> list[tuple[ImageJobResult, ImageJob, Asset]]:
     normalized_scope = normalize_gallery_scope(scope)
+    normalized_tag = normalize_gallery_tag(tag) if tag else ""
     statement = (
         select(ImageJobResult, ImageJob, Asset)
         .join(ImageJob, ImageJob.id == ImageJobResult.job_id)
@@ -65,6 +73,8 @@ def list_gallery_items(session: Session, *, owner: OwnerContext, scope: str) -> 
         statement = statement.where(Asset.owner_anonymous_session_id == owner.anonymous_session_id)
     else:
         return []
+    if normalized_tag:
+        statement = statement.join(ImageAssetTag, ImageAssetTag.asset_id == Asset.id).where(ImageAssetTag.normalized_tag == normalized_tag)
     return list(session.execute(statement).all())
 
 
@@ -100,6 +110,7 @@ def _remove_asset_and_references(session: Session, asset: Asset) -> None:
     for result in results:
         session.delete(result)
     session.flush()
+    delete_asset_tagging_state(session, asset_ids=[asset.id])
     storage = build_asset_storage()
     delete_asset_objects(asset, storage)
     session.delete(asset)
