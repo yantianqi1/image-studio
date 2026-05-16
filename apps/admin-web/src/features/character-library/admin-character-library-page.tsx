@@ -1,66 +1,34 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ChangeEvent, type FormEvent } from "react";
+import type { ChangeEvent, FormEvent } from "react";
 
+import { useAdminCharacterLibrary, type UploadState } from "@/features/character-library/admin-character-library-state";
 import { AdminShell } from "@/features/shell/admin-shell";
 import { ErrorBox } from "@/features/ui/error-box";
-import { adminApi, type AdminCharacterLibraryItem } from "@/lib/admin-api";
-
-type UploadState = Readonly<{
-  file: File | null;
-  name: string;
-}>;
-
-const INITIAL_UPLOAD: UploadState = { file: null, name: "" };
+import type { AdminCharacterLibraryItem } from "@/lib/admin-api";
 
 export function AdminCharacterLibraryPage() {
-  const [items, setItems] = useState<readonly AdminCharacterLibraryItem[]>([]);
-  const [upload, setUpload] = useState<UploadState>(INITIAL_UPLOAD);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      setItems(await adminApi.characterLibrary());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "加载失败");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
-
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!upload.file || !upload.name.trim() || submitting) return;
-    setSubmitting(true);
-    setError("");
-    try {
-      const item = await adminApi.createCharacterLibraryItem({ name: upload.name.trim(), file: upload.file });
-      setItems((current) => [item, ...current]);
-      setUpload(INITIAL_UPLOAD);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "上传失败");
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  const library = useAdminCharacterLibrary();
 
   return (
     <AdminShell title="形象库" description="管理可被所有用户调用的公共形象。">
       <section className="admin-panel">
-        <CharacterUploadForm state={upload} submitting={submitting} onChange={setUpload} onSubmit={handleSubmit} />
+        <CharacterUploadForm
+          state={library.upload}
+          submitting={library.submitting}
+          onChange={library.setUpload}
+          onSubmit={library.handleSubmit}
+        />
       </section>
       <section className="admin-panel">
-        <CharacterLibraryHeader loading={loading} total={items.length} onRefresh={refresh} />
-        {error ? <ErrorBox message={error} /> : null}
-        <CharacterGrid items={items} loading={loading} />
+        <CharacterLibraryHeader loading={library.loading} total={library.items.length} onRefresh={library.refresh} />
+        {library.error ? <ErrorBox message={library.error} /> : null}
+        <CharacterGrid
+          deletingId={library.deletingId}
+          items={library.items}
+          loading={library.loading}
+          onDelete={library.handleDelete}
+        />
       </section>
     </AdminShell>
   );
@@ -114,11 +82,15 @@ function CharacterLibraryHeader({
 }
 
 function CharacterGrid({
+  deletingId,
   items,
   loading,
+  onDelete,
 }: Readonly<{
+  deletingId: number | null;
   items: readonly AdminCharacterLibraryItem[];
   loading: boolean;
+  onDelete: (item: AdminCharacterLibraryItem) => void;
 }>) {
   if (loading) {
     return <p className="py-8 text-center text-sm text-gray-500">加载中...</p>;
@@ -129,19 +101,38 @@ function CharacterGrid({
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
       {items.map((item) => (
-        <CharacterCard key={item.id} item={item} />
+        <CharacterCard deleting={item.id === deletingId} key={item.id} item={item} onDelete={onDelete} />
       ))}
     </div>
   );
 }
 
-function CharacterCard({ item }: Readonly<{ item: AdminCharacterLibraryItem }>) {
+function CharacterCard({
+  deleting,
+  item,
+  onDelete,
+}: Readonly<{
+  deleting: boolean;
+  item: AdminCharacterLibraryItem;
+  onDelete: (item: AdminCharacterLibraryItem) => void;
+}>) {
   return (
     <article className="admin-card overflow-hidden p-0">
       <img src={item.thumbnail_url} alt={item.name} className="aspect-square w-full object-cover" loading="lazy" />
       <div className="px-3 py-2">
         <p className="truncate text-sm font-semibold text-gray-900">{item.name}</p>
-        <p className="mt-1 text-xs text-gray-500">#{item.id}</p>
+        <div className="mt-2 flex items-center gap-2">
+          <p className="text-xs text-gray-500">#{item.id}</p>
+          <button
+            className="ml-auto rounded bg-red-50 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-100 disabled:opacity-50"
+            type="button"
+            disabled={deleting}
+            onClick={() => onDelete(item)}
+            aria-label={`删除公共形象 ${item.name}`}
+          >
+            {deleting ? "删除中..." : "删除"}
+          </button>
+        </div>
       </div>
     </article>
   );

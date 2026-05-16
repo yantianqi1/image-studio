@@ -4,6 +4,15 @@ import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
 
+const studioCharacterLibrarySource = readFileSync(
+  new URL("../src/features/studio/studio-character-library.tsx", import.meta.url),
+  "utf8",
+);
+const studioCharacterLibraryStateSource = readFileSync(
+  new URL("../src/features/studio/studio-character-library-state.ts", import.meta.url),
+  "utf8",
+);
+
 function loadPublicApi(apiClient) {
   const source = readFileSync(new URL("../src/lib/public-api.ts", import.meta.url), "utf8");
   const compiled = ts.transpileModule(source, {
@@ -65,6 +74,30 @@ test("publicApi uploads private character with a name", async () => {
   assert.equal(calls[0].body.get("name"), "我的形象");
   assert.equal(calls[0].body.get("file"), file);
   assert.equal(item.id, 8);
+});
+
+test("publicApi deletes a private character by entry id", async () => {
+  const calls = [];
+  const { publicApi } = loadPublicApi({
+    apiFetch: async (path, options) => {
+      calls.push({ path, options });
+      return { deleted: true, id: 8 };
+    },
+    apiUpload: unexpectedApiUpload,
+    apiDownload: unexpectedApiDownload,
+  });
+
+  const result = await publicApi.deleteCharacterLibraryItem(8);
+
+  assert.equal(calls[0].path, "/character-library/8");
+  assert.equal(calls[0].options.method, "DELETE");
+  assert.deepEqual(result, { deleted: true, id: 8 });
+});
+
+test("studio character library renders thumbnails and exposes delete action", () => {
+  assert.match(studioCharacterLibrarySource, /src=\{item\.thumbnail_url\}/);
+  assert.match(studioCharacterLibraryStateSource, /publicApi\.deleteCharacterLibraryItem/);
+  assert.match(studioCharacterLibrarySource, /删除形象/);
 });
 
 function unexpectedApiFetch() {

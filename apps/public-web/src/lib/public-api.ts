@@ -8,6 +8,7 @@ import type {
   ComicProject,
   ComicTaskCreateRequest,
   ComicTaskImageResult,
+  CharacterLibraryDeleteResult,
   CharacterLibraryItem,
   CreateComicProjectRequest,
   DeleteResult,
@@ -136,6 +137,9 @@ export const publicApi = {
     formData.append("name", input.name);
     formData.append("file", input.file);
     return apiUpload<CharacterLibraryItem>("/character-library", formData);
+  },
+  deleteCharacterLibraryItem(characterId: number) {
+    return apiFetch<CharacterLibraryDeleteResult>(`/character-library/${characterId}`, { method: "DELETE" });
   },
   getModels() {
     return apiFetch<readonly PublicModelSummary[]>("/models");

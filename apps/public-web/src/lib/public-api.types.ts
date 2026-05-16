@@ -81,6 +81,11 @@ export type CharacterLibraryItem = Readonly<{
   created_at: string;
 }>;
 
+export type CharacterLibraryDeleteResult = Readonly<{
+  deleted: boolean;
+  id: number;
+}>;
+
 export type ImageJobResult = Readonly<{
   id: number;
   job_id: number;

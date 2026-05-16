@@ -1,34 +1,29 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ChangeEvent, type FormEvent } from "react";
+import type { FormEvent } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { Check, ImagePlus, Loader2, RefreshCcw, UserRound, X } from "lucide-react";
+import { Check, ImagePlus, Loader2, RefreshCcw, Trash2, UserRound, X } from "lucide-react";
 
-import { isUnauthorizedApiError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
-import { publicApi, type CharacterLibraryItem } from "@/lib/public-api";
+import type { CharacterLibraryItem } from "@/lib/public-api";
+import { readFile, useCharacterLibrary, type UploadState } from "@/features/studio/studio-character-library-state";
 
 type StudioCharacterLibraryProps = Readonly<{
   open: boolean;
   selectedId: number | null;
   onOpenChange: (open: boolean) => void;
   onSelect: (item: CharacterLibraryItem) => void;
+  onDelete?: (item: CharacterLibraryItem) => void;
 }>;
-
-type UploadState = Readonly<{
-  file: File | null;
-  name: string;
-}>;
-
-const INITIAL_UPLOAD: UploadState = { file: null, name: "" };
 
 export function StudioCharacterLibrary({
   open,
   selectedId,
   onOpenChange,
   onSelect,
+  onDelete,
 }: StudioCharacterLibraryProps) {
-  const library = useCharacterLibrary(open, onSelect);
+  const library = useCharacterLibrary(open, onSelect, onDelete);
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
@@ -38,52 +33,20 @@ export function StudioCharacterLibrary({
           <CharacterLibraryHeader count={library.items.length} loading={library.loading} onRefresh={library.loadItems} />
           <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[17rem_minmax(0,1fr)]">
             <CharacterUploadForm state={library.upload} uploading={library.uploading} onChange={library.setUpload} onSubmit={library.handleUpload} />
-            <CharacterGrid items={library.items} loading={library.loading} selectedId={selectedId} onSelect={onSelect} />
+            <CharacterGrid
+              deletingId={library.deletingId}
+              items={library.items}
+              loading={library.loading}
+              selectedId={selectedId}
+              onDelete={library.handleDelete}
+              onSelect={onSelect}
+            />
           </div>
           {library.error ? <p className="border-t border-red-100 bg-red-50 px-5 py-3 text-sm font-medium text-red-600">{library.error}</p> : null}
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
   );
-}
-
-function useCharacterLibrary(open: boolean, onSelect: (item: CharacterLibraryItem) => void) {
-  const [items, setItems] = useState<readonly CharacterLibraryItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState("");
-  const [upload, setUpload] = useState<UploadState>(INITIAL_UPLOAD);
-  const loadItems = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      setItems(await publicApi.getCharacterLibrary());
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "形象库加载失败");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-  useEffect(() => {
-    if (open) void loadItems();
-  }, [loadItems, open]);
-  const handleUpload = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!upload.file || !upload.name.trim() || uploading) return;
-    setUploading(true);
-    setError("");
-    try {
-      const item = await publicApi.createCharacterLibraryItem({ name: upload.name.trim(), file: upload.file });
-      setItems((current) => [item, ...current]);
-      setUpload(INITIAL_UPLOAD);
-      onSelect(item);
-    } catch (uploadError) {
-      setError(resolveUploadError(uploadError));
-    } finally {
-      setUploading(false);
-    }
-  };
-  return { error, handleUpload, items, loadItems, loading, setUpload, upload, uploading };
 }
 
 function CharacterLibraryHeader({
@@ -158,14 +121,18 @@ function CharacterUploadForm({
 }
 
 function CharacterGrid({
+  deletingId,
   items,
   loading,
   selectedId,
+  onDelete,
   onSelect,
 }: Readonly<{
+  deletingId: number | null;
   items: readonly CharacterLibraryItem[];
   loading: boolean;
   selectedId: number | null;
+  onDelete: (item: CharacterLibraryItem) => void;
   onSelect: (item: CharacterLibraryItem) => void;
 }>) {
   if (loading) {
@@ -178,7 +145,14 @@ function CharacterGrid({
     <div className="min-h-0 overflow-y-auto p-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {items.map((item) => (
-          <CharacterCard key={item.id} item={item} selected={item.id === selectedId} onSelect={onSelect} />
+          <CharacterCard
+            deleting={item.id === deletingId}
+            item={item}
+            key={item.id}
+            selected={item.id === selectedId}
+            onDelete={onDelete}
+            onSelect={onSelect}
+          />
         ))}
       </div>
     </div>
@@ -186,41 +160,46 @@ function CharacterGrid({
 }
 
 function CharacterCard({
+  deleting,
   item,
   selected,
+  onDelete,
   onSelect,
 }: Readonly<{
+  deleting: boolean;
   item: CharacterLibraryItem;
   selected: boolean;
+  onDelete: (item: CharacterLibraryItem) => void;
   onSelect: (item: CharacterLibraryItem) => void;
 }>) {
   return (
-    <button
-      type="button"
+    <article
       className={cn(
-        "group relative overflow-hidden rounded-xl border bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md",
+        "group relative overflow-hidden rounded-xl border bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md",
         selected ? "border-gray-950 ring-2 ring-gray-950/10" : "border-gray-200",
       )}
-      onClick={() => onSelect(item)}
     >
-      <img src={item.thumbnail_url} alt={item.name} className="aspect-square w-full object-cover" loading="lazy" />
-      <span className="block truncate px-3 py-2 text-sm font-semibold text-gray-900">{item.name}</span>
+      <button type="button" className="block w-full text-left" onClick={() => onSelect(item)}>
+        <img src={item.thumbnail_url} alt={item.name} className="aspect-square w-full object-cover" loading="lazy" />
+        <span className="block truncate px-3 py-2 text-sm font-semibold text-gray-900">{item.name}</span>
+      </button>
       {selected ? (
         <span className="absolute right-2 top-2 inline-flex size-7 items-center justify-center rounded-full bg-gray-950 text-white shadow">
           <Check className="size-4" />
         </span>
       ) : null}
-    </button>
+      {item.visibility === "private" ? (
+        <button
+          type="button"
+          className="absolute bottom-2 right-2 inline-flex size-8 items-center justify-center rounded-full bg-white/90 text-red-600 opacity-0 shadow transition hover:bg-white disabled:opacity-60 group-hover:opacity-100"
+          disabled={deleting}
+          onClick={() => onDelete(item)}
+          aria-label={`删除形象 ${item.name}`}
+          title="删除形象"
+        >
+          {deleting ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+        </button>
+      ) : null}
+    </article>
   );
-}
-
-function readFile(event: ChangeEvent<HTMLInputElement>): File | null {
-  return event.target.files?.[0] ?? null;
-}
-
-function resolveUploadError(error: unknown): string {
-  if (isUnauthorizedApiError(error)) {
-    return "请先登录";
-  }
-  return error instanceof Error ? error.message : "形象保存失败";
 }

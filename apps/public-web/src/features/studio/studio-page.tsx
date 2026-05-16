@@ -757,6 +757,10 @@ export function StudioPage() {
     setCharacterLibraryOpen(false);
   }, []);
 
+  const handleDeleteCharacter = useCallback((item: CharacterLibraryItem) => {
+    setSelectedCharacter((current) => (current?.id === item.id ? null : current));
+  }, []);
+
   const handleComposerFixedHeightChange = useCallback((height: number) => {
     setComposerBottomInset((current) => (current === height ? current : height));
   }, []);
@@ -851,6 +855,7 @@ export function StudioPage() {
         open={characterLibraryOpen}
         selectedId={selectedCharacter?.id ?? null}
         onOpenChange={setCharacterLibraryOpen}
+        onDelete={handleDeleteCharacter}
         onSelect={handleSelectCharacter}
       />
       <MobileStudioHistoryDrawer

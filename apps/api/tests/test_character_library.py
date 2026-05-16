@@ -66,7 +66,8 @@ def test_admin_public_character_is_visible_to_anonymous_users() -> None:
     admin_login(admin)
     character = upload_character(admin, "/api/admin/character-library", "公共少女")
 
-    response = new_client().get("/api/public/character-library")
+    anonymous = new_client()
+    response = anonymous.get("/api/public/character-library")
 
     assert response.status_code == 200
     items = response.json()["data"]
@@ -74,6 +75,23 @@ def test_admin_public_character_is_visible_to_anonymous_users() -> None:
         (character["id"], "公共少女", "public")
     ]
     assert items[0]["thumbnail_url"].endswith(f"/image/assets/{character['asset_id']}/thumbnail")
+    thumbnail_response = anonymous.get(items[0]["thumbnail_url"])
+    assert thumbnail_response.status_code == 200
+    assert thumbnail_response.headers["content-type"] == "image/jpeg"
+
+
+def test_admin_character_library_uses_admin_image_urls() -> None:
+    admin = build_client()
+    seed_admin()
+    admin_login(admin)
+    character = upload_character(admin, "/api/admin/character-library", "后台公共形象")
+
+    expected_prefix = f"/api/admin/image/assets/{character['asset_id']}"
+    assert character["asset_url"] == expected_prefix
+    assert character["thumbnail_url"] == expected_prefix
+    image_response = admin.get(character["thumbnail_url"])
+    assert image_response.status_code == 200
+    assert image_response.headers["content-type"] == "image/png"
 
 
 def test_character_payload_uses_api_thumbnail_when_public_thumbnail_missing() -> None:
@@ -121,6 +139,53 @@ def test_private_characters_are_visible_only_to_the_uploader() -> None:
     assert character["id"] in {item["id"] for item in alice_items}
     assert character["id"] not in {item["id"] for item in bob_items}
     assert character["id"] not in {item["id"] for item in anonymous_items}
+
+
+def test_private_character_owner_can_delete_entry_and_asset() -> None:
+    client = build_client()
+    register_user(client, "delete-character@example.com")
+    character = upload_character(client, "/api/public/character-library", "可删除形象")
+
+    response = client.delete(f"/api/public/character-library/{character['id']}")
+
+    assert response.status_code == 200
+    assert response.json()["data"] == {"deleted": True, "id": character["id"]}
+    items = client.get("/api/public/character-library").json()["data"]
+    assert character["id"] not in {item["id"] for item in items}
+    with session_scope() as session:
+        assert session.get(CharacterLibraryEntry, character["id"]) is None
+        assert session.get(Asset, character["asset_id"]) is None
+
+
+def test_private_character_delete_rejects_other_users() -> None:
+    alice = build_client()
+    register_user(alice, "alice-delete-character@example.com")
+    character = upload_character(alice, "/api/public/character-library", "Alice 删除保护")
+
+    bob = new_client()
+    register_user(bob, "bob-delete-character@example.com")
+    response = bob.delete(f"/api/public/character-library/{character['id']}")
+
+    assert response.status_code == 404
+    alice_items = alice.get("/api/public/character-library").json()["data"]
+    assert character["id"] in {item["id"] for item in alice_items}
+
+
+def test_admin_can_delete_public_character_entry_and_asset() -> None:
+    admin = build_client()
+    seed_admin()
+    admin_login(admin)
+    character = upload_character(admin, "/api/admin/character-library", "待删除公共形象")
+
+    response = admin.delete(f"/api/admin/character-library/{character['id']}")
+
+    assert response.status_code == 200
+    assert response.json()["data"] == {"deleted": True, "id": character["id"]}
+    items = admin.get("/api/admin/character-library").json()["data"]
+    assert character["id"] not in {item["id"] for item in items}
+    with session_scope() as session:
+        assert session.get(CharacterLibraryEntry, character["id"]) is None
+        assert session.get(Asset, character["asset_id"]) is None
 
 
 def test_image_job_with_character_library_adds_reference_asset_and_prompt_instruction() -> None:

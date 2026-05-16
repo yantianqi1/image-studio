@@ -30,6 +30,11 @@ export type AdminCharacterLibraryItem = Readonly<{
   created_at: string;
 }>;
 
+export type AdminCharacterLibraryDeleteResult = Readonly<{
+  deleted: boolean;
+  id: number;
+}>;
+
 export type ModelVariant = Readonly<{
   id: number;
   model_id: number;
@@ -378,6 +383,11 @@ export const adminApi = {
     formData.append("name", input.name);
     formData.append("file", input.file);
     return apiUpload<AdminCharacterLibraryItem>("/api/admin/character-library", formData);
+  },
+  deleteCharacterLibraryItem(characterId: number) {
+    return apiFetch<AdminCharacterLibraryDeleteResult>(`/api/admin/character-library/${characterId}`, {
+      method: "DELETE",
+    });
   },
   settings() {
     return apiFetch<{

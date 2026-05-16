@@ -9,6 +9,14 @@ const routeSource = readFileSync(
   new URL("../src/app/admin/(protected)/character-library/page.tsx", import.meta.url),
   "utf8",
 );
+const pageSource = readFileSync(
+  new URL("../src/features/character-library/admin-character-library-page.tsx", import.meta.url),
+  "utf8",
+);
+const pageStateSource = readFileSync(
+  new URL("../src/features/character-library/admin-character-library-state.ts", import.meta.url),
+  "utf8",
+);
 const nextConfigSource = readFileSync(new URL("../next.config.ts", import.meta.url), "utf8");
 
 function loadAdminApi(apiClient) {
@@ -68,6 +76,30 @@ test("admin API uploads public character as multipart", async () => {
   assert.equal(calls[0].body.get("name"), "公共形象");
   assert.equal(calls[0].body.get("file"), file);
   assert.equal(item.id, 2);
+});
+
+test("admin API deletes a public character by entry id", async () => {
+  const calls = [];
+  const { adminApi } = loadAdminApi({
+    apiFetch: async (path, options) => {
+      calls.push({ path, options });
+      return { deleted: true, id: 2 };
+    },
+    apiUpload: unexpectedApiUpload,
+  });
+
+  const result = await adminApi.deleteCharacterLibraryItem(2);
+
+  assert.equal(calls[0].path, "/api/admin/character-library/2");
+  assert.equal(calls[0].options.method, "DELETE");
+  assert.deepEqual(result, { deleted: true, id: 2 });
+});
+
+test("admin character library page renders thumbnails and delete action", () => {
+  assert.match(routeSource, /AdminCharacterLibraryPage/);
+  assert.match(pageSource, /src=\{item\.thumbnail_url\}/);
+  assert.match(pageStateSource, /adminApi\.deleteCharacterLibraryItem/);
+  assert.match(pageStateSource, /删除公共形象/);
 });
 
 test("admin character library page is routed from the navigation", () => {

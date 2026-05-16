@@ -8,9 +8,14 @@ from sqlalchemy.orm import Session
 from apps.api.app.core.errors import AppError
 from apps.api.app.domains.auth.ownership import OwnerContext
 from apps.api.app.domains.character_library.models import CharacterLibraryEntry
-from apps.api.app.domains.image.assets import detect_image_mime_type, persist_uploaded_asset, resolve_asset_public_urls
+from apps.api.app.domains.image.assets import (
+    delete_asset_objects,
+    detect_image_mime_type,
+    persist_uploaded_asset,
+    resolve_asset_public_urls,
+)
 from apps.api.app.domains.image.gallery import ASSET_VISIBILITY_PUBLIC, set_asset_visibility
-from apps.api.app.domains.image.models import Asset
+from apps.api.app.domains.image.models import Asset, ImageJobReferenceAsset
 from apps.api.app.infra.storage.asset_storage import AssetStorage
 
 CHARACTER_VISIBILITY_PRIVATE = "private"
@@ -148,8 +153,65 @@ def list_accessible_characters(session: Session, *, owner: OwnerContext) -> list
 
 
 def list_admin_characters(session: Session) -> list[CharacterLibraryEntry]:
-    statement = select(CharacterLibraryEntry).order_by(CharacterLibraryEntry.created_at.desc())
+    statement = (
+        select(CharacterLibraryEntry)
+        .where(CharacterLibraryEntry.visibility == CHARACTER_VISIBILITY_PUBLIC)
+        .order_by(CharacterLibraryEntry.created_at.desc())
+    )
     return list(session.execute(statement).scalars())
+
+
+def delete_private_character(
+    session: Session,
+    *,
+    storage: AssetStorage,
+    character_id: int,
+    user_id: int,
+) -> None:
+    entry = get_character_entry(session, character_id)
+    if entry.owner_user_id != user_id:
+        raise AppError(code="character_library_not_found", message="character library entry not found", status_code=404)
+    delete_character_entry(session, storage=storage, entry=entry)
+
+
+def delete_public_character_by_admin(
+    session: Session,
+    *,
+    storage: AssetStorage,
+    character_id: int,
+) -> None:
+    entry = get_character_entry(session, character_id)
+    if entry.visibility != CHARACTER_VISIBILITY_PUBLIC:
+        raise AppError(code="character_library_not_found", message="character library entry not found", status_code=404)
+    delete_character_entry(session, storage=storage, entry=entry)
+
+
+def get_character_entry(session: Session, character_id: int) -> CharacterLibraryEntry:
+    entry = session.get(CharacterLibraryEntry, character_id)
+    if entry is None:
+        raise AppError(code="character_library_not_found", message="character library entry not found", status_code=404)
+    return entry
+
+
+def delete_character_entry(session: Session, *, storage: AssetStorage, entry: CharacterLibraryEntry) -> None:
+    asset = session.get(Asset, entry.asset_id)
+    if asset is None:
+        raise AppError(code="character_asset_missing", message="character asset missing", status_code=500)
+    delete_asset_objects(asset, storage)
+    delete_character_reference_rows(session, asset_id=asset.id)
+    session.delete(entry)
+    session.flush()
+    session.delete(asset)
+    session.flush()
+
+
+def delete_character_reference_rows(session: Session, *, asset_id: int) -> None:
+    rows = list(session.execute(
+        select(ImageJobReferenceAsset).where(ImageJobReferenceAsset.asset_id == asset_id)
+    ).scalars())
+    for row in rows:
+        session.delete(row)
+    session.flush()
 
 
 def resolve_character_reference_bundle(
@@ -210,6 +272,22 @@ def character_payload(entry: CharacterLibraryEntry, *, storage: AssetStorage, as
         "asset_id": entry.asset_id,
         "asset_url": asset_url,
         "thumbnail_url": thumbnail_url,
+        "visibility": entry.visibility,
+        "owner_user_id": entry.owner_user_id,
+        "created_at": entry.created_at.isoformat(),
+    }
+
+
+def admin_character_payload(entry: CharacterLibraryEntry, *, asset: Asset | None) -> dict[str, object]:
+    if asset is None:
+        raise AppError(code="character_asset_missing", message="character asset missing", status_code=500)
+    asset_url = f"/api/admin/image/assets/{asset.id}"
+    return {
+        "id": entry.id,
+        "name": entry.name,
+        "asset_id": entry.asset_id,
+        "asset_url": asset_url,
+        "thumbnail_url": asset_url,
         "visibility": entry.visibility,
         "owner_user_id": entry.owner_user_id,
         "created_at": entry.created_at.isoformat(),
