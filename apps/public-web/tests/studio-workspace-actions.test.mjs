@@ -63,6 +63,22 @@ test("studio turns can be deleted and retry reuses the original turn", () => {
   assert.doesNotMatch(pageSource, /conversations\.removeTurn\(conv\.id, turnId\)[\s\S]*submitDraft\(draft\)/);
 });
 
+test("studio result prompt bubble exposes parameters and edit retry", () => {
+  assert.match(resultsSource, /formatTurnParameters/);
+  assert.match(resultsSource, /Pencil/);
+  assert.match(resultsSource, /aria-label="修改提示词"/);
+  assert.match(resultsSource, /onEditPromptRetry/);
+  assert.match(pageSource, /handleEditPromptRetry/);
+  assert.match(pageSource, /retryTurnWithPrompt/);
+});
+
+test("studio first image turn requests backend generated conversation title", () => {
+  assert.match(pageSource, /applyGeneratedTitle/);
+  assert.match(pageSource, /job\.title/);
+  assert.match(pageSource, /renameConversation/);
+  assert.match(pageSource, /autoTitle:\s*input\.applyGeneratedTitle/);
+});
+
 test("studio request mode infers edit only when image workspace has references", () => {
   const { resolveStudioDraftMode } = loadRequestMode();
 

@@ -63,6 +63,15 @@ def create_image_job(client: TestClient, *, prompt: str = "A paper city under su
     return response.json()["data"]
 
 
+def create_auto_titled_image_job(client: TestClient, *, prompt: str) -> dict[str, object]:
+    response = client.post(
+        "/api/public/image/jobs",
+        json={"prompt": prompt, "model_code": "gpt-image-2", "requested_count": 1, "auto_title": True},
+    )
+    assert response.status_code == 201
+    return response.json()["data"]
+
+
 def client_provider_headers(*, client_id: str = "browser-client-1") -> dict[str, str]:
     return {
         "x-client-id": client_id,
@@ -167,6 +176,35 @@ def test_create_image_job_stays_queued_until_worker_runs():
     balance_cents, locked_cents = load_wallet_balance(user["id"])
     assert balance_cents == 100
     assert locked_cents == 77
+
+
+def test_auto_titled_image_job_generates_configured_short_title(monkeypatch):
+    captured: dict[str, object] = {}
+
+    def fake_post(url: str, *, headers, json, timeout: float):
+        captured["url"] = url
+        captured["headers"] = headers
+        captured["json"] = json
+        captured["timeout"] = timeout
+        payload = {"choices": [{"message": {"content": '{"title":"雨夜少女"}'}}]}
+        return FakeHttpResponse(status_code=200, payload=payload, headers={})
+
+    monkeypatch.setenv("OPENAI_PROVIDER_KEY", "sk-test")
+    monkeypatch.setenv("OPENAI_CHAT_MODEL_CODE", "title-model")
+    monkeypatch.setenv("OPENAI_CHAT_MODEL_PROVIDER_MODEL", "title-provider-model")
+    monkeypatch.setenv("IMAGE_JOB_TITLE_MODEL_CODE", "title-model")
+    monkeypatch.setattr("apps.api.app.domains.llm.openai_chat.httpx.post", fake_post)
+    client = build_client()
+
+    job = create_auto_titled_image_job(client, prompt="画一个雨夜街头的少女，电影感光影")
+
+    assert job["title"] == "雨夜少女"
+    assert captured["json"]["model"] == "title-provider-model"
+    assert "10个汉字以内" in captured["json"]["messages"][0]["content"]
+    assert "画一个雨夜街头的少女" in captured["json"]["messages"][1]["content"]
+    with session_scope() as session:
+        stored_job = session.get(ImageJob, job["id"])
+        assert stored_job.title == "雨夜少女"
 
 
 def test_anonymous_image_job_uses_server_provider_when_enabled():

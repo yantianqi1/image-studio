@@ -10,12 +10,14 @@ from apps.api.app.domains.llm.channel_pricing import (
     OFFICIAL_GPT_IMAGE_2_VARIANTS,
     CatalogVariantSeed,
     build_lowcost_image_variant_seeds,
+    build_openrouter_image_variant_seeds,
 )
 from apps.api.app.domains.llm.models import ModelVariant, Provider, SellableModel
 from apps.api.app.domains.llm.provider_validation import (
     LOCAL_DEV_PROVIDER_TYPE,
     OPENAI_CHAT_COMPATIBLE_PROVIDER_TYPE,
     OPENAI_COMPATIBLE_PROVIDER_TYPE,
+    OPENROUTER_CHAT_IMAGE_PROVIDER_TYPE,
     validate_capability,
     validate_provider_config,
 )
@@ -54,6 +56,11 @@ def ensure_provider_catalog(session: Session) -> None:
         official_model = ensure_catalog_model(session, provider=official_provider, seed=build_official_image_model_seed())
         if official_model is not None:
             ensure_model_variants(session, model=official_model, seeds=OFFICIAL_GPT_IMAGE_2_VARIANTS)
+    openrouter_provider = ensure_openrouter_provider(session)
+    if openrouter_provider is not None:
+        openrouter_model = ensure_catalog_model(session, provider=openrouter_provider, seed=build_openrouter_image_model_seed())
+        if openrouter_model is not None:
+            ensure_model_variants(session, model=openrouter_model, seeds=build_openrouter_image_variant_seeds())
     session.flush()
 
 
@@ -150,6 +157,29 @@ def ensure_official_openai_provider(session: Session) -> Provider | None:
     return provider
 
 
+def ensure_openrouter_provider(session: Session) -> Provider | None:
+    settings = get_settings()
+    provider_type = settings.openrouter_provider_type.strip() or OPENROUTER_CHAT_IMAGE_PROVIDER_TYPE
+    validate_provider_config(
+        provider_type=provider_type,
+        base_url=settings.openrouter_provider_base_url,
+        api_key_env=settings.openrouter_provider_api_key_env,
+    )
+    provider = session.execute(select(Provider).where(Provider.name == settings.openrouter_provider_name)).scalar_one_or_none()
+    if provider is not None and provider.status == DELETED_PROVIDER_STATUS:
+        return None
+    if provider is None:
+        provider = Provider(name=settings.openrouter_provider_name)
+        session.add(provider)
+    provider.type = provider_type
+    provider.base_url = settings.openrouter_provider_base_url.strip()
+    provider.api_key_env = settings.openrouter_provider_api_key_env.strip()
+    provider.default_model = settings.openrouter_provider_default_model.strip()
+    provider.status = "active"
+    session.flush()
+    return provider
+
+
 def build_chat_model_seed() -> CatalogModelSeed:
     settings = get_settings()
     return CatalogModelSeed(
@@ -185,6 +215,19 @@ def build_official_image_model_seed() -> CatalogModelSeed:
         provider_model=settings.openai_official_image_model_provider_model,
         member_price_cents=settings.openai_official_image_model_member_price_cents,
         anonymous_price_cents=settings.openai_official_image_model_anonymous_price_cents,
+        public_enabled=True,
+    )
+
+
+def build_openrouter_image_model_seed() -> CatalogModelSeed:
+    settings = get_settings()
+    return CatalogModelSeed(
+        code=settings.openrouter_image_model_code,
+        display_name=settings.openrouter_image_model_display_name,
+        capability="image",
+        provider_model=settings.openrouter_image_model_provider_model,
+        member_price_cents=settings.openrouter_image_model_member_price_cents,
+        anonymous_price_cents=settings.openrouter_image_model_anonymous_price_cents,
         public_enabled=True,
     )
 

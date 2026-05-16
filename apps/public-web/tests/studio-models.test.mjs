@@ -108,6 +108,31 @@ test("studio model selection corrects unsupported official channel parameters", 
   assert.equal(getModelStartingPriceCents(model), 20);
 });
 
+test("studio image model resolver keeps openrouter as a selectable channel", () => {
+  const { filterImageModels, resolveImageModel } = loadStudioModels();
+  const models = [
+    { code: "gpt-image-2", display_name: "GPT Image 2", capability: "image", member_price_cents: 77 },
+    buildOfficialModel(),
+    {
+      code: "gpt-image-2-openrouter",
+      display_name: "GPT Image 2 OpenRouter",
+      capability: "image",
+      member_price_cents: 150,
+      variants: [{ size: "1024x1024", quality: "medium", member_price_cents: 150 }],
+    },
+    { code: "chat-only", display_name: "Chat", capability: "chat", member_price_cents: 12 },
+  ];
+
+  const resolved = resolveImageModel(models, "gpt-image-2-openrouter");
+
+  assert.deepEqual(toPlain(filterImageModels(models).map((model) => model.code)), [
+    "gpt-image-2",
+    "gpt-image-2-official",
+    "gpt-image-2-openrouter",
+  ]);
+  assert.equal(resolved.selectedModel.code, "gpt-image-2-openrouter");
+});
+
 function toPlain(value) {
   return JSON.parse(JSON.stringify(value));
 }

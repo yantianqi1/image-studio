@@ -22,6 +22,9 @@ def extract_image_reference(payload: dict[str, object]) -> ImageReference:
     content_array_ref = extract_content_array_reference(payload)
     if content_array_ref is not None:
         return content_array_ref
+    message_images_ref = extract_message_images_reference(payload)
+    if message_images_ref is not None:
+        return message_images_ref
     text = extract_response_text(payload)
     url = extract_markdown_image_url(text)
     if url is not None:
@@ -73,18 +76,32 @@ def extract_content_array_reference(payload: dict[str, object]) -> ImageReferenc
     return None
 
 
+def extract_message_images_reference(payload: dict[str, object]) -> ImageReference | None:
+    choices = payload.get("choices")
+    if not isinstance(choices, list) or not choices:
+        return None
+    first_choice = choices[0]
+    if not isinstance(first_choice, dict):
+        return None
+    message = first_choice.get("message")
+    if not isinstance(message, dict):
+        return None
+    images = message.get("images")
+    if not isinstance(images, list):
+        return None
+    for item in images:
+        if isinstance(item, dict):
+            ref = extract_content_item_image(item)
+            if ref is not None:
+                return ref
+    return None
+
+
 def extract_content_item_image(item: dict[str, object]) -> ImageReference | None:
     item_type = item.get("type")
-    if item_type == "image_url":
-        image_url = item.get("image_url")
-        if isinstance(image_url, dict):
-            url = image_url.get("url")
-            if isinstance(url, str):
-                match = BASE64_DATA_URL_PATTERN.match(url)
-                if match:
-                    return ImageReference(kind="base64", value=match.group(1))
-                if url.startswith(("http://", "https://")):
-                    return ImageReference(kind="url", value=url)
+    image_url_ref = extract_image_url_reference(item)
+    if item_type == "image_url" or image_url_ref is not None:
+        return image_url_ref
     if item_type == "image":
         b64 = item.get("b64_json") or item.get("data")
         if isinstance(b64, str) and b64:
@@ -92,6 +109,21 @@ def extract_content_item_image(item: dict[str, object]) -> ImageReference | None
         url = item.get("url")
         if isinstance(url, str) and url.startswith(("http://", "https://")):
             return ImageReference(kind="url", value=url)
+    return None
+
+
+def extract_image_url_reference(item: dict[str, object]) -> ImageReference | None:
+    image_url = item.get("image_url")
+    if not isinstance(image_url, dict):
+        return None
+    url = image_url.get("url")
+    if not isinstance(url, str):
+        return None
+    match = BASE64_DATA_URL_PATTERN.match(url)
+    if match:
+        return ImageReference(kind="base64", value=match.group(1))
+    if url.startswith(("http://", "https://")):
+        return ImageReference(kind="url", value=url)
     return None
 
 

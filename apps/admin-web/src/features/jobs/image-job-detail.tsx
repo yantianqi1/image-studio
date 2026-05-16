@@ -106,11 +106,30 @@ function buildDetailItems(job: AdminImageJob): readonly DetailItem[] {
     { label: "画质", value: formatJobQuality(job.quality) },
     { label: "数量", value: String(job.requested_count) },
     { label: "扣费", value: formatJobCents(job.charge_cents) },
+    { label: "Token", value: formatJobTokens(job) },
+    { label: "上游成本", value: formatNullableCents(job.raw_provider_cost_cents) },
+    { label: "渠道费用", value: formatNullableCents(job.provider_fee_cents) },
+    { label: "内部成本", value: formatNullableCents(job.internal_cost_cents) },
+    { label: "毛利", value: formatMargin(job) },
     { label: "耗时", value: formatJobDuration(job.started_at, job.finished_at) },
     { label: "尝试", value: `${job.attempt_count}/${job.max_attempts}` },
     { label: "创建", value: formatJobDateTime(job.created_at) },
     { label: "完成", value: formatJobDateTime(job.finished_at) },
   ];
+}
+
+function formatNullableCents(value: number | null): string {
+  return value === null ? "未记录" : formatJobCents(value);
+}
+
+function formatMargin(job: AdminImageJob): string {
+  if (job.internal_cost_cents === null) return "未记录";
+  return formatJobCents(job.charge_cents - job.internal_cost_cents);
+}
+
+function formatJobTokens(job: AdminImageJob): string {
+  if (job.provider_total_tokens === null) return "未记录";
+  return `${job.provider_input_tokens ?? 0}/${job.provider_output_tokens ?? 0}/${job.provider_total_tokens}`;
 }
 
 function collectRevisedPrompts(job: AdminImageJob): readonly string[] {

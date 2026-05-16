@@ -28,6 +28,7 @@ class CreateImageJobRequest(BaseModel):
     character_library_ids: list[ReferenceAssetId] = Field(default_factory=list)
     conversation_messages: list[ImageConversationMessage] = Field(default_factory=list)
     visibility: str = Field(default="private", pattern="^(private|public)$")
+    auto_title: bool = False
 
 
 class UpdateAssetVisibilityRequest(BaseModel):

@@ -26,6 +26,7 @@ export type ImageGenerationRequest = Readonly<{
   character_library_ids?: readonly number[];
   conversation_messages?: readonly ImageConversationMessage[];
   visibility?: ImageAssetVisibility;
+  auto_title?: boolean;
 }>;
 
 export type ImageConversationContentPart = Readonly<
@@ -46,8 +47,15 @@ export type ImageGenerationResponse = Readonly<{
   status: string;
   prompt: string;
   model_code: string;
+  title?: string | null;
   visibility?: ImageAssetVisibility;
   charge_cents: number;
+  provider_input_tokens?: number | null;
+  provider_output_tokens?: number | null;
+  provider_total_tokens?: number | null;
+  raw_provider_cost_cents?: number | null;
+  provider_fee_cents?: number | null;
+  internal_cost_cents?: number | null;
   error_message?: string | null;
   source_asset_id?: number | null;
   client_provider_base_url?: string | null;

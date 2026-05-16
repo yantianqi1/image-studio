@@ -7,11 +7,23 @@ from apps.api.app.domains.llm.catalog import DEFAULT_MODEL_CODE, DEFAULT_PROVIDE
 
 
 @dataclass(frozen=True)
+class ProviderUsage:
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    total_tokens: int | None = None
+    raw_provider_cost_cents: int | None = None
+    provider_fee_cents: int | None = None
+    internal_cost_cents: int | None = None
+    raw_payload: dict[str, object] | None = None
+
+
+@dataclass(frozen=True)
 class RenderedImage:
     content: bytes
     mime_type: str
     revised_prompt: str
     provider_request_id: str
+    usage: ProviderUsage | None = None
 
 
 def render_local_image(

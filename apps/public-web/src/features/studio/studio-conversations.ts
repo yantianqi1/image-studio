@@ -105,6 +105,37 @@ export function retryTurnInConversation(
   };
 }
 
+export function retryTurnWithPromptInConversation(
+  conversation: StudioConversation,
+  turnId: string,
+  prompt: string,
+  retriedAt = new Date().toISOString(),
+): StudioConversation | null {
+  const target = conversation.turns.find((turn) => turn.id === turnId);
+  if (!target) return null;
+  return {
+    ...conversation,
+    updatedAt: retriedAt,
+    turns: conversation.turns.map((turn) =>
+      turn.id === turnId ? resetTurnForRetry({ ...target, prompt }, retriedAt) : turn,
+    ),
+  };
+}
+
+export function renameConversationTitle(
+  conversations: readonly StudioConversation[],
+  conversationId: string,
+  title: string,
+): readonly StudioConversation[] {
+  const trimmed = title.trim();
+  if (!trimmed) return conversations;
+  return conversations.map((conversation) =>
+    conversation.id === conversationId
+      ? { ...conversation, title: trimmed, updatedAt: new Date().toISOString() }
+      : conversation,
+  );
+}
+
 export function removeTurnFromConversation(
   conversation: StudioConversation,
   turnId: string,

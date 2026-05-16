@@ -40,6 +40,7 @@ from apps.api.app.domains.image.repository import (
     resolve_source_asset,
 )
 from apps.api.app.domains.llm.client_provider import ClientProviderConfig
+from apps.api.app.domains.llm.rendering import ProviderUsage
 from apps.api.app.domains.llm.service import (
     render_image,
     resolve_model_execution_target,
@@ -58,6 +59,7 @@ def create_job(
     *,
     owner: OwnerContext,
     source: str,
+    title: str | None = None,
     prompt: str,
     model_code: str,
     requested_count: int,
@@ -83,6 +85,7 @@ def create_job(
         job_input=CreateImageJobRecordInput(
             owner=owner,
             source=source,
+            title=title,
             prompt=prompt,
             model_code=model_code,
             requested_count=requested_count,
@@ -169,6 +172,7 @@ def process_render_results(session: Session, *, job: ImageJob) -> None:
     )
     for result_index in range(1, job.requested_count + 1):
         rendered = render_job_image(session, job=job, reference_asset_ids=reference_asset_ids, client_config=client_config)
+        apply_rendered_usage(job, rendered.usage)
         asset = persist_rendered_asset(
             session,
             storage=storage,
@@ -181,6 +185,49 @@ def process_render_results(session: Session, *, job: ImageJob) -> None:
         ensure_thumbnail_exists(asset, storage)
         set_asset_visibility(asset, job.visibility)
         add_job_result(session, job=job, result_index=result_index, asset_id=asset.id, rendered=rendered)
+
+
+def apply_rendered_usage(job: ImageJob, usage: ProviderUsage | None) -> None:
+    if usage is None:
+        return
+    job.provider_input_tokens = add_nullable_int(job.provider_input_tokens, usage.input_tokens)
+    job.provider_output_tokens = add_nullable_int(job.provider_output_tokens, usage.output_tokens)
+    job.provider_total_tokens = add_nullable_int(job.provider_total_tokens, usage.total_tokens)
+    job.raw_provider_cost_cents = add_nullable_int(job.raw_provider_cost_cents, usage.raw_provider_cost_cents)
+    job.provider_fee_cents = add_nullable_int(job.provider_fee_cents, usage.provider_fee_cents)
+    job.internal_cost_cents = add_nullable_int(job.internal_cost_cents, usage.internal_cost_cents)
+    job.provider_usage = append_usage_payload(existing=job.provider_usage, raw_payload=usage.raw_payload)
+
+
+def add_nullable_int(existing: int | None, value: int | None) -> int | None:
+    if value is None:
+        return existing
+    return (existing or 0) + value
+
+
+def append_usage_payload(*, existing: object, raw_payload: dict[str, object] | None) -> dict[str, object] | None:
+    if raw_payload is None:
+        if existing is None or isinstance(existing, dict):
+            return existing
+        raise AppError(code="provider_usage_invalid", message="stored provider usage invalid", status_code=500)
+    entries = extract_usage_entries(existing)
+    return {"results": [*entries, raw_payload]}
+
+
+def extract_usage_entries(existing: object) -> list[dict[str, object]]:
+    if existing is None:
+        return []
+    if not isinstance(existing, dict):
+        raise AppError(code="provider_usage_invalid", message="stored provider usage invalid", status_code=500)
+    entries = existing.get("results")
+    if not isinstance(entries, list):
+        raise AppError(code="provider_usage_invalid", message="stored provider usage invalid", status_code=500)
+    result: list[dict[str, object]] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise AppError(code="provider_usage_invalid", message="stored provider usage invalid", status_code=500)
+        result.append(entry)
+    return result
 
 
 def render_job_image(

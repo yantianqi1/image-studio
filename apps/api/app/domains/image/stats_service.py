@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from sqlalchemy import Date, case, cast, func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from apps.api.app.domains.image.models import ImageJob
@@ -13,9 +13,27 @@ def get_image_job_stats(session: Session) -> dict:
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     week_ago = today_start - timedelta(days=7)
     two_weeks_ago = today_start - timedelta(days=14)
+    overview = _overview_stats(session, today_start=today_start, week_ago=week_ago)
+    avg_duration_seconds = _avg_duration(session)
+    return {
+        "overview": overview["overview"],
+        "revenue": overview["revenue"],
+        "performance": {
+            "avg_duration_seconds": avg_duration_seconds,
+        },
+        "distribution": {
+            "model": _group_count(session, ImageJob.model_code),
+            "source": _group_count(session, ImageJob.source),
+            "size": _group_count(session, ImageJob.size),
+            "quality": _group_count(session, ImageJob.quality),
+        },
+        "channel_costs": _channel_costs(session),
+        "daily_trend": _daily_trend(session, since=two_weeks_ago),
+    }
 
-    # Single query for overview + revenue (replaces 6 separate queries)
-    overview_row = session.execute(
+
+def _overview_stats(session: Session, *, today_start: datetime, week_ago: datetime) -> dict[str, dict]:
+    row = session.execute(
         select(
             func.count(ImageJob.id),
             func.count(ImageJob.id).filter(ImageJob.status == "succeeded"),
@@ -25,46 +43,13 @@ def get_image_job_stats(session: Session) -> dict:
             func.coalesce(func.sum(ImageJob.charge_cents).filter(ImageJob.created_at >= week_ago), 0),
         )
     ).one()
-
-    total = int(overview_row[0])
-    succeeded = int(overview_row[1])
-    failed = int(overview_row[2])
-    total_revenue = int(overview_row[3])
-    today_revenue = int(overview_row[4])
-    week_revenue = int(overview_row[5])
+    total = int(row[0])
+    succeeded = int(row[1])
+    failed = int(row[2])
     success_rate = round(succeeded / total, 4) if total > 0 else 0
-
-    avg_duration_seconds = _avg_duration(session)
-
-    model_distribution = _group_count(session, ImageJob.model_code)
-    source_distribution = _group_count(session, ImageJob.source)
-    size_distribution = _group_count(session, ImageJob.size)
-    quality_distribution = _group_count(session, ImageJob.quality)
-
-    daily_trend = _daily_trend(session, since=two_weeks_ago)
-
     return {
-        "overview": {
-            "total": total,
-            "succeeded": succeeded,
-            "failed": failed,
-            "success_rate": success_rate,
-        },
-        "revenue": {
-            "total_cents": total_revenue,
-            "today_cents": today_revenue,
-            "week_cents": week_revenue,
-        },
-        "performance": {
-            "avg_duration_seconds": avg_duration_seconds,
-        },
-        "distribution": {
-            "model": model_distribution,
-            "source": source_distribution,
-            "size": size_distribution,
-            "quality": quality_distribution,
-        },
-        "daily_trend": daily_trend,
+        "overview": {"total": total, "succeeded": succeeded, "failed": failed, "success_rate": success_rate},
+        "revenue": {"total_cents": int(row[3]), "today_cents": int(row[4]), "week_cents": int(row[5])},
     }
 
 
@@ -92,8 +77,35 @@ def _group_count(session: Session, column) -> list[dict]:
     return [{"key": key or "unknown", "count": count} for key, count in rows]
 
 
+def _channel_costs(session: Session) -> list[dict]:
+    rows = (
+        session.query(
+            ImageJob.model_code,
+            func.count(ImageJob.id),
+            func.coalesce(func.sum(ImageJob.charge_cents), 0),
+            func.coalesce(func.sum(ImageJob.internal_cost_cents), 0),
+        )
+        .group_by(ImageJob.model_code)
+        .order_by(func.sum(ImageJob.charge_cents).desc())
+        .all()
+    )
+    return [build_channel_cost_item(row) for row in rows]
+
+
+def build_channel_cost_item(row) -> dict[str, object]:
+    revenue_cents = int(row[2])
+    internal_cost_cents = int(row[3])
+    return {
+        "key": row[0] or "unknown",
+        "count": int(row[1]),
+        "revenue_cents": revenue_cents,
+        "internal_cost_cents": internal_cost_cents,
+        "gross_margin_cents": revenue_cents - internal_cost_cents,
+    }
+
+
 def _daily_trend(session: Session, *, since: datetime) -> list[dict]:
-    date_col = cast(ImageJob.created_at, Date)
+    date_col = func.date(ImageJob.created_at)
     rows = (
         session.query(
             date_col.label("date"),

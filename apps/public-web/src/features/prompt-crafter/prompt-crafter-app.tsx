@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, MutableRefObject } from "react";
-import { FolderOpen, ImagePlus } from "lucide-react";
+import { FolderOpen, ImagePlus, RefreshCw } from "lucide-react";
 
 import { AppShell } from "@/features/shell/app-shell";
 import { publicApi } from "@/lib/public-api";
@@ -14,6 +14,11 @@ import {
 } from "./prompt-crafter-api";
 import { extractPromptOptionsFromMarkdown } from "./prompt-markdown";
 import { PromptMarkdownView } from "./prompt-markdown-view";
+import {
+  buildPromptCrafterRefreshMessages,
+  readPromptCrafterSession,
+  savePromptCrafterSession,
+} from "./prompt-crafter-session";
 import { applyPromptToGenerate } from "./use-prompt";
 import styles from "./prompt-crafter.module.css";
 
@@ -37,6 +42,7 @@ export function PromptCrafterApp() {
   const [copyLabel, setCopyLabel] = useState("复制");
   const [reverseFiles, setReverseFiles] = useState<readonly File[]>([]);
   const [reverseNote, setReverseNote] = useState("");
+  const [hydrated, setHydrated] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const folderInputRef = useRef<HTMLInputElement | null>(null);
@@ -45,7 +51,21 @@ export function PromptCrafterApp() {
   const firstUsablePrompt = useMemo(() => readFirstUsablePrompt(latestPrompt), [latestPrompt]);
   const canSubmit = draft.trim().length > 0 && status !== "streaming";
   const canContinue = Boolean(latestPrompt) && status !== "streaming";
+  const canRefresh = messages.some((message) => message.role === "user") && status !== "streaming";
   const canReverse = reverseFiles.length > 0 && status !== "streaming";
+
+  useEffect(() => {
+    const session = readPromptCrafterSession();
+    setDraft(session.draft);
+    setMessages(session.messages);
+    setReverseNote(session.reverseNote);
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    savePromptCrafterSession({ draft, messages, reverseNote });
+  }, [draft, hydrated, messages, reverseNote]);
 
   const submitPrompt = useCallback(async (content: string) => {
     const trimmed = content.trim();
@@ -63,6 +83,27 @@ export function PromptCrafterApp() {
       setStatus,
       stream: ({ signal, onChunk }) => streamPromptCrafter({ messages: nextMessages, signal, onChunk }),
     });
+  }, [messages, status]);
+
+  const refreshPrompt = useCallback(async () => {
+    if (status === "streaming") return;
+    try {
+      const nextMessages = buildPromptCrafterRefreshMessages(messages);
+      setErrorMessage("");
+      setStatus("streaming");
+      setCopyLabel("复制");
+      await runAssistantStream({
+        abortRef,
+        nextMessages,
+        setErrorMessage,
+        setMessages,
+        setStatus,
+        stream: ({ signal, onChunk }) => streamPromptCrafter({ messages: nextMessages, signal, onChunk }),
+      });
+    } catch (error: unknown) {
+      setErrorMessage(error instanceof Error ? error.message : "提示词刷新失败");
+      setStatus("error");
+    }
   }, [messages, status]);
 
   const handleReverseImageFiles = useCallback((event: ChangeEvent<HTMLInputElement>) => {
@@ -195,6 +236,10 @@ export function PromptCrafterApp() {
               </button>
               <button className={styles.secondaryButton} disabled={!canContinue} type="button" onClick={() => void submitPrompt(REFINEMENT_PROMPT)}>
                 继续优化
+              </button>
+              <button className={styles.secondaryButton} disabled={!canRefresh} type="button" onClick={() => void refreshPrompt()}>
+                <RefreshCw aria-hidden="true" size={16} />
+                刷新
               </button>
             </div>
           </form>

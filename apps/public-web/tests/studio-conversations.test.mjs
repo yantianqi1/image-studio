@@ -99,6 +99,22 @@ test("retryTurnInConversation reuses the failed turn instead of appending a new 
   assert.equal(updated.updatedAt, retriedAt);
 });
 
+test("retryTurnWithPromptInConversation edits the prompt and reuses the same turn", () => {
+  const { retryTurnWithPromptInConversation } = loadStudioConversations();
+  const retriedAt = "2026-05-15T00:04:00.000Z";
+
+  const updated = retryTurnWithPromptInConversation(createConversation(), "turn-2", "改成夜景霓虹", retriedAt);
+
+  assert.equal(updated.turns.length, 2);
+  assert.equal(updated.turns[1].id, "turn-2");
+  assert.equal(updated.turns[1].prompt, "改成夜景霓虹");
+  assert.equal(updated.turns[1].status, "queued");
+  assert.deepEqual(JSON.parse(JSON.stringify(updated.turns[1].images)), []);
+  assert.equal(updated.turns[1].error, undefined);
+  assert.equal(updated.turns[1].createdAt, retriedAt);
+  assert.equal(updated.updatedAt, retriedAt);
+});
+
 test("removeTurnFromConversation deletes one historical turn from the conversation", () => {
   const { removeTurnFromConversation } = loadStudioConversations();
   const deletedAt = "2026-05-15T00:03:00.000Z";

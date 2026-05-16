@@ -81,6 +81,7 @@ type PollSubmittedImageJobInput = Readonly<{
 }>;
 
 type SubmitExistingTurnInput = Readonly<{
+  applyGeneratedTitle?: boolean;
   contextBeforeTurnId?: string;
   conversation: StudioConversation | null;
   conversationId: string;
@@ -476,6 +477,7 @@ export function StudioPage() {
       setTurnProgress(progressKey, { message: "提交生成请求..." });
 
       const job = await publicApi.generateImage(buildImageJobRequest({
+        autoTitle: input.applyGeneratedTitle,
         contextBeforeTurnId,
         draft,
         conversation,
@@ -483,6 +485,9 @@ export function StudioPage() {
       }));
       throwIfAborted(abortController.signal);
 
+      if (input.applyGeneratedTitle && job.title) {
+        conversations.renameConversation(convId, job.title);
+      }
       conversations.updateTurn(convId, turnId, { status: "generating", taskId: job.id });
       setTurnProgress(progressKey, { message: "已提交，等待生成..." });
 
@@ -511,10 +516,13 @@ export function StudioPage() {
   }, [clearConversationSubmitting, conversations, markConversationSubmitting, pollSubmittedImageJob]);
 
   const submitDraft = useCallback(async (draft: TurnDraft) => {
+    const shouldApplyGeneratedTitle =
+      conversations.activeConversation === null || conversations.activeConversation.turns.length === 0;
     const { turnId, conversationId: convId } = conversations.addTurn(draft);
     if (!convId || !turnId) return;
 
     await submitExistingTurn({
+      applyGeneratedTitle: shouldApplyGeneratedTitle,
       conversation: conversations.activeConversation,
       conversationId: convId,
       draft,
@@ -608,6 +616,35 @@ export function StudioPage() {
       visibility: turn.visibility,
     };
     conversations.retryTurn(conv.id, turnId);
+    void submitExistingTurn({
+      contextBeforeTurnId: turn.id,
+      conversation: conv,
+      conversationId: conv.id,
+      draft,
+      turnId,
+    });
+  }, [conversations, submittingConversationIds, submitExistingTurn]);
+
+  const handleEditPromptRetry = useCallback((turnId: string, nextPrompt: string) => {
+    const conv = conversations.activeConversation;
+    const promptText = nextPrompt.trim();
+    if (!conv || !promptText || submittingConversationIds.has(conv.id)) return;
+    const turn = conv.turns.find((item) => item.id === turnId);
+    if (!turn) return;
+    const draft: TurnDraft = {
+      prompt: promptText,
+      model: turn.model,
+      mode: turn.mode,
+      referenceImages: turn.referenceImages,
+      characterLibraryIds: turn.characterLibraryIds ?? turn.characterReferences?.map((character) => character.id) ?? [],
+      characterReferences: turn.characterReferences ?? [],
+      count: turn.count,
+      aspectRatio: turn.aspectRatio,
+      resolution: turn.resolution,
+      quality: turn.quality,
+      visibility: turn.visibility,
+    };
+    conversations.retryTurnWithPrompt(conv.id, turnId, promptText);
     void submitExistingTurn({
       contextBeforeTurnId: turn.id,
       conversation: conv,
@@ -767,6 +804,7 @@ export function StudioPage() {
             isRefreshingPresets={isRefreshingPresets}
             onRetryTurn={handleRetryTurn}
             onComplianceRetryTurn={handleComplianceRetryTurn}
+            onEditPromptRetry={handleEditPromptRetry}
             onEditFromTurn={handleEditFromTurn}
             onCancelTurn={handleCancelTurn}
             onDeleteTurn={handleDeleteTurn}

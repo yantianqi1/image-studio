@@ -41,8 +41,13 @@ def generate_structured_chat(
     response_schema: dict | None = None,
     client_provider_config: ClientProviderConfig | None = None,
     chat_target: ChatTarget | None = None,
+    model_code: str | None = None,
 ) -> dict:
-    target = chat_target or resolve_chat_target_for_config(session, client_provider_config)
+    target = chat_target or resolve_chat_target_for_config(
+        session,
+        client_provider_config,
+        model_code=model_code,
+    )
     response = post_chat_completion(
         target=target,
         payload=build_chat_payload(target.provider_model, system_prompt, user_payload, schema_name, response_schema=response_schema),
@@ -50,17 +55,23 @@ def generate_structured_chat(
     return parse_chat_response(response, response_schema=response_schema)
 
 
-def resolve_chat_target_for_config(session: Session | None, config: ClientProviderConfig | None) -> ChatTarget:
+def resolve_chat_target_for_config(
+    session: Session | None,
+    config: ClientProviderConfig | None,
+    *,
+    model_code: str | None = None,
+) -> ChatTarget:
     if config is not None:
         return resolve_client_chat_target(config)
-    return resolve_chat_target(require_session(session))
+    return resolve_chat_target(require_session(session), model_code=model_code)
 
 
-def resolve_chat_target(session: Session) -> ChatTarget:
+def resolve_chat_target(session: Session, *, model_code: str | None = None) -> ChatTarget:
     ensure_provider_catalog(session)
     settings = get_settings()
+    target_model_code = (model_code or settings.openai_chat_model_code).strip()
     statement = select(SellableModel, Provider).join(Provider, SellableModel.provider_id == Provider.id).where(
-        SellableModel.code == settings.openai_chat_model_code,
+        SellableModel.code == target_model_code,
         SellableModel.capability.in_(("chat", "text")),
         Provider.status == "active",
     )

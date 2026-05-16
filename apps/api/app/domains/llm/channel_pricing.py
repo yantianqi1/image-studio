@@ -27,6 +27,27 @@ OFFICIAL_GPT_IMAGE_2_VARIANTS: tuple[CatalogVariantSeed, ...] = (
     CatalogVariantSeed(size="1536x1024", quality="high", member_price_cents=370),
 )
 
+OPENROUTER_LOW_PRICE_CENTS = 80
+OPENROUTER_MEDIUM_PRICE_CENTS = 150
+OPENROUTER_HIGH_PRICE_CENTS = 300
+OPENROUTER_IMAGE_SIZES = (
+    "1024x1024",
+    "1248x832",
+    "832x1248",
+    "1184x864",
+    "864x1184",
+    "1152x896",
+    "896x1152",
+    "1344x768",
+    "768x1344",
+    "1536x672",
+)
+OPENROUTER_QUALITY_PRICES = {
+    "low": OPENROUTER_LOW_PRICE_CENTS,
+    "medium": OPENROUTER_MEDIUM_PRICE_CENTS,
+    "high": OPENROUTER_HIGH_PRICE_CENTS,
+}
+
 
 def build_lowcost_image_variant_seeds() -> list[CatalogVariantSeed]:
     return [
@@ -37,4 +58,12 @@ def build_lowcost_image_variant_seeds() -> list[CatalogVariantSeed]:
             anonymous_price_cents=0,
         )
         for price in build_all_default_prices()
+    ]
+
+
+def build_openrouter_image_variant_seeds() -> list[CatalogVariantSeed]:
+    return [
+        CatalogVariantSeed(size=size, quality=quality, member_price_cents=price_cents)
+        for size in OPENROUTER_IMAGE_SIZES
+        for quality, price_cents in OPENROUTER_QUALITY_PRICES.items()
     ]

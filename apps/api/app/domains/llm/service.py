@@ -17,10 +17,12 @@ from apps.api.app.domains.llm.image_reference import extract_image_reference
 from apps.api.app.domains.llm.models import Provider, SellableModel, ModelVariant
 from apps.api.app.domains.llm.openai_chat_image import render_openai_chat_compatible_image
 from apps.api.app.domains.llm.openai_image import render_openai_compatible_image
+from apps.api.app.domains.llm.openrouter_chat_image import render_openrouter_chat_image
 from apps.api.app.domains.llm.provider_validation import (
     LOCAL_DEV_PROVIDER_TYPE,
     OPENAI_CHAT_COMPATIBLE_PROVIDER_TYPE,
     OPENAI_COMPATIBLE_PROVIDER_TYPE,
+    OPENROUTER_CHAT_IMAGE_PROVIDER_TYPE,
     SUPPORTED_PROVIDER_TYPES,
     normalize_optional_string,
     validate_capability,
@@ -257,6 +259,18 @@ def render_image(
             size=size,
             quality=quality,
         )
+    if provider.type == OPENROUTER_CHAT_IMAGE_PROVIDER_TYPE:
+        return render_openrouter_chat_image(
+            session,
+            provider=provider,
+            prompt=prompt,
+            provider_model=provider_model,
+            source_asset_id=source_asset_id,
+            reference_asset_ids=reference_ids,
+            conversation_messages=conversation_messages,
+            size=size,
+            quality=quality,
+        )
     raise AppError(code="unsupported_provider_type", message="unsupported provider type", status_code=422)
 
 
@@ -288,6 +302,18 @@ def render_image_with_client_provider(
         )
     if provider.type == OPENAI_CHAT_COMPATIBLE_PROVIDER_TYPE:
         return render_openai_chat_compatible_image(
+            session,
+            provider=provider,
+            prompt=prompt,
+            provider_model=provider_model,
+            source_asset_id=source_asset_id,
+            reference_asset_ids=reference_ids,
+            conversation_messages=conversation_messages,
+            size=size,
+            quality=quality,
+        )
+    if provider.type == OPENROUTER_CHAT_IMAGE_PROVIDER_TYPE:
+        return render_openrouter_chat_image(
             session,
             provider=provider,
             prompt=prompt,

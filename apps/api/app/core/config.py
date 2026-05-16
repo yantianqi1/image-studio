@@ -39,6 +39,7 @@ class AppSettings(BaseSettings):
     openai_chat_model_provider_model: str = "gemini-3-flash-preview-low"
     openai_chat_model_member_price_cents: int = 12
     openai_chat_model_anonymous_price_cents: int = 0
+    image_job_title_model_code: str = ""
     openai_image_model_code: str = "gpt-image-2"
     openai_image_model_display_name: str = "GPT Image 2"
     openai_image_model_provider_model: str = "gpt-image-2"
@@ -54,6 +55,16 @@ class AppSettings(BaseSettings):
     openai_official_image_model_provider_model: str = "gpt-image-2"
     openai_official_image_model_member_price_cents: int = 130
     openai_official_image_model_anonymous_price_cents: int = 0
+    openrouter_provider_name: str = "openrouter"
+    openrouter_provider_type: str = "openrouter-chat-image"
+    openrouter_provider_base_url: str = "https://openrouter.ai/api/v1"
+    openrouter_provider_api_key_env: str = "OPENROUTER_API_KEY"
+    openrouter_provider_default_model: str = "openai/gpt-image-2"
+    openrouter_image_model_code: str = "gpt-image-2-openrouter"
+    openrouter_image_model_display_name: str = "GPT Image 2 OpenRouter"
+    openrouter_image_model_provider_model: str = "openai/gpt-image-2"
+    openrouter_image_model_member_price_cents: int = 150
+    openrouter_image_model_anonymous_price_cents: int = 0
 
     model_config = SettingsConfigDict(
         env_file=".env",

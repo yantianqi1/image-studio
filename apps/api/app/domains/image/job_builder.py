@@ -18,6 +18,7 @@ from apps.api.app.domains.llm.service import ModelExecutionTarget
 class CreateImageJobRecordInput:
     owner: OwnerContext
     source: str
+    title: str | None
     prompt: str
     model_code: str
     requested_count: int
@@ -64,6 +65,7 @@ def build_image_job(*, job_input: CreateImageJobRecordInput, charge_cents: int, 
         user_id=job_input.owner.user_id,
         anonymous_session_id=job_input.owner.anonymous_session_id,
         source=job_input.source,
+        title=job_input.title,
         prompt=job_input.prompt,
         model_code=job_input.model_code,
         source_asset_id=job_input.source_asset_id,

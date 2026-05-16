@@ -13,6 +13,7 @@ import type {
 } from "@/features/studio/studio-types";
 
 type BuildImageJobRequestInput = Readonly<{
+  autoTitle?: boolean;
   draft: TurnDraft;
   conversation: StudioConversation | null;
   contextBeforeTurnId?: string;
@@ -40,6 +41,7 @@ export function buildImageJobRequest(input: BuildImageJobRequestInput): ImageGen
     size: input.draft.resolution === "auto" ? undefined : input.draft.resolution,
     quality: input.draft.quality,
     visibility: "private",
+    ...(input.autoTitle ? { auto_title: true } : {}),
     ...(resolveCharacterLibraryIds(input.draft).length
       ? { character_library_ids: resolveCharacterLibraryIds(input.draft) }
       : {}),

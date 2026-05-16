@@ -212,6 +212,32 @@ test("buildImageJobRequest forwards selected character library ids", () => {
   assert.equal(request.prompt, "让角色在花园里读书");
 });
 
+test("buildImageJobRequest opts into backend title generation for first studio turn", () => {
+  const { buildImageJobRequest } = loadStudioImageRequest();
+  const draft = {
+    prompt: "雨夜街头的人像海报",
+    model: "gpt-image-2",
+    mode: "generate",
+    referenceImages: [],
+    count: 1,
+    aspectRatio: "9:16",
+    resolution: "1024x1536",
+    quality: "high",
+    visibility: "private",
+  };
+
+  const request = buildImageJobRequest({
+    draft,
+    conversation: null,
+    referenceImages: [],
+    autoTitle: true,
+  });
+
+  assert.equal(request.auto_title, true);
+  assert.equal(request.size, "1024x1536");
+  assert.equal(request.quality, "high");
+});
+
 test("uploadPendingReferenceImages uploads data url references", async () => {
   const { uploadPendingReferenceImages } = loadStudioImageRequest();
   const uploadedFiles = [];

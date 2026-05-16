@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
+import { RefreshCw } from "lucide-react";
 
 import {
   type PromptCrafterMessage,
@@ -9,6 +10,11 @@ import {
 } from "./prompt-crafter-api";
 import { extractPromptOptionsFromMarkdown } from "./prompt-markdown";
 import { PromptMarkdownView } from "./prompt-markdown-view";
+import {
+  buildPromptCrafterRefreshMessages,
+  readPromptCrafterSession,
+  savePromptCrafterSession,
+} from "./prompt-crafter-session";
 import { applyPromptToGenerate } from "./use-prompt";
 import styles from "./prompt-crafter-drawer.module.css";
 
@@ -38,6 +44,8 @@ export function PromptCrafterDrawer({ onClose }: Readonly<{ onClose: () => void 
   const [errorMessage, setErrorMessage] = useState("");
   const [copyLabel, setCopyLabel] = useState("复制");
   const [closing, setClosing] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+  const [reverseNote, setReverseNote] = useState("");
   const abortRef = useRef<AbortController | null>(null);
 
   const latestPrompt = useMemo(
@@ -47,6 +55,20 @@ export function PromptCrafterDrawer({ onClose }: Readonly<{ onClose: () => void 
   const firstUsablePrompt = useMemo(() => readFirstUsablePrompt(latestPrompt), [latestPrompt]);
   const canSubmit = draft.trim().length > 0 && status !== "streaming";
   const canContinue = Boolean(latestPrompt) && status !== "streaming";
+  const canRefresh = messages.some((message) => message.role === "user") && status !== "streaming";
+
+  useEffect(() => {
+    const session = readPromptCrafterSession();
+    setDraft(session.draft);
+    setMessages(session.messages);
+    setReverseNote(session.reverseNote);
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    savePromptCrafterSession({ draft, messages, reverseNote });
+  }, [draft, hydrated, messages, reverseNote]);
 
   const submitPrompt = useCallback(async (content: string) => {
     const trimmed = content.trim();
@@ -57,6 +79,20 @@ export function PromptCrafterDrawer({ onClose }: Readonly<{ onClose: () => void 
     setStatus("streaming");
     setCopyLabel("复制");
     await runStream({ abortRef, nextMessages, setErrorMessage, setMessages, setStatus });
+  }, [messages, status]);
+
+  const refreshPrompt = useCallback(async () => {
+    if (status === "streaming") return;
+    try {
+      const nextMessages = buildPromptCrafterRefreshMessages(messages);
+      setErrorMessage("");
+      setStatus("streaming");
+      setCopyLabel("复制");
+      await runStream({ abortRef, nextMessages, setErrorMessage, setMessages, setStatus });
+    } catch (error: unknown) {
+      setErrorMessage(error instanceof Error ? error.message : "提示词刷新失败");
+      setStatus("error");
+    }
   }, [messages, status]);
 
   const handleSubmit = useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
@@ -126,6 +162,15 @@ export function PromptCrafterDrawer({ onClose }: Readonly<{ onClose: () => void 
                 onClick={() => void submitPrompt(REFINEMENT_PROMPT)}
               >
                 优化
+              </button>
+              <button
+                className={styles.secondaryButton}
+                disabled={!canRefresh}
+                type="button"
+                onClick={() => void refreshPrompt()}
+              >
+                <RefreshCw aria-hidden="true" size={15} />
+                刷新
               </button>
             </div>
             {status === "error" ? <p className={styles.errorText}>{errorMessage}</p> : null}

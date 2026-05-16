@@ -33,6 +33,7 @@ from apps.api.app.domains.image.service import (
     list_job_results_for_owner,
     list_jobs_for_owner,
 )
+from apps.api.app.domains.image.title_generation import generate_image_job_title
 from apps.api.app.domains.llm.client_provider import CLIENT_PROVIDER_SOURCE, read_client_provider_config
 from apps.api.app.domains.public_quota.constants import PUBLIC_QUOTA_FEATURE_IMAGE
 from apps.api.app.domains.public_quota.service import consume_public_quota, resolve_request_ip
@@ -62,10 +63,12 @@ def create_image_job(
         character_ids=payload.character_library_ids,
         prompt=payload.prompt,
     )
+    title = generate_image_job_title(session, prompt=payload.prompt) if payload.auto_title else None
     job = create_job(
         session,
         owner=owner,
         source=resolve_image_job_source(owner=owner, has_client_provider=client_config is not None),
+        title=title,
         prompt=character_bundle.prompt,
         model_code=payload.model_code,
         requested_count=payload.requested_count,
@@ -328,6 +331,7 @@ def job_payload(job) -> dict[str, object]:
         "user_id": job.user_id,
         "source": job.source,
         "mode": job.mode,
+        "title": job.title,
         "prompt": job.prompt,
         "model_code": job.model_code,
         "visibility": job.visibility,
@@ -342,6 +346,12 @@ def job_payload(job) -> dict[str, object]:
         "size": job.size,
         "quality": job.quality,
         "charge_cents": job.charge_cents,
+        "provider_input_tokens": job.provider_input_tokens,
+        "provider_output_tokens": job.provider_output_tokens,
+        "provider_total_tokens": job.provider_total_tokens,
+        "raw_provider_cost_cents": job.raw_provider_cost_cents,
+        "provider_fee_cents": job.provider_fee_cents,
+        "internal_cost_cents": job.internal_cost_cents,
         "error_code": job.error_code,
         "error_message": job.error_message,
         "created_at": job.created_at.isoformat(),

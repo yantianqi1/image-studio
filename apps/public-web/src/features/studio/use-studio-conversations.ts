@@ -10,6 +10,7 @@ import {
   listConversations,
   removeTurnFromConversation,
   retryTurnInConversation,
+  retryTurnWithPromptInConversation,
   saveConversation,
   saveConversations,
   setActiveConversationId,
@@ -123,6 +124,16 @@ export function useStudioConversations() {
     });
   }, []);
 
+  const retryTurnWithPrompt = useCallback((conversationId: string, turnId: string, prompt: string) => {
+    setConversations((prev) => {
+      const conv = prev.find((c) => c.id === conversationId);
+      if (!conv) return prev;
+      const updated = retryTurnWithPromptInConversation(conv, turnId, prompt.trim());
+      if (!updated) return prev;
+      return saveConversation(prev, updated);
+    });
+  }, []);
+
   return {
     conversations,
     activeConversation,
@@ -137,5 +148,6 @@ export function useStudioConversations() {
     updateTurn,
     removeTurn,
     retryTurn,
+    retryTurnWithPrompt,
   } as const;
 }

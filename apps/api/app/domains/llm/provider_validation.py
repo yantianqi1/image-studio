@@ -5,7 +5,13 @@ from apps.api.app.core.errors import AppError
 LOCAL_DEV_PROVIDER_TYPE = "local-dev"
 OPENAI_COMPATIBLE_PROVIDER_TYPE = "openai-compatible"
 OPENAI_CHAT_COMPATIBLE_PROVIDER_TYPE = "openai-chat-compatible"
-SUPPORTED_PROVIDER_TYPES = {LOCAL_DEV_PROVIDER_TYPE, OPENAI_COMPATIBLE_PROVIDER_TYPE, OPENAI_CHAT_COMPATIBLE_PROVIDER_TYPE}
+OPENROUTER_CHAT_IMAGE_PROVIDER_TYPE = "openrouter-chat-image"
+REMOTE_PROVIDER_TYPES = {
+    OPENAI_COMPATIBLE_PROVIDER_TYPE,
+    OPENAI_CHAT_COMPATIBLE_PROVIDER_TYPE,
+    OPENROUTER_CHAT_IMAGE_PROVIDER_TYPE,
+}
+SUPPORTED_PROVIDER_TYPES = {LOCAL_DEV_PROVIDER_TYPE, *REMOTE_PROVIDER_TYPES}
 
 
 def validate_provider_type(provider_type: str) -> None:
@@ -14,7 +20,7 @@ def validate_provider_type(provider_type: str) -> None:
 
 
 def validate_provider_config(*, provider_type: str, base_url: str | None, api_key_env: str | None) -> None:
-    if provider_type not in {OPENAI_COMPATIBLE_PROVIDER_TYPE, OPENAI_CHAT_COMPATIBLE_PROVIDER_TYPE}:
+    if provider_type not in REMOTE_PROVIDER_TYPES:
         return
     if not normalize_optional_string(base_url) or not normalize_optional_string(api_key_env):
         raise AppError(code="provider_config_invalid", message="provider config invalid", status_code=422)

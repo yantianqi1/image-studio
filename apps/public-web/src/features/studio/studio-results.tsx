@@ -3,6 +3,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import {
+  Check,
   CircleStop,
   Clock3,
   Download,
@@ -10,12 +11,14 @@ import {
   Globe2,
   Loader2,
   Lock,
+  Pencil,
   Plus,
   RefreshCw,
   RotateCcw,
   ShieldCheck,
   Sparkles,
   Trash2,
+  X,
 } from "lucide-react";
 
 import { cn } from "@/lib/cn";
@@ -40,6 +43,7 @@ type StudioResultsProps = Readonly<{
   isRefreshingPresets: boolean;
   onRetryTurn: (turnId: string) => void;
   onComplianceRetryTurn: (turnId: string) => void;
+  onEditPromptRetry: (turnId: string, prompt: string) => void;
   onEditFromTurn: (turnId: string, image: StoredImage) => void;
   onCancelTurn: (turnId: string) => void;
   onDeleteTurn: (turnId: string) => void;
@@ -93,6 +97,7 @@ export const StudioResults = memo(function StudioResults({
   isRefreshingPresets,
   onRetryTurn,
   onComplianceRetryTurn,
+  onEditPromptRetry,
   onEditFromTurn,
   onCancelTurn,
   onDeleteTurn,
@@ -192,6 +197,7 @@ export const StudioResults = memo(function StudioResults({
             progress={progressByTurnKey.get(`${conversation.id}:${turn.id}`)}
             onRetry={() => onRetryTurn(turn.id)}
             onComplianceRetry={() => onComplianceRetryTurn(turn.id)}
+            onEditPromptRetry={(prompt) => onEditPromptRetry(turn.id, prompt)}
             onEditFromImage={(image) => onEditFromTurn(turn.id, image)}
             onCancel={() => onCancelTurn(turn.id)}
             onDelete={() => onDeleteTurn(turn.id)}
@@ -214,6 +220,7 @@ const TurnCard = memo(function TurnCard({
   progress,
   onRetry,
   onComplianceRetry,
+  onEditPromptRetry,
   onEditFromImage,
   onCancel,
   onDelete,
@@ -224,6 +231,7 @@ const TurnCard = memo(function TurnCard({
   progress: TurnProgress | undefined;
   onRetry: () => void;
   onComplianceRetry: () => void;
+  onEditPromptRetry: (prompt: string) => void;
   onEditFromImage: (image: StoredImage) => void;
   onCancel: () => void;
   onDelete: () => void;
@@ -233,6 +241,19 @@ const TurnCard = memo(function TurnCard({
   const modeInfo = MODE_LABELS[turn.mode] ?? MODE_LABELS.generate;
   const isBusy = turn.status === "queued" || turn.status === "generating";
   const busyStartMs = isBusy ? new Date(turn.createdAt).getTime() : null;
+  const [editingPrompt, setEditingPrompt] = useState(false);
+  const [promptDraft, setPromptDraft] = useState(turn.prompt);
+
+  useEffect(() => {
+    if (!editingPrompt) setPromptDraft(turn.prompt);
+  }, [editingPrompt, turn.prompt]);
+
+  const submitPromptEdit = useCallback(() => {
+    const nextPrompt = promptDraft.trim();
+    if (!nextPrompt || isBusy) return;
+    setEditingPrompt(false);
+    onEditPromptRetry(nextPrompt);
+  }, [isBusy, onEditPromptRetry, promptDraft]);
 
   return (
     <div className="flex flex-col gap-3 sm:gap-4">
@@ -247,6 +268,9 @@ const TurnCard = memo(function TurnCard({
               </span>
               <span className="rounded-full bg-gray-100 px-2 py-0.5 text-gray-600">{turn.model}</span>
               <span className="px-1 text-gray-400">{formatTurnTime(turn.createdAt)}</span>
+              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-700">
+                {formatTurnParameters(turn)}
+              </span>
             </div>
             <div className="flex shrink-0 items-center gap-1">
               {isBusy ? (
@@ -273,6 +297,17 @@ const TurnCard = memo(function TurnCard({
                   </button>
                 </>
               )}
+              {!isBusy && (
+                <button
+                  type="button"
+                  className="inline-flex size-7 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 transition hover:bg-gray-50 hover:text-gray-700"
+                  onClick={() => setEditingPrompt(true)}
+                  aria-label="修改提示词"
+                  title="修改提示词"
+                >
+                  <Pencil className="size-3.5" />
+                </button>
+              )}
               <button
                 type="button"
                 className="inline-flex size-7 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600"
@@ -284,7 +319,19 @@ const TurnCard = memo(function TurnCard({
               </button>
             </div>
           </div>
-          <div className="whitespace-pre-wrap break-words">{turn.prompt}</div>
+          {editingPrompt ? (
+            <PromptEditForm
+              value={promptDraft}
+              onCancel={() => {
+                setPromptDraft(turn.prompt);
+                setEditingPrompt(false);
+              }}
+              onChange={setPromptDraft}
+              onSubmit={submitPromptEdit}
+            />
+          ) : (
+            <div className="whitespace-pre-wrap break-words">{turn.prompt}</div>
+          )}
 
           {/* Reference images */}
           {turn.referenceImages.length > 0 && (
@@ -381,6 +428,49 @@ const TurnCard = memo(function TurnCard({
     </div>
   );
 });
+
+function PromptEditForm({
+  value,
+  onCancel,
+  onChange,
+  onSubmit,
+}: Readonly<{
+  value: string;
+  onCancel: () => void;
+  onChange: (value: string) => void;
+  onSubmit: () => void;
+}>) {
+  return (
+    <div className="flex flex-col gap-2">
+      <textarea
+        className="min-h-28 w-full resize-y rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm leading-6 text-gray-900 outline-none transition focus:border-gray-400 focus:bg-white"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      <div className="flex justify-end gap-2">
+        <button
+          type="button"
+          className="inline-flex size-8 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 transition hover:bg-gray-50"
+          onClick={onCancel}
+          aria-label="取消修改"
+          title="取消"
+        >
+          <X className="size-4" />
+        </button>
+        <button
+          type="button"
+          className="inline-flex size-8 items-center justify-center rounded-full bg-gray-900 text-white transition hover:bg-gray-800 disabled:bg-gray-200 disabled:text-gray-400"
+          onClick={onSubmit}
+          disabled={!value.trim()}
+          aria-label="保存并重新生成"
+          title="保存并重新生成"
+        >
+          <Check className="size-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function ImageCell({
   image,
@@ -513,6 +603,20 @@ function ImageCell({
     </figure>
   );
 }
+
+function formatTurnParameters(turn: StudioTurn): string {
+  return [
+    turn.resolution || "auto",
+    turn.aspectRatio,
+    QUALITY_LABELS[turn.quality] ?? turn.quality,
+  ].filter(Boolean).join(" / ");
+}
+
+const QUALITY_LABELS: Record<string, string> = {
+  low: "低质量",
+  medium: "中质量",
+  high: "高质量",
+};
 
 function GenerationSkeleton({
   aspectRatio,

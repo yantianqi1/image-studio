@@ -1,7 +1,7 @@
 "use client";
 
 import { useAdminStats } from "@/lib/use-admin-data";
-import type { DailyTrendItem, DistributionItem, ImageJobStats } from "@/lib/admin-image-job-types";
+import type { ChannelCostItem, DailyTrendItem, DistributionItem, ImageJobStats } from "@/lib/admin-image-job-types";
 
 export function ImageJobStatsPanel() {
   const { data: stats, error, isLoading } = useAdminStats();
@@ -25,6 +25,7 @@ export function ImageJobStatsPanel() {
         <DistributionPanel title="分辨率分布" items={stats.distribution.size} />
         <DistributionPanel title="画质分布" items={stats.distribution.quality} />
       </div>
+      <ChannelCostPanel items={stats.channel_costs} />
     </div>
   );
 }
@@ -35,9 +36,38 @@ function MetricCards({ stats }: { stats: ImageJobStats }) {
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       <MetricCard label="总任务数" value={String(stats.overview.total)} />
       <MetricCard label="成功率" value={`${(stats.overview.success_rate * 100).toFixed(1)}%`} tone="success" />
-      <MetricCard label="总收入" value={`¥${(stats.revenue.total_cents / 100).toFixed(2)}`} />
+      <MetricCard label="总收入" value={formatCents(stats.revenue.total_cents)} />
       <MetricCard label="平均耗时" value={avgDuration != null ? `${avgDuration.toFixed(1)}s` : "—"} />
     </div>
+  );
+}
+
+function ChannelCostPanel({ items }: { items: readonly ChannelCostItem[] }) {
+  if (items.length === 0) {
+    return (
+      <section className="admin-panel p-4">
+        <h3 className="text-sm font-semibold">渠道成本与毛利</h3>
+        <p className="mt-2 text-xs text-gray-400">暂无数据</p>
+      </section>
+    );
+  }
+  return (
+    <section className="admin-panel p-4">
+      <h3 className="mb-3 text-sm font-semibold">渠道成本与毛利</h3>
+      <div className="overflow-x-auto">
+        <div className="grid min-w-[38rem] gap-2">
+          {items.slice(0, 10).map((item) => (
+            <div key={item.key} className="grid grid-cols-[minmax(0,1fr)_repeat(4,auto)] items-center gap-3 text-xs">
+              <span className="truncate font-medium text-gray-700" title={item.key}>{item.key}</span>
+              <span className="text-gray-500">{item.count} 次</span>
+              <span className="text-gray-600">{formatCents(item.revenue_cents)}</span>
+              <span className="text-gray-500">{formatCents(item.internal_cost_cents)}</span>
+              <span className="font-semibold text-emerald-600">{formatCents(item.gross_margin_cents)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -96,6 +126,10 @@ function RevenueChart({ data }: { data: readonly DailyTrendItem[] }) {
       </div>
     </section>
   );
+}
+
+function formatCents(value: number) {
+  return `¥${(value / 100).toFixed(2)}`;
 }
 
 function DistributionPanel({ title, items }: { title: string; items: readonly DistributionItem[] }) {

@@ -243,12 +243,22 @@ def resolve_asset_public_urls(asset: Asset, storage: AssetStorage) -> tuple[str,
     direct_url = storage.public_url(asset.storage_path)
     if direct_url is None:
         asset_url = f"/api/public/image/assets/{asset.id}"
-        thumb_url = f"/api/public/image/assets/{asset.id}/thumbnail"
+        thumb_url = api_thumbnail_url(asset)
     else:
         asset_url = direct_url
-        thumb_key = thumbnail_asset_key(asset.storage_path)
-        thumb_url = storage.public_url(thumb_key) or f"/api/public/image/assets/{asset.id}/thumbnail"
+        thumb_url = resolve_public_thumbnail_url(asset, storage=storage)
     return asset_url, thumb_url
+
+
+def resolve_public_thumbnail_url(asset: Asset, *, storage: AssetStorage) -> str:
+    thumb_key = thumbnail_asset_key(asset.storage_path)
+    if storage.exists(thumb_key):
+        return storage.public_url(thumb_key) or api_thumbnail_url(asset)
+    return api_thumbnail_url(asset)
+
+
+def api_thumbnail_url(asset: Asset) -> str:
+    return f"/api/public/image/assets/{asset.id}/thumbnail"
 
 
 def resolve_existing_asset_path(storage_path: str) -> Path:

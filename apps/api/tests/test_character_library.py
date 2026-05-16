@@ -1,18 +1,29 @@
 from __future__ import annotations
 
 import base64
+from datetime import datetime
 
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from apps.api.app.domains.auth.service import create_admin_account
-from apps.api.app.domains.image.models import ImageJob, ImageJobReferenceAsset
+from apps.api.app.domains.character_library.models import CharacterLibraryEntry
+from apps.api.app.domains.character_library.service import character_payload
+from apps.api.app.domains.image.models import Asset, ImageJob, ImageJobReferenceAsset
 from apps.api.app.infra.db.session import initialize_database, session_scope
 from apps.api.app.main import create_app
 
 VALID_PNG_BYTES = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
 )
+
+
+class MissingThumbnailPublicStorage:
+    def public_url(self, key: str) -> str:
+        return f"https://cdn.example.test/{key}"
+
+    def exists(self, key: str) -> bool:
+        return False
 
 
 def build_client() -> TestClient:
@@ -63,6 +74,23 @@ def test_admin_public_character_is_visible_to_anonymous_users() -> None:
         (character["id"], "公共少女", "public")
     ]
     assert items[0]["thumbnail_url"].endswith(f"/image/assets/{character['asset_id']}/thumbnail")
+
+
+def test_character_payload_uses_api_thumbnail_when_public_thumbnail_missing() -> None:
+    asset = Asset(id=42, storage_path="uploads/upload-42.png", mime_type="image/png", created_at=datetime.utcnow())
+    entry = CharacterLibraryEntry(
+        id=7,
+        name="远端形象",
+        asset_id=42,
+        visibility="public",
+        owner_user_id=None,
+        created_at=datetime.utcnow(),
+    )
+
+    payload = character_payload(entry, storage=MissingThumbnailPublicStorage(), asset=asset)
+
+    assert payload["asset_url"] == "https://cdn.example.test/uploads/upload-42.png"
+    assert payload["thumbnail_url"] == "/api/public/image/assets/42/thumbnail"
 
 
 def test_private_character_upload_requires_login() -> None:

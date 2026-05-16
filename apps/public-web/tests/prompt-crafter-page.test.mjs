@@ -7,6 +7,7 @@ import ts from "typescript";
 const pageFile = new URL("../src/app/apps/prompt-crafter/page.tsx", import.meta.url);
 const appFile = new URL("../src/features/prompt-crafter/prompt-crafter-app.tsx", import.meta.url);
 const apiFile = new URL("../src/features/prompt-crafter/prompt-crafter-api.ts", import.meta.url);
+const sessionFile = new URL("../src/features/prompt-crafter/prompt-crafter-session.ts", import.meta.url);
 const markdownFile = new URL("../src/features/prompt-crafter/prompt-markdown.ts", import.meta.url);
 const markdownViewFile = new URL("../src/features/prompt-crafter/prompt-markdown-view.tsx", import.meta.url);
 const markdownStylesFile = new URL("../src/features/prompt-crafter/prompt-markdown.module.css", import.meta.url);
@@ -19,6 +20,20 @@ function readRequiredSource(file, label) {
 
 function loadPromptMarkdown() {
   const source = readRequiredSource(markdownFile, "prompt markdown parser");
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
+  }).outputText;
+  const sandbox = { exports: {}, module: { exports: {} } };
+  sandbox.exports = sandbox.module.exports;
+  vm.runInNewContext(compiled, sandbox);
+  return sandbox.module.exports;
+}
+
+function loadPromptCrafterSession() {
+  const source = readRequiredSource(sessionFile, "prompt crafter session");
   const compiled = ts.transpileModule(source, {
     compilerOptions: {
       module: ts.ModuleKind.CommonJS,
@@ -49,8 +64,11 @@ test("prompt crafter page exposes a streaming workspace", () => {
   assert.match(appSource, /aria-label="返回应用中心"/);
   assert.match(appSource, /生成提示词/);
   assert.match(appSource, /继续优化/);
+  assert.match(appSource, /刷新/);
   assert.match(appSource, /发送到生图/);
   assert.match(appSource, /streamPromptCrafter/);
+  assert.match(appSource, /readPromptCrafterSession/);
+  assert.match(appSource, /savePromptCrafterSession/);
   assert.match(appSource, /PromptMarkdownView/);
   assert.match(markdownViewSource, /复制生成提示词/);
   assert.match(markdownViewSource, /copyGeneratedPrompt/);
@@ -66,6 +84,34 @@ test("prompt crafter page exposes a streaming workspace", () => {
   assert.match(markdownStylesSource, /white-space:\s*pre-wrap;/);
   assert.match(stylesSource, /@media \(max-width:\s*640px\)/);
   assert.equal(existsSync(markdownViewFile), true);
+});
+
+test("prompt crafter drawer persists messages and exposes refresh", () => {
+  const drawerSource = readRequiredSource(
+    new URL("../src/features/prompt-crafter/prompt-crafter-drawer.tsx", import.meta.url),
+    "prompt crafter drawer",
+  );
+
+  assert.match(drawerSource, /readPromptCrafterSession/);
+  assert.match(drawerSource, /savePromptCrafterSession/);
+  assert.match(drawerSource, /buildPromptCrafterRefreshMessages/);
+  assert.match(drawerSource, /刷新/);
+});
+
+test("prompt crafter refresh resends the latest user turn without stale assistant output", () => {
+  const { buildPromptCrafterRefreshMessages } = loadPromptCrafterSession();
+  const messages = [
+    { role: "user", content: "做一张咖啡海报" },
+    { role: "assistant", content: "第一版" },
+    { role: "user", content: "加一点胶片质感" },
+    { role: "assistant", content: "第二版" },
+  ];
+
+  assert.deepEqual(JSON.parse(JSON.stringify(buildPromptCrafterRefreshMessages(messages))), [
+    { role: "user", content: "做一张咖啡海报" },
+    { role: "assistant", content: "第一版" },
+    { role: "user", content: "加一点胶片质感" },
+  ]);
 });
 
 test("prompt crafter page keeps skill internals out of the UI source", () => {
