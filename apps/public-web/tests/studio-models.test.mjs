@@ -133,6 +133,32 @@ test("studio image model resolver keeps openrouter as a selectable channel", () 
   assert.equal(resolved.selectedModel.code, "gpt-image-2-openrouter");
 });
 
+test("studio openrouter parameters use documented aspect ratios", () => {
+  const { buildModelAspectRatioOptions, resolveModelParameterSelection } = loadStudioModels();
+  const model = {
+    code: "gpt-image-2-openrouter",
+    display_name: "GPT Image 2 OpenRouter",
+    capability: "image",
+    member_price_cents: 150,
+    variants: [
+      { size: "1184x864", aspect_ratio: "4:3", quality: "medium", member_price_cents: 150 },
+      { size: "864x1184", aspect_ratio: "3:4", quality: "medium", member_price_cents: 150 },
+      { size: "1344x768", aspect_ratio: "16:9", quality: "medium", member_price_cents: 150 },
+      { size: "1536x672", aspect_ratio: "21:9", quality: "medium", member_price_cents: 150 },
+    ],
+  };
+
+  const ratios = buildModelAspectRatioOptions(model).map((ratio) => ratio.value);
+  const selection = resolveModelParameterSelection(model, {
+    aspectRatio: "37:27",
+    resolution: "1184x864",
+    quality: "medium",
+  });
+
+  assert.deepEqual(toPlain(ratios.toSorted()), ["16:9", "21:9", "3:4", "4:3"]);
+  assert.equal(selection.aspectRatio, "4:3");
+});
+
 function toPlain(value) {
   return JSON.parse(JSON.stringify(value));
 }

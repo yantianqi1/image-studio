@@ -59,10 +59,10 @@ class AppSettings(BaseSettings):
     openrouter_provider_type: str = "openrouter-chat-image"
     openrouter_provider_base_url: str = "https://openrouter.ai/api/v1"
     openrouter_provider_api_key_env: str = "OPENROUTER_API_KEY"
-    openrouter_provider_default_model: str = "openai/gpt-image-2"
+    openrouter_provider_default_model: str = "openai/gpt-5.4-image-2"
     openrouter_image_model_code: str = "gpt-image-2-openrouter"
     openrouter_image_model_display_name: str = "GPT Image 2 OpenRouter"
-    openrouter_image_model_provider_model: str = "openai/gpt-image-2"
+    openrouter_image_model_provider_model: str = "openai/gpt-5.4-image-2"
     openrouter_image_model_member_price_cents: int = 150
     openrouter_image_model_anonymous_price_cents: int = 0
 

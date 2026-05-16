@@ -1,3 +1,5 @@
+import math
+
 from fastapi import APIRouter, Depends, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -9,6 +11,7 @@ from apps.api.app.core.response import api_ok
 from apps.api.app.domains.auth.service import require_admin
 from apps.api.app.domains.llm.admin_ops import delete_provider, delete_sellable_model
 from apps.api.app.domains.llm.models import Provider, SellableModel, ModelVariant
+from apps.api.app.domains.llm.openrouter_image_options import OPENROUTER_SIZE_TO_ASPECT_RATIO
 from apps.api.app.domains.llm.service import (
     create_or_update_sellable_model,
     create_provider,
@@ -562,10 +565,32 @@ def public_variant_payload(variant: ModelVariant) -> dict[str, object]:
     return {
         "id": variant.id,
         "size": variant.size,
+        "aspect_ratio": resolve_variant_aspect_ratio(variant.size),
         "quality": variant.quality,
         "member_price_cents": variant.member_price_cents,
         "anonymous_price_cents": variant.anonymous_price_cents,
     }
+
+
+def resolve_variant_aspect_ratio(size: str) -> str:
+    normalized = size.strip().lower()
+    mapped_ratio = OPENROUTER_SIZE_TO_ASPECT_RATIO.get(normalized)
+    if mapped_ratio:
+        return mapped_ratio
+    width, height = parse_variant_size(normalized)
+    divisor = math.gcd(width, height)
+    return f"{width // divisor}:{height // divisor}"
+
+
+def parse_variant_size(size: str) -> tuple[int, int]:
+    parts = size.split("x", 1)
+    if len(parts) != 2 or not parts[0].isdigit() or not parts[1].isdigit():
+        return 1, 1
+    width = int(parts[0])
+    height = int(parts[1])
+    if width <= 0 or height <= 0:
+        return 1, 1
+    return width, height
 
 
 def upstream_model_payload(model: object) -> dict[str, object]:

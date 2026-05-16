@@ -1,4 +1,4 @@
-import type { PublicModelSummary } from "@/lib/public-api";
+import type { PublicModelSummary, PublicModelVariant } from "@/lib/public-api";
 import {
   ASPECT_RATIO_OPTIONS as KNOWN_ASPECT_RATIO_OPTIONS,
   type AspectRatioOption,
@@ -33,9 +33,9 @@ type ParameterSelection = Readonly<{
 const QUALITY_ORDER = ["low", "medium", "high"] as const;
 
 export function buildModelAspectRatioOptions(model: PublicModelSummary | null): readonly AspectRatioOption[] {
-  const sizes = collectModelSizes(model);
-  if (sizes.length === 0) return [];
-  const sizesByRatio = groupSizesByRatio(sizes);
+  const variants = sortVariants(model?.variants ?? []);
+  if (variants.length === 0) return [];
+  const sizesByRatio = groupSizesByRatio(variants);
   return Array.from(sizesByRatio.entries()).map(([ratio, ratioSizes]) => ({
     value: ratio,
     label: ratio,
@@ -50,12 +50,13 @@ export function resolveModelParameterSelection(
 ): ParameterSelection {
   const variants = model?.variants ?? [];
   if (variants.length === 0) return current;
-  if (variants.some((variant) => variant.size === current.resolution && variant.quality === current.quality)) {
-    return { ...current, aspectRatio: sizeToAspectRatio(current.resolution) };
+  const currentVariant = variants.find((variant) => variant.size === current.resolution && variant.quality === current.quality);
+  if (currentVariant) {
+    return { ...current, aspectRatio: variantToAspectRatio(currentVariant) };
   }
   const firstVariant = sortVariants(variants)[0];
   return {
-    aspectRatio: sizeToAspectRatio(firstVariant.size),
+    aspectRatio: variantToAspectRatio(firstVariant),
     resolution: firstVariant.size,
     quality: firstVariant.quality,
   };
@@ -87,17 +88,14 @@ export function findModelAspectRatioOption(
   return buildModelAspectRatioOptions(model).find((option) => option.value === ratio);
 }
 
-function collectModelSizes(model: PublicModelSummary | null): string[] {
-  const variants = model?.variants ?? [];
-  const sizes = Array.from(new Set(variants.map((variant) => variant.size)));
-  return sizes.sort(compareSizes);
-}
-
-function groupSizesByRatio(sizes: readonly string[]) {
+function groupSizesByRatio(variants: readonly PublicModelVariant[]) {
   const groups = new Map<string, string[]>();
-  for (const size of sizes) {
-    const ratio = sizeToAspectRatio(size);
-    groups.set(ratio, [...(groups.get(ratio) ?? []), size]);
+  for (const variant of variants) {
+    const ratio = variantToAspectRatio(variant);
+    const sizes = groups.get(ratio) ?? [];
+    if (!sizes.includes(variant.size)) {
+      groups.set(ratio, [...sizes, variant.size]);
+    }
   }
   return groups;
 }
@@ -131,6 +129,10 @@ function sizeToAspectRatio(size: string): string {
   const [width, height] = parseSize(size);
   const divisor = greatestCommonDivisor(width, height);
   return `${width / divisor}:${height / divisor}`;
+}
+
+function variantToAspectRatio(variant: PublicModelVariant): string {
+  return variant.aspect_ratio || sizeToAspectRatio(variant.size);
 }
 
 function parseSize(size: string): [number, number] {

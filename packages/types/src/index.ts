@@ -99,6 +99,7 @@ export interface SellableModel {
 export interface SellableModelVariant {
   id: number;
   size: string;
+  aspectRatio?: string;
   quality: string;
   memberPriceCents: number;
   anonymousPriceCents: number;

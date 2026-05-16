@@ -70,10 +70,31 @@ def test_openrouter_catalog_seed_exposes_image_channel(monkeypatch) -> None:
     assert any(item["name"] == "openrouter" and item["type"] == "openrouter-chat-image" for item in providers)
     openrouter_model = next(item for item in models if item["code"] == "gpt-image-2-openrouter")
     assert openrouter_model["display_name"] == "GPT Image 2 OpenRouter"
+    assert openrouter_model["provider_model"] == "openai/gpt-5.4-image-2"
     assert find_variant(openrouter_model, size="1024x1024", quality="medium")["member_price_cents"] == 150
+    assert find_variant(openrouter_model, size="1184x864", quality="medium")["aspect_ratio"] == "4:3"
+    assert find_variant(openrouter_model, size="1344x768", quality="medium")["aspect_ratio"] == "16:9"
+    assert find_variant(openrouter_model, size="1536x672", quality="medium")["aspect_ratio"] == "21:9"
     assert find_variant(openrouter_model, size="768x1344", quality="high")["member_price_cents"] == 300
     assert find_variant(openrouter_model, size="896x1152", quality="low")["member_price_cents"] == 80
     assert find_variant(openrouter_model, size="1152x896", quality="low")["member_price_cents"] == 80
+
+
+def test_openrouter_image_config_uses_documented_aspect_ratio_mapping() -> None:
+    from apps.api.app.domains.llm.openrouter_chat_image import build_image_config
+
+    assert build_image_config(size="1184x864", quality="medium") == {
+        "aspect_ratio": "4:3",
+        "image_size": "2K",
+    }
+    assert build_image_config(size="864x1184", quality="high") == {
+        "aspect_ratio": "3:4",
+        "image_size": "4K",
+    }
+    assert build_image_config(size="1344x768", quality="low") == {
+        "aspect_ratio": "16:9",
+        "image_size": "1K",
+    }
 
 
 def test_openrouter_job_routes_payload_and_records_usage(monkeypatch) -> None:
@@ -166,7 +187,7 @@ def assert_openrouter_request_payload(captured: dict[str, object]) -> None:
     assert isinstance(payload, dict)
     assert captured["url"] == "https://openrouter.ai/api/v1/chat/completions"
     assert captured["headers"]["Authorization"] == "Bearer sk-openrouter"
-    assert payload["model"] == "openai/gpt-image-2"
+    assert payload["model"] == "openai/gpt-5.4-image-2"
     assert payload["modalities"] == ["image", "text"]
     assert payload["image_config"] == {"aspect_ratio": "1:1", "image_size": "2K"}
     assert "size" not in payload
@@ -212,7 +233,7 @@ def test_openrouter_variant_price_adds_reference_and_edit_surcharges(monkeypatch
     assert create_response.json()["data"]["charge_cents"] == 285
     with session_scope() as session:
         job = session.execute(select(ImageJob).where(ImageJob.id == create_response.json()["data"]["id"])).scalar_one()
-        assert job.provider_model == "openai/gpt-image-2"
+        assert job.provider_model == "openai/gpt-5.4-image-2"
 
 
 def test_openrouter_message_images_can_be_extracted() -> None:

@@ -17,6 +17,7 @@ from apps.api.app.domains.llm.openai_chat_image_messages import (
     build_chat_image_messages,
     collect_render_asset_ids,
 )
+from apps.api.app.domains.llm.openrouter_image_options import OPENROUTER_SIZE_TO_ASPECT_RATIO
 from apps.api.app.domains.llm.rendering import ProviderUsage, RenderedImage
 from apps.api.app.infra.storage.asset_storage import AssetStorage
 from apps.api.app.infra.storage.factory import build_asset_storage
@@ -109,6 +110,9 @@ def resolve_aspect_ratio(size: str | None) -> str | None:
         return None
     if ASPECT_RATIO_PATTERN.match(normalized):
         return normalized
+    mapped_ratio = OPENROUTER_SIZE_TO_ASPECT_RATIO.get(normalized)
+    if mapped_ratio:
+        return mapped_ratio
     dimensions = parse_pixel_size(normalized)
     if dimensions is None:
         raise AppError(code="openrouter_image_size_invalid", message="openrouter image size invalid", status_code=422)

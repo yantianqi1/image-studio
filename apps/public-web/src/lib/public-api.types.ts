@@ -126,6 +126,7 @@ export type PublicModelSummary = Readonly<{
 export type PublicModelVariant = Readonly<{
   id: number;
   size: string;
+  aspect_ratio?: string;
   quality: string;
   member_price_cents: number;
   anonymous_price_cents: number;
