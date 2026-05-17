@@ -25,6 +25,12 @@ import { cn } from "@/lib/cn";
 import type { TurnProgress } from "@/features/studio/studio-turn-progress";
 import type { ImageAssetVisibility } from "@/lib/public-api";
 import type { StudioConversation, StudioTurn, StoredImage } from "@/features/studio/studio-types";
+import {
+  capturePinnedResultsViewportSnapshot,
+  captureResultsViewportSnapshot,
+  shouldScrollResultsToBottom,
+  type ResultsViewportSnapshot,
+} from "@/features/studio/studio-results-scroll";
 
 type PresetCard = Readonly<{
   id: string;
@@ -108,16 +114,37 @@ export const StudioResults = memo(function StudioResults({
   onRefreshPresets,
 }: StudioResultsProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
-  const turnCountRef = useRef(0);
+  const previousConversationIdRef = useRef<string | null>(null);
+  const previousLayoutKeyRef = useRef("");
+  const previousTurnCountRef = useRef(0);
+  const previousViewportRef = useRef<ResultsViewportSnapshot | null>(null);
   const viewportStyle = getResultsViewportStyle(bottomInset);
 
   useEffect(() => {
     const turns = conversation?.turns ?? [];
-    if (turns.length > turnCountRef.current) {
-      viewportRef.current?.scrollTo({ top: viewportRef.current.scrollHeight, behavior: "smooth" });
+    const conversationId = conversation?.id ?? null;
+    const changedConversation = conversationId !== previousConversationIdRef.current;
+    const previousTurnCount = changedConversation ? 0 : previousTurnCountRef.current;
+    const previousLayoutKey = changedConversation ? "" : previousLayoutKeyRef.current;
+    const previousViewport = changedConversation ? null : previousViewportRef.current;
+    const layoutKey = getResultsLayoutKey(conversation, bottomInset);
+    const viewport = viewportRef.current;
+    const shouldScroll = shouldScrollResultsToBottom({
+      hasLayoutChanged: layoutKey !== previousLayoutKey,
+      hasNewTurn: turns.length > previousTurnCount,
+      previousViewport,
+    });
+
+    if (viewport && shouldScroll) {
+      viewport.scrollTo({ top: viewport.scrollHeight, behavior: turns.length > previousTurnCount ? "smooth" : "auto" });
+      previousViewportRef.current = capturePinnedResultsViewportSnapshot(viewport);
+    } else {
+      previousViewportRef.current = viewport ? captureResultsViewportSnapshot(viewport) : null;
     }
-    turnCountRef.current = turns.length;
-  }, [conversation?.turns]);
+    previousConversationIdRef.current = conversationId;
+    previousLayoutKeyRef.current = layoutKey;
+    previousTurnCountRef.current = turns.length;
+  }, [bottomInset, conversation]);
 
   if (!conversation || conversation.turns.length === 0) {
     return (
@@ -217,7 +244,29 @@ export const StudioResults = memo(function StudioResults({
 
 function getResultsViewportStyle(bottomInset: number): CSSProperties | undefined {
   if (bottomInset <= 0) return undefined;
-  return { paddingBottom: bottomInset + FIXED_COMPOSER_CLEARANCE };
+  const reservedSpace = bottomInset + FIXED_COMPOSER_CLEARANCE;
+  return { paddingBottom: reservedSpace, scrollPaddingBottom: reservedSpace };
+}
+
+function getResultsLayoutKey(conversation: StudioConversation | null, bottomInset: number) {
+  const turns = conversation?.turns ?? [];
+  const latestTurn = turns.at(-1);
+  if (!latestTurn) return `${conversation?.id ?? "none"}:${bottomInset}:empty`;
+  return [
+    conversation?.id ?? "none",
+    turns.length,
+    latestTurn.id,
+    latestTurn.prompt,
+    latestTurn.status,
+    latestTurn.error ?? "",
+    latestTurn.images.length,
+    latestTurn.referenceImages.length,
+    latestTurn.count,
+    latestTurn.aspectRatio,
+    latestTurn.resolution,
+    latestTurn.quality,
+    bottomInset,
+  ].join("|");
 }
 
 function PresetSkeletonGrid() {

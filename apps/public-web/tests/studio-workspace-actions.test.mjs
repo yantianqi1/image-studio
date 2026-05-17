@@ -136,7 +136,9 @@ test("studio results reserve space for the fixed mobile composer", () => {
   assert.match(pageSource, /composerBottomInset/);
   assert.match(pageSource, /bottomInset=\{composerBottomInset\}/);
   assert.match(resultsSource, /FIXED_COMPOSER_CLEARANCE/);
-  assert.match(resultsSource, /paddingBottom: bottomInset \+ FIXED_COMPOSER_CLEARANCE/);
+  assert.match(resultsSource, /const reservedSpace = bottomInset \+ FIXED_COMPOSER_CLEARANCE/);
+  assert.match(resultsSource, /paddingBottom: reservedSpace/);
+  assert.match(resultsSource, /scrollPaddingBottom: reservedSpace/);
 });
 
 test("studio workspace compacts the shell header and hides the global prompt crafter FAB", () => {
