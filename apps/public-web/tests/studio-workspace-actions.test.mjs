@@ -128,9 +128,9 @@ test("studio surfaces anonymous image concurrency limit as a dismissible notice"
 
 test("studio results reserve space for the fixed mobile composer", () => {
   assert.match(composerSource, /onFixedHeightChange/);
-  assert.match(composerSource, /FIXED_COMPOSER_STATIC_MIN_WIDTH_PX = 640/);
-  assert.match(composerSource, /window\.innerWidth >= FIXED_COMPOSER_STATIC_MIN_WIDTH_PX/);
-  assert.match(composerSource, /style\.position === "fixed"/);
+  assert.doesNotMatch(composerSource, /window\.innerWidth >=/);
+  assert.match(composerSource, /resolveFixedComposerHeight/);
+  assert.match(composerSource, /position: style\.position/);
   assert.match(composerSource, /sm:static sm:mx-auto sm:w-full sm:max-w-\[980px\] sm:px-0 sm:pb-4/);
   assert.doesNotMatch(composerSource, /sm:static sm:mx-0 sm:w-full sm:max-w-none/);
   assert.match(pageSource, /composerBottomInset/);

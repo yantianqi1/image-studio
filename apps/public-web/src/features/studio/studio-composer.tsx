@@ -48,6 +48,7 @@ import {
   type ComposerMode,
   type StoredReferenceImage,
 } from "@/features/studio/studio-types";
+import { resolveFixedComposerHeight } from "@/features/studio/studio-composer-layout";
 import type { CharacterLibraryItem, PublicModelSummary } from "@/lib/public-api.types";
 import type { ResourceState } from "@/lib/use-api-resource";
 
@@ -88,7 +89,6 @@ const PROMPT_AREA_MIN_HEIGHT = 76;
 const PROMPT_AREA_DEFAULT_HEIGHT = 112;
 const PROMPT_AREA_MOBILE_DEFAULT_HEIGHT = 84;
 const PROMPT_AREA_MAX_HEIGHT = 320;
-const FIXED_COMPOSER_STATIC_MIN_WIDTH_PX = 640;
 
 function getPromptAreaMaxHeight() {
   if (typeof window === "undefined") return PROMPT_AREA_MAX_HEIGHT;
@@ -140,10 +140,13 @@ function useFixedComposerHeight(
 }
 
 function getFixedComposerHeight(element: HTMLElement) {
-  if (window.innerWidth >= FIXED_COMPOSER_STATIC_MIN_WIDTH_PX) return 0;
   const style = window.getComputedStyle(element);
-  const height = style.position === "fixed" ? Math.ceil(window.innerHeight - element.getBoundingClientRect().top) : 0;
-  return Math.max(0, height);
+  const rect = element.getBoundingClientRect();
+  return resolveFixedComposerHeight({
+    position: style.position,
+    top: rect.top,
+    viewportHeight: window.innerHeight,
+  });
 }
 
 export const StudioComposer = memo(function StudioComposer(props: StudioComposerProps) {
