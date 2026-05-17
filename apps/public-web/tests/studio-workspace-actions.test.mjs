@@ -141,8 +141,9 @@ test("studio results reserve space for the fixed mobile composer", () => {
   assert.match(resultsSource, /scrollPaddingBottom: reservedSpace/);
 });
 
-test("studio workspace compacts the shell header and hides the global prompt crafter FAB", () => {
-  assert.match(appShellSource, /GlobalPromptCrafter disabled=\{workspaceMode\}/);
+test("studio workspace compacts the shell header and keeps the global prompt crafter FAB", () => {
+  assert.match(appShellSource, /<GlobalPromptCrafter \/>/);
+  assert.doesNotMatch(appShellSource, /GlobalPromptCrafter disabled=\{workspaceMode\}/);
   assert.match(appShellSource, /workspaceMode: boolean/);
   assert.match(appHeaderStylesSource, /\.workspaceHeader \.mobileNav \{\n\s+display: none;/);
   assert.match(appHeaderStylesSource, /\.workspaceHeader \.brandName,/);

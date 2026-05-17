@@ -4,10 +4,6 @@ import { useCallback, useState, type ComponentType } from "react";
 
 import { PromptCrafterFab } from "@/features/prompt-crafter/prompt-crafter-fab";
 
-type GlobalPromptCrafterProps = Readonly<{
-  disabled?: boolean;
-}>;
-
 type PromptCrafterDrawerComponent = ComponentType<Readonly<{ onClose: () => void }>>;
 
 let promptCrafterDrawerPromise: Promise<PromptCrafterDrawerComponent> | null = null;
@@ -19,7 +15,7 @@ function loadPromptCrafterDrawer() {
   return promptCrafterDrawerPromise;
 }
 
-export function GlobalPromptCrafter({ disabled = false }: GlobalPromptCrafterProps) {
+export function GlobalPromptCrafter() {
   const [open, setOpen] = useState(false);
   const [Drawer, setDrawer] = useState<PromptCrafterDrawerComponent | null>(null);
   const preloadDrawer = useCallback(() => {
@@ -31,8 +27,6 @@ export function GlobalPromptCrafter({ disabled = false }: GlobalPromptCrafterPro
       setOpen(true);
     });
   }, []);
-
-  if (disabled) return null;
 
   return (
     <>

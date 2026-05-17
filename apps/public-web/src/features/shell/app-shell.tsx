@@ -56,7 +56,7 @@ export function AppShell({
         <section className={workspaceMode ? "h-full min-h-0" : hasHero ? "mt-5" : ""}>{children}</section>
       </main>
 
-      <GlobalPromptCrafter disabled={workspaceMode} />
+      <GlobalPromptCrafter />
     </div>
   );
 }
