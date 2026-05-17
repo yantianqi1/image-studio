@@ -411,7 +411,7 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
   return (
     <div
       ref={composerRootRef}
-      className="fixed inset-x-3 bottom-3 z-30 mx-auto w-auto max-w-3xl shrink-0 px-0 pb-0 pt-1 sm:static sm:mx-0 sm:w-full sm:max-w-none sm:px-4 sm:pb-4"
+      className="fixed inset-x-3 bottom-3 z-30 mx-auto w-auto max-w-3xl shrink-0 px-0 pb-0 pt-1 sm:static sm:mx-auto sm:w-full sm:max-w-[980px] sm:px-0 sm:pb-4"
     >
       <input
         ref={fileInputRef}
