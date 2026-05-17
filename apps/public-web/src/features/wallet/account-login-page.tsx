@@ -10,10 +10,11 @@ export function renderLoginPage(props: Readonly<{
   auth: AuthController;
   loading: boolean;
 }>) {
+  const title = props.auth.intent === "register" ? "注册 Image Studio" : "登录 Image Studio";
+
   return (
-    <div className="grid min-h-[calc(100vh-136px)] items-center gap-8 lg:grid-cols-[1fr_440px]">
-      <section className="relative overflow-hidden rounded-[32px] border border-white/80 bg-white/70 p-8 shadow-[0_24px_70px_rgba(15,23,42,0.10)] lg:p-12">
-        <div className="absolute right-8 top-8 h-40 w-40 rounded-[40px] bg-gradient-to-br from-cyan-200 via-blue-200 to-violet-200 opacity-70 blur-2xl" />
+    <div className="grid min-h-[calc(100dvh-88px)] items-start gap-4 lg:min-h-[calc(100vh-136px)] lg:grid-cols-[1fr_440px] lg:items-center lg:gap-8">
+      <section className="relative hidden overflow-hidden rounded-[24px] border border-white/80 bg-white/70 p-8 shadow-[0_24px_70px_rgba(15,23,42,0.10)] lg:block lg:p-12">
         <p className="text-sm font-bold text-blue-700">AI SaaS Account</p>
         <h1 className="mt-5 max-w-2xl text-4xl font-bold leading-tight text-slate-950 lg:text-6xl">欢迎来到 Image Studio</h1>
         <p className="mt-5 max-w-xl text-lg leading-8 text-slate-600">AI 创作与账户管理的一站式平台</p>
@@ -22,7 +23,12 @@ export function renderLoginPage(props: Readonly<{
         </div>
       </section>
 
-      <section className="rounded-[32px] border border-white/80 bg-white p-6 shadow-[0_24px_70px_rgba(15,23,42,0.12)]">
+      <section className="mx-auto w-full max-w-md rounded-2xl border border-white/80 bg-white p-4 shadow-sm sm:p-6 lg:max-w-none lg:rounded-[24px] lg:shadow-[0_24px_70px_rgba(15,23,42,0.12)]">
+        <div className="mb-4 lg:hidden">
+          <p className="text-xs font-bold uppercase tracking-[0.14em] text-blue-700">账户中心</p>
+          <h1 className="mt-2 text-2xl font-bold leading-tight text-slate-950">{title}</h1>
+          <p className="mt-2 text-sm leading-6 text-slate-500">登录后查看额度、创作历史与消费详情</p>
+        </div>
         <LoginTabs auth={props.auth} />
         <LoginForm auth={props.auth} loading={props.loading} />
       </section>
@@ -48,11 +54,11 @@ function LoginForm({ auth, loading }: Readonly<{ auth: AuthController; loading: 
   const submitting = auth.state.status === "submitting" || loading;
 
   return (
-    <form className="mt-6 grid gap-4" onSubmit={auth.onSubmit}>
+    <form className="mt-5 grid gap-3 sm:mt-6 sm:gap-4" onSubmit={auth.onSubmit}>
       <AccountInput label="邮箱 / 手机号" onChange={auth.onEmailChange} type="text" value={auth.email} />
       {auth.authMode === "password" ? <AccountInput label="密码" onChange={auth.onPasswordChange} type="password" value={auth.password} /> : null}
       {auth.authMode === "code" ? <AccountInput label="验证码" onChange={auth.onVerificationCodeChange} type="text" value={auth.verificationCode} /> : null}
-      <div className="flex items-center justify-between text-sm text-slate-500">
+      <div className="flex items-center justify-between gap-3 text-sm text-slate-500">
         <label className="inline-flex items-center gap-2">
           <input className="size-4 rounded border-slate-300" type="checkbox" />
           记住我
@@ -62,14 +68,14 @@ function LoginForm({ auth, loading }: Readonly<{ auth: AuthController; loading: 
         </Link>
       </div>
       <button
-        className="rounded-2xl bg-gradient-to-r from-blue-600 to-violet-600 px-5 py-3 font-bold text-white shadow-[0_14px_30px_rgba(79,70,229,0.24)] disabled:bg-slate-200 disabled:shadow-none"
+        className="rounded-xl bg-blue-700 px-5 py-3 font-bold text-white shadow-sm disabled:bg-slate-200 disabled:shadow-none sm:rounded-2xl"
         disabled={submitting}
         type="submit"
       >
         {submitting ? "处理中..." : isRegister ? "注册账户" : "登录"}
       </button>
       <button
-        className="rounded-2xl border border-slate-200 bg-white px-5 py-3 font-bold text-slate-800"
+        className="rounded-xl border border-slate-200 bg-white px-5 py-3 font-bold text-slate-800 sm:rounded-2xl"
         type="button"
         onClick={() => auth.onIntentChange(isRegister ? "login" : "register")}
       >
@@ -86,7 +92,7 @@ function AccountInput(props: Readonly<{ label: string; onChange: (value: string)
     <label className="grid gap-2 text-sm font-semibold text-slate-700">
       {props.label}
       <input
-        className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none transition focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-100"
+        className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none transition focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-100 sm:rounded-2xl"
         onChange={(event) => props.onChange(event.target.value)}
         type={props.type}
         value={props.value}

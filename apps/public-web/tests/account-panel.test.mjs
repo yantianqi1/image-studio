@@ -89,6 +89,19 @@ test("unauthenticated account branch renders only login and registration entry",
   }
 });
 
+test("account pages use mobile-first layout for login and wallet views", () => {
+  assert.match(accountShellSource, /px-3 py-4 sm:px-8 sm:py-8/);
+  assert.match(accountTopNavigationSource, /min-h-\[56px\].*sm:min-h-\[72px\]/);
+  assert.match(accountTopNavigationSource, /hidden truncate sm:inline/);
+  assert.match(accountLoginSource, /min-h-\[calc\(100dvh-88px\)\]/);
+  assert.match(accountLoginSource, /relative hidden overflow-hidden/);
+  assert.match(accountLoginSource, /mx-auto w-full max-w-md/);
+  assert.match(accountLoginSource, /账户中心/);
+  assert.match(personalCenterSource, /grid grid-cols-2 gap-2 rounded-2xl/);
+  assert.match(personalCenterSource, /mt-4 grid gap-3 sm:hidden/);
+  assert.match(personalCenterSource, /mt-4 hidden overflow-x-auto sm:block/);
+});
+
 test("authenticated account branch renders the personal center modules only after login", () => {
   const authenticatedActions = extractFunctionBody(accountTopNavigationSource, "renderAuthenticatedTopActions");
 

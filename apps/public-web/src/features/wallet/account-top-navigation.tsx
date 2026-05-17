@@ -19,7 +19,7 @@ export function renderTopNavigation(props: Readonly<{
 }>) {
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/86 backdrop-blur-xl">
-      <div className="mx-auto flex min-h-[72px] w-full max-w-[1500px] items-center gap-5 px-5 sm:px-8">
+      <div className="mx-auto flex min-h-[56px] w-full max-w-[1500px] items-center gap-2 px-3 sm:min-h-[72px] sm:gap-5 sm:px-8">
         <BrandLink />
         <nav className="hidden flex-1 justify-center gap-2 md:flex" aria-label="产品导航">
           {TOP_NAV_LINKS.map((item) => <TopNavLink item={item} key={item.href} />)}
@@ -34,11 +34,11 @@ export function renderTopNavigation(props: Readonly<{
 
 function BrandLink() {
   return (
-    <Link href="/" className="flex min-w-0 items-center gap-3 font-bold text-slate-950" aria-label="Image Studio 首页">
-      <span className="grid size-10 place-items-center overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <Link href="/" className="flex min-w-0 items-center gap-2 font-bold text-slate-950 sm:gap-3" aria-label="Image Studio 首页">
+      <span className="grid size-9 place-items-center overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm sm:size-10 sm:rounded-2xl">
         <BrandMark />
       </span>
-      <span className="truncate">Image Studio</span>
+      <span className="hidden truncate sm:inline">Image Studio</span>
     </Link>
   );
 }
@@ -64,7 +64,7 @@ function renderGuestTopActions() {
         <HelpCircle className="size-4" />
         帮助中心
       </Link>
-      <Link className="rounded-full bg-slate-950 px-4 py-2 text-sm font-semibold text-white shadow-sm" href="/login?mode=register">
+      <Link className="rounded-full bg-slate-950 px-3 py-2 text-sm font-semibold text-white shadow-sm sm:px-4" href="/login?mode=register">
         注册
       </Link>
     </div>
@@ -84,7 +84,7 @@ function renderAuthenticatedTopActions(props: Readonly<{
         <Settings className="size-4" />
         设置
       </button>
-      <button className="flex items-center gap-2 rounded-full border border-slate-200 bg-white py-1.5 pl-1.5 pr-3 text-sm font-semibold text-slate-900 shadow-sm" type="button">
+      <button className="flex min-w-0 items-center gap-2 rounded-full border border-slate-200 bg-white py-1.5 pl-1.5 pr-2 text-sm font-semibold text-slate-900 shadow-sm sm:pr-3" type="button">
         <span className="grid size-8 place-items-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-white">
           {getUserInitial(props.session.user)}
         </span>

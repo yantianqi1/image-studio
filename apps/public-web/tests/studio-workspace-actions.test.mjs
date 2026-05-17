@@ -155,6 +155,8 @@ test("studio composer mobile toolbar scrolls and the settings panel expands to a
   assert.match(composerSource, /overflow-x-auto pb-1 pr-1/);
   assert.match(composerSource, /shrink-0 sm:relative/);
   assert.match(composerSource, /left-0 right-0 z-\[80\] max-h-\[min\(58dvh,28rem\)\] w-auto/);
+  assert.match(composerSource, /hidden h-8 shrink-0 items-center gap-1\.5 rounded-full border px-3 text-xs font-medium transition sm:inline-flex/);
+  assert.match(composerSource, /mt-2 grid grid-cols-2 gap-2 sm:hidden/);
 });
 
 test("studio character library opens as a mobile bottom sheet and keeps delete controls reachable", () => {

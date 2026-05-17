@@ -634,7 +634,7 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
                 <button
                   type="button"
                   className={cn(
-                    "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition",
+                    "hidden h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition sm:inline-flex",
                     complianceSuccess
                       ? "border-green-300 bg-green-50 text-green-600"
                       : isComplianceRunning
@@ -661,7 +661,7 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
                 <button
                   type="button"
                   className={cn(
-                    "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition",
+                    "hidden h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition sm:inline-flex",
                     optimizationSuccess
                       ? "border-green-300 bg-green-50 text-green-600"
                       : isOptimizationRunning
@@ -713,6 +713,54 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
                   )}
                 </button>
               </div>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2 sm:hidden">
+              <button
+                type="button"
+                className={cn(
+                  "inline-flex h-9 items-center justify-center gap-1.5 rounded-full border px-3 text-xs font-medium transition",
+                  complianceSuccess
+                    ? "border-green-300 bg-green-50 text-green-600"
+                    : isComplianceRunning
+                      ? "border-blue-200 bg-blue-50 text-blue-600"
+                      : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50",
+                )}
+                onClick={handlePromptCompliance}
+                disabled={isComplianceRunning || !prompt.trim()}
+                title="将提示词合规化"
+              >
+                {isComplianceRunning ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : complianceSuccess ? (
+                  <Check className="size-3.5" />
+                ) : (
+                  <ShieldCheck className="size-3.5" />
+                )}
+                <span>{complianceSuccess ? "已合规" : isComplianceRunning ? "合规中" : "合规"}</span>
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  "inline-flex h-9 items-center justify-center gap-1.5 rounded-full border px-3 text-xs font-medium transition",
+                  optimizationSuccess
+                    ? "border-green-300 bg-green-50 text-green-600"
+                    : isOptimizationRunning
+                      ? "border-blue-200 bg-blue-50 text-blue-600"
+                      : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50",
+                )}
+                onClick={handlePromptOptimization}
+                disabled={isOptimizationRunning || !prompt.trim()}
+                title="优化当前提示词"
+              >
+                {isOptimizationRunning ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : optimizationSuccess ? (
+                  <Check className="size-3.5" />
+                ) : (
+                  <WandSparkles className="size-3.5" />
+                )}
+                <span>{optimizationSuccess ? "已优化" : isOptimizationRunning ? "优化中" : "优化"}</span>
+              </button>
             </div>
             {promptToolError ? (
               <p className="mt-2 px-1 text-xs font-medium leading-5 text-red-600">{promptToolError}</p>

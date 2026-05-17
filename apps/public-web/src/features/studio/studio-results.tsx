@@ -137,6 +137,18 @@ export const StudioResults = memo(function StudioResults({
           </div>
           {presetCards.length > 0 ? (
             <div className="relative">
+              <div className="mb-2 flex justify-end px-1">
+                <button
+                  type="button"
+                  className="inline-flex size-8 items-center justify-center rounded-full border border-gray-200 bg-white/90 text-gray-500 shadow-sm backdrop-blur transition hover:bg-white hover:text-gray-700 disabled:opacity-50"
+                  onClick={onRefreshPresets}
+                  disabled={isRefreshingPresets}
+                  aria-label="刷新预设"
+                  title="刷新预设"
+                >
+                  <RefreshCw className={cn("size-3.5", isRefreshingPresets && "animate-spin")} />
+                </button>
+              </div>
               <div className="grid grid-cols-2 gap-3 px-1 text-left lg:grid-cols-4">
                 {presetCards.map((preset) => (
                   <button
@@ -171,16 +183,6 @@ export const StudioResults = memo(function StudioResults({
                   </button>
                 ))}
               </div>
-              <button
-                type="button"
-                className="absolute right-1 bottom-1 z-10 inline-flex size-8 items-center justify-center rounded-full border border-gray-200 bg-white/90 text-gray-500 shadow-sm backdrop-blur transition hover:bg-white hover:text-gray-700 disabled:opacity-50"
-                onClick={onRefreshPresets}
-                disabled={isRefreshingPresets}
-                aria-label="刷新预设"
-                title="刷新预设"
-              >
-                <RefreshCw className={cn("size-3.5", isRefreshingPresets && "animate-spin")} />
-              </button>
             </div>
           ) : (
             <PresetSkeletonGrid />
