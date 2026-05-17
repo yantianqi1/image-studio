@@ -121,7 +121,7 @@ export const StudioResults = memo(function StudioResults({
 
   if (!conversation || conversation.turns.length === 0) {
     return (
-      <div className="flex min-h-0 flex-1 items-start justify-start overflow-y-auto p-4 scroll-smooth sm:items-center sm:justify-center sm:p-6 [scrollbar-width:thin]" style={viewportStyle}>
+      <div className="flex min-h-0 flex-1 items-start justify-start overflow-y-auto p-4 pb-44 scroll-smooth sm:items-center sm:justify-center sm:p-6 sm:pb-6 [scrollbar-width:thin]" style={viewportStyle}>
         <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-4 sm:gap-5">
           <div className="mx-auto flex max-w-[640px] flex-col items-center text-center">
             <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
@@ -193,7 +193,7 @@ export const StudioResults = memo(function StudioResults({
   }
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto p-4 scroll-smooth sm:p-6 [scrollbar-width:thin]" ref={viewportRef} style={viewportStyle}>
+    <div className="min-h-0 flex-1 overflow-y-auto p-4 pb-44 scroll-smooth sm:p-6 sm:pb-6 [scrollbar-width:thin]" ref={viewportRef} style={viewportStyle}>
       <div className="mx-auto flex w-full max-w-[980px] flex-col gap-5 sm:gap-6">
         {conversation.turns.map((turn) => (
           <TurnCard
