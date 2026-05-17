@@ -88,7 +88,7 @@ const PROMPT_AREA_MIN_HEIGHT = 76;
 const PROMPT_AREA_DEFAULT_HEIGHT = 112;
 const PROMPT_AREA_MOBILE_DEFAULT_HEIGHT = 84;
 const PROMPT_AREA_MAX_HEIGHT = 320;
-const FIXED_COMPOSER_STATIC_MIN_WIDTH_PX = 1024;
+const FIXED_COMPOSER_STATIC_MIN_WIDTH_PX = 640;
 
 function getPromptAreaMaxHeight() {
   if (typeof window === "undefined") return PROMPT_AREA_MAX_HEIGHT;
@@ -409,7 +409,10 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
   }, [prompt, isOptimizationRunning, onPromptChange]);
 
   return (
-    <div ref={composerRootRef} className="fixed inset-x-3 bottom-3 z-30 mx-auto w-auto max-w-3xl shrink-0 px-0 pb-0 pt-1 sm:inset-x-4 sm:bottom-4 lg:static lg:w-full lg:px-4 lg:pb-4">
+    <div
+      ref={composerRootRef}
+      className="fixed inset-x-3 bottom-3 z-30 mx-auto w-auto max-w-3xl shrink-0 px-0 pb-0 pt-1 sm:static sm:mx-0 sm:w-full sm:max-w-none sm:px-4 sm:pb-4"
+    >
       <input
         ref={fileInputRef}
         type="file"
