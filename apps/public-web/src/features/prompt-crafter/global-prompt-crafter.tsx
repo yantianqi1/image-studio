@@ -1,16 +1,43 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState, type ComponentType } from "react";
 
-import { PromptCrafterDrawer, PromptCrafterFab } from "@/features/prompt-crafter/prompt-crafter-drawer";
+import { PromptCrafterFab } from "@/features/prompt-crafter/prompt-crafter-fab";
 
-export function GlobalPromptCrafter() {
+type GlobalPromptCrafterProps = Readonly<{
+  disabled?: boolean;
+}>;
+
+type PromptCrafterDrawerComponent = ComponentType<Readonly<{ onClose: () => void }>>;
+
+let promptCrafterDrawerPromise: Promise<PromptCrafterDrawerComponent> | null = null;
+
+function loadPromptCrafterDrawer() {
+  promptCrafterDrawerPromise ??= import("@/features/prompt-crafter/prompt-crafter-drawer").then(
+    (module) => module.PromptCrafterDrawer,
+  );
+  return promptCrafterDrawerPromise;
+}
+
+export function GlobalPromptCrafter({ disabled = false }: GlobalPromptCrafterProps) {
   const [open, setOpen] = useState(false);
+  const [Drawer, setDrawer] = useState<PromptCrafterDrawerComponent | null>(null);
+  const preloadDrawer = useCallback(() => {
+    void loadPromptCrafterDrawer().then((component) => setDrawer(() => component));
+  }, []);
+  const openDrawer = useCallback(() => {
+    void loadPromptCrafterDrawer().then((component) => {
+      setDrawer(() => component);
+      setOpen(true);
+    });
+  }, []);
+
+  if (disabled) return null;
 
   return (
     <>
-      {!open ? <PromptCrafterFab onClick={() => setOpen(true)} /> : null}
-      {open ? <PromptCrafterDrawer onClose={() => setOpen(false)} /> : null}
+      {!open ? <PromptCrafterFab onClick={openDrawer} onPrefetch={preloadDrawer} /> : null}
+      {open && Drawer ? <Drawer onClose={() => setOpen(false)} /> : null}
     </>
   );
 }

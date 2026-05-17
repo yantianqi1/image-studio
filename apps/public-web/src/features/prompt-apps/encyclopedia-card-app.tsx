@@ -14,7 +14,7 @@ import { AppShell } from "@/features/shell/app-shell";
 import type { PublicModelSummary } from "@/lib/public-api";
 import { publicApi } from "@/lib/public-api";
 import type { ResourceState } from "@/lib/use-api-resource";
-import { useApiResource } from "@/lib/use-api-resource";
+import { usePublicModels } from "@/lib/use-public-models";
 
 import {
   buildEncyclopediaCardImageRequest,
@@ -86,7 +86,7 @@ function PromptAppBackLink() {
 function useEncyclopediaController(): EncyclopediaController {
   const [form, setForm] = useState<EncyclopediaForm>({ modelCode: "", note: "", topic: "" });
   const [state, setState] = useState<EncyclopediaCardState>({ status: "idle" });
-  const modelsState = useApiResource(() => publicApi.getModels());
+  const modelsState = usePublicModels();
   const imageModelsState = getImageModelsState(modelsState);
   const { imageModels, resolvedModelCode, selectedModel } = imageModelsState.status === "ready"
     ? resolveImageModel(imageModelsState.data, form.modelCode)

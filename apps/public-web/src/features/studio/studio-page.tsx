@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { History, MessageSquarePlus, X } from "lucide-react";
@@ -20,11 +21,11 @@ import {
   WelcomeAccountDialog,
 } from "@/features/shell/welcome-account-dialog";
 import { StudioComposer } from "@/features/studio/studio-composer";
-import { StudioCharacterLibrary } from "@/features/studio/studio-character-library";
-import { StudioPromptMarket } from "@/features/studio/studio-prompt-market";
 import type { BananaPrompt } from "@/features/studio/studio-prompt-sources";
-import { fetchPromptMarketPrompts } from "@/features/studio/studio-prompt-sources";
-import { StudioLightbox } from "@/features/studio/studio-lightbox";
+import {
+  fetchPromptMarketPrompts,
+  refreshPromptMarketPrompts,
+} from "@/features/studio/studio-prompt-sources";
 import { StudioResults } from "@/features/studio/studio-results";
 import { StudioSidebar } from "@/features/studio/studio-sidebar";
 import {
@@ -59,12 +60,29 @@ import {
   listenPromptCrafterUsePrompt,
   readGeneratePromptParam,
 } from "@/features/prompt-crafter/use-prompt";
-import { publicApi, type CharacterLibraryItem, type ImageAssetVisibility } from "@/lib/public-api";
 import { ApiError } from "@/lib/api-client";
-import { useApiResource } from "@/lib/use-api-resource";
+import { publicApi, type CharacterLibraryItem, type ImageAssetVisibility } from "@/lib/public-api";
 import { cn } from "@/lib/cn";
+import { usePublicModels } from "@/lib/use-public-models";
 import { streamPromptCrafter } from "@/features/prompt-crafter/prompt-crafter-api";
 import { buildPromptComplianceInstruction } from "@/features/studio/studio-prompt-actions";
+
+const PRESET_LOAD_DELAY_MS = 800;
+
+const StudioCharacterLibrary = dynamic(
+  () => import("@/features/studio/studio-character-library").then((module) => module.StudioCharacterLibrary),
+  { ssr: false },
+);
+
+const StudioLightbox = dynamic(
+  () => import("@/features/studio/studio-lightbox").then((module) => module.StudioLightbox),
+  { ssr: false },
+);
+
+const StudioPromptMarket = dynamic(
+  () => import("@/features/studio/studio-prompt-market").then((module) => module.StudioPromptMarket),
+  { ssr: false },
+);
 
 const SIDEBAR_COLLAPSED_KEY = "commercial_studio_sidebar_collapsed";
 const SETTINGS_KEY = "commercial_studio_image_settings";
@@ -238,7 +256,7 @@ export function StudioPage() {
 
   // --- Data ---
   const conversations = useStudioConversations();
-  const modelsState = useApiResource(() => publicApi.getModels());
+  const modelsState = usePublicModels();
   const selectedModel =
     modelsState.status === "ready"
       ? resolveImageModel(modelsState.data, model).selectedModel
@@ -250,8 +268,11 @@ export function StudioPage() {
   const [isRefreshingPresets, setIsRefreshingPresets] = useState(false);
   const presetsFetchedRef = useRef(false);
 
-  const loadPresets = useCallback(async (signal: AbortSignal) => {
-    const prompts = await fetchPromptMarketPrompts(signal);
+  const loadPresets = useCallback(async (
+    signal: AbortSignal,
+    loader: typeof fetchPromptMarketPrompts = fetchPromptMarketPrompts,
+  ) => {
+    const prompts = await loader(signal);
     const withPreview = prompts.filter((p) => p.preview && !p.isNsfw);
     const shuffled = withPreview.sort(() => Math.random() - 0.5);
     const candidates = shuffled.slice(0, 12);
@@ -271,17 +292,25 @@ export function StudioPage() {
     if (presetsFetchedRef.current) return;
     presetsFetchedRef.current = true;
     const controller = new AbortController();
-    loadPresets(controller.signal).catch(() => {});
-    return () => controller.abort();
+    const timer = window.setTimeout(() => {
+      void loadPresets(controller.signal).catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        console.error("Failed to load studio presets", error);
+      });
+    }, PRESET_LOAD_DELAY_MS);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
   }, [loadPresets]);
 
   const handleRefreshPresets = useCallback(async () => {
     if (isRefreshingPresets) return;
     setIsRefreshingPresets(true);
     try {
-      await loadPresets(new AbortController().signal);
-    } catch {
-      // ignore
+      await loadPresets(new AbortController().signal, refreshPromptMarketPrompts);
+    } catch (error: unknown) {
+      console.error("Failed to refresh studio presets", error);
     } finally {
       setIsRefreshingPresets(false);
     }

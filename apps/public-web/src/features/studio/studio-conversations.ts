@@ -14,9 +14,13 @@ const ACTIVE_CONVERSATION_KEY = "commercial_studio_active_conversation";
 export const CONVERSATIONS_CHANGED_EVENT = "studio:conversations-changed";
 
 let writeQueue: Promise<void> = Promise.resolve();
+let cachedConversations: readonly StudioConversation[] | null = null;
+let conversationsLoadPromise: Promise<readonly StudioConversation[]> | null = null;
 
 function queueWrite(fn: () => Promise<void>) {
-  writeQueue = writeQueue.then(fn).catch(() => {});
+  writeQueue = writeQueue.then(fn).catch((error: unknown) => {
+    console.error("Failed to persist studio conversations", error);
+  });
 }
 
 const store = localforage.createInstance({
@@ -25,17 +29,36 @@ const store = localforage.createInstance({
 });
 
 export async function listConversations(): Promise<readonly StudioConversation[]> {
-  const data = await store.getItem<StudioConversation[]>(STORAGE_KEY);
-  return data ?? [];
+  if (cachedConversations !== null) {
+    return cachedConversations;
+  }
+  if (conversationsLoadPromise) {
+    return conversationsLoadPromise;
+  }
+  conversationsLoadPromise = store.getItem<StudioConversation[]>(STORAGE_KEY)
+    .then((data) => {
+      cachedConversations = data ?? [];
+      return cachedConversations;
+    })
+    .finally(() => {
+      conversationsLoadPromise = null;
+    });
+  return conversationsLoadPromise;
 }
 
 export function saveConversations(conversations: readonly StudioConversation[]) {
+  const snapshot = [...conversations];
+  cachedConversations = snapshot;
   queueWrite(async () => {
-    await store.setItem(STORAGE_KEY, [...conversations]);
+    await store.setItem(STORAGE_KEY, snapshot);
     if (typeof window !== "undefined") {
       window.dispatchEvent(new Event(CONVERSATIONS_CHANGED_EVENT));
     }
   });
+}
+
+export function getCachedConversations(): readonly StudioConversation[] | null {
+  return cachedConversations;
 }
 
 export function saveConversation(

@@ -84,12 +84,18 @@ const MODE_OPTIONS: readonly { value: ComposerMode; label: string; icon: typeof 
   { value: "generate", label: "生图", icon: Paintbrush },
 ];
 
-const PROMPT_AREA_MIN_HEIGHT = 90;
-const PROMPT_AREA_DEFAULT_HEIGHT = 104;
+const PROMPT_AREA_MIN_HEIGHT = 76;
+const PROMPT_AREA_DEFAULT_HEIGHT = 112;
+const PROMPT_AREA_MOBILE_DEFAULT_HEIGHT = 84;
 const PROMPT_AREA_MAX_HEIGHT = 320;
+const FIXED_COMPOSER_STATIC_MIN_WIDTH_PX = 1024;
 
 function getPromptAreaMaxHeight() {
   if (typeof window === "undefined") return PROMPT_AREA_MAX_HEIGHT;
+  const mobileCap = Math.min(180, Math.floor(window.innerHeight * 0.3));
+  if (window.innerWidth < 640) {
+    return Math.max(PROMPT_AREA_MIN_HEIGHT, mobileCap);
+  }
   return Math.max(PROMPT_AREA_MIN_HEIGHT, Math.min(PROMPT_AREA_MAX_HEIGHT, Math.floor(window.innerHeight * 0.42)));
 }
 
@@ -134,9 +140,9 @@ function useFixedComposerHeight(
 }
 
 function getFixedComposerHeight(element: HTMLElement) {
+  if (window.innerWidth >= FIXED_COMPOSER_STATIC_MIN_WIDTH_PX) return 0;
   const style = window.getComputedStyle(element);
-  const rect = element.getBoundingClientRect();
-  const height = style.position === "fixed" ? Math.ceil(window.innerHeight - rect.top) : 0;
+  const height = style.position === "fixed" ? Math.ceil(window.innerHeight - element.getBoundingClientRect().top) : 0;
   return Math.max(0, height);
 }
 
@@ -243,8 +249,16 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
 
   // Window resize clamp
   useEffect(() => {
-    const handleResize = () => setPromptAreaHeight((h) => clampPromptAreaHeight(h));
+    const handleResize = () => {
+      setPromptAreaHeight((height) => {
+        if (window.innerWidth < 640 && height === PROMPT_AREA_DEFAULT_HEIGHT) {
+          return PROMPT_AREA_MOBILE_DEFAULT_HEIGHT;
+        }
+        return clampPromptAreaHeight(height);
+      });
+    };
     window.addEventListener("resize", handleResize);
+    handleResize();
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
@@ -458,7 +472,7 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
       {/* Main composer panel */}
       <div
         ref={composerPanelRef}
-        className="overflow-visible rounded-[24px] border border-gray-200 bg-white/95 shadow-[0_20px_70px_-42px_rgba(15,23,42,0.35)] backdrop-blur-xl sm:border-gray-100 sm:shadow-[0_24px_80px_-34px_rgba(15,23,42,0.3)]"
+        className="relative overflow-visible rounded-[24px] border border-gray-200 bg-white/95 shadow-[0_20px_70px_-42px_rgba(15,23,42,0.35)] backdrop-blur-xl sm:border-gray-100 sm:shadow-[0_24px_80px_-34px_rgba(15,23,42,0.3)]"
       >
         {/* Resize handle */}
         <button
@@ -510,13 +524,13 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
           >
             <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:gap-3">
               {/* Left toolbar */}
-              <div className="flex min-w-0 flex-nowrap items-center gap-1.5 sm:gap-2">
+              <div className="flex min-w-0 flex-nowrap items-center gap-1.5 overflow-x-auto pb-1 pr-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-2 sm:overflow-visible sm:pb-0 sm:pr-0">
                 {/* Model selector */}
                 <div ref={modelMenuRef} className="relative shrink-0">
                   <button
                     type="button"
                     className={cn(
-                      "inline-flex h-8 items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600 transition hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400",
+                      "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600 transition hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400",
                       isModelMenuOpen && "border-blue-200 bg-blue-50 text-blue-600",
                     )}
                     onClick={() => setIsModelMenuOpen((o) => !o)}
@@ -584,7 +598,7 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
                 </button>
 
                 {/* Settings toggle */}
-                <div ref={settingsContainerRef} className="relative shrink-0">
+                <div ref={settingsContainerRef} className="shrink-0 sm:relative">
                     <button
                       type="button"
                       className={cn(
@@ -741,7 +755,7 @@ function ImageSettingsPopover({
 }: ImageSettingsPopoverProps) {
   return (
     <div
-      className="absolute bottom-[calc(100%+8px)] right-0 z-[80] max-h-[min(70dvh,34rem)] w-[20rem] overflow-y-auto rounded-2xl border border-gray-200 bg-white p-3 shadow-lg"
+      className="absolute bottom-[calc(100%+8px)] left-0 right-0 z-[80] max-h-[min(58dvh,28rem)] w-auto overflow-y-auto rounded-2xl border border-gray-200 bg-white p-3 shadow-lg sm:left-auto sm:right-0 sm:w-[20rem] sm:max-h-[min(70dvh,34rem)]"
     >
       <div className="mb-3 flex items-center justify-between border-b border-gray-100 pb-2">
         <h2 className="text-sm font-semibold text-gray-900">图片参数</h2>

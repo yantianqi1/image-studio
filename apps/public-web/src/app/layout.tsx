@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import { connection } from "next/server";
 import "./globals.css";
 import { buildPublicMetadata } from "@/lib/site-metadata";
 import { SwrProvider } from "@/lib/swr-provider";
@@ -20,7 +19,6 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  await connection();
   return (
     <html
       lang="zh-CN"

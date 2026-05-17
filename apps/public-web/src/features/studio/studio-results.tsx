@@ -58,6 +58,7 @@ const MODE_LABELS: Record<string, { label: string; colorClass: string }> = {
   edit: { label: "生图", colorClass: "bg-blue-50 text-blue-600" },
 };
 const FIXED_COMPOSER_CLEARANCE = 16;
+const PRESET_SKELETON_COUNT = 4;
 
 function formatTurnTime(iso: string) {
   const date = new Date(iso);
@@ -120,28 +121,28 @@ export const StudioResults = memo(function StudioResults({
 
   if (!conversation || conversation.turns.length === 0) {
     return (
-      <div className="flex flex-1 items-center justify-center overflow-y-auto p-4 scroll-smooth sm:p-6 [scrollbar-width:thin]" style={viewportStyle}>
-        <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-5">
+      <div className="flex flex-1 items-start justify-start overflow-y-auto p-4 scroll-smooth sm:items-center sm:justify-center sm:p-6 [scrollbar-width:thin]" style={viewportStyle}>
+        <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-4 sm:gap-5">
           <div className="mx-auto flex max-w-[640px] flex-col items-center text-center">
             <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
               <Sparkles className="size-4 text-blue-500" />
               生图预设
             </div>
-            <h1 className="text-3xl font-medium leading-tight text-gray-900 sm:text-5xl">
+            <h1 className="hidden text-3xl font-medium leading-tight text-gray-900 sm:block sm:text-5xl">
               Turn ideas into images
             </h1>
-            <p className="mx-auto mt-3 max-w-[460px] text-sm leading-6 text-gray-500 sm:text-[15px]">
+            <p className="mx-auto mt-3 hidden max-w-[460px] text-sm leading-6 text-gray-500 sm:block sm:text-[15px]">
               选择一组真实案例预设快速开始，也可以直接在下方输入自己的画面描述。
             </p>
           </div>
-          {presetCards.length > 0 && (
+          {presetCards.length > 0 ? (
             <div className="relative">
-              <div className="hide-scrollbar flex gap-3 overflow-x-auto px-1 pb-1 text-left sm:grid sm:grid-cols-2 sm:overflow-visible lg:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3 px-1 text-left lg:grid-cols-4">
                 {presetCards.map((preset) => (
                   <button
                     key={preset.id}
                     type="button"
-                    className="group w-[250px] shrink-0 overflow-hidden rounded-[22px] border border-gray-100 bg-white transition hover:-translate-y-0.5 hover:shadow-[0_12px_16px_-4px_rgba(36,36,36,0.08)] sm:w-auto"
+                    className="group w-full overflow-hidden rounded-[18px] border border-gray-100 bg-white transition hover:-translate-y-0.5 hover:shadow-[0_12px_16px_-4px_rgba(36,36,36,0.08)] sm:rounded-[22px]"
                     onClick={() => onApplyPreset(preset.id)}
                     aria-label={`套用预设：${preset.title}`}
                   >
@@ -162,10 +163,10 @@ export const StudioResults = memo(function StudioResults({
                         </span>
                       </div>
                     </div>
-                    <div className="flex flex-col gap-2 px-4 py-3.5">
-                      <div className="text-sm font-semibold text-gray-900">{preset.title}</div>
-                      <div className="line-clamp-2 text-sm leading-6 text-gray-500">{preset.hint}</div>
-                      <div className="border-t border-gray-100 pt-2 text-xs font-medium text-blue-600">套用这个预设</div>
+                    <div className="flex flex-col gap-1.5 px-3 py-2.5 sm:gap-2 sm:px-4 sm:py-3.5">
+                      <div className="line-clamp-2 text-xs font-semibold leading-5 text-gray-900 sm:text-sm">{preset.title}</div>
+                      <div className="hidden line-clamp-2 text-sm leading-6 text-gray-500 sm:block">{preset.hint}</div>
+                      <div className="border-t border-gray-100 pt-1 text-[11px] font-medium text-blue-600 sm:pt-2 sm:text-xs">套用预设</div>
                     </div>
                   </button>
                 ))}
@@ -181,6 +182,8 @@ export const StudioResults = memo(function StudioResults({
                 <RefreshCw className={cn("size-3.5", isRefreshingPresets && "animate-spin")} />
               </button>
             </div>
+          ) : (
+            <PresetSkeletonGrid />
           )}
         </div>
       </div>
@@ -213,6 +216,27 @@ export const StudioResults = memo(function StudioResults({
 function getResultsViewportStyle(bottomInset: number): CSSProperties | undefined {
   if (bottomInset <= 0) return undefined;
   return { paddingBottom: bottomInset + FIXED_COMPOSER_CLEARANCE };
+}
+
+function PresetSkeletonGrid() {
+  return (
+    <div className="grid grid-cols-2 gap-3 px-1 lg:grid-cols-4" aria-hidden="true">
+      {Array.from({ length: PRESET_SKELETON_COUNT }).map((_, index) => (
+        <div
+          className="overflow-hidden rounded-[18px] border border-gray-100 bg-white"
+          key={index}
+        >
+          <div className="relative aspect-[16/9] bg-gray-100">
+            <div className="skeleton-shimmer absolute inset-0 bg-gradient-to-r from-gray-100 via-gray-200/60 to-gray-100" />
+          </div>
+          <div className="space-y-2 px-3 py-2.5">
+            <div className="h-4 rounded-full bg-gray-100" />
+            <div className="h-3 w-2/3 rounded-full bg-gray-100" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 const TurnCard = memo(function TurnCard({
@@ -361,7 +385,7 @@ const TurnCard = memo(function TurnCard({
           {(turn.images.length > 0 || isBusy) && (
             <div className={cn(
               "grid gap-3 sm:gap-4",
-              turn.count <= 1 ? "grid-cols-1 max-w-[360px]" : "grid-cols-2 max-w-[560px]",
+              turn.count <= 1 ? "grid-cols-1 max-w-[240px] sm:max-w-[360px]" : "grid-cols-2 max-w-[560px]",
             )}>
               {turn.images.map((image, index) => (
                 <ImageCell
@@ -531,7 +555,7 @@ function ImageCell({
             className="absolute inset-0 cursor-pointer"
             aria-label="查看大图"
           />
-          <div className="pointer-events-none absolute top-2 right-2 z-10 flex items-center gap-1 opacity-0 transition duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
+          <div className="pointer-events-auto absolute top-2 right-2 z-10 flex items-center gap-1 opacity-100 transition duration-150 sm:pointer-events-none sm:opacity-0 sm:group-hover:pointer-events-auto sm:group-hover:opacity-100">
             <button
               type="button"
               onClick={() => onOpenLightbox(index)}
@@ -574,7 +598,7 @@ function ImageCell({
                   )
                 }
                 className={cn(
-                  "inline-flex h-6 items-center gap-1 rounded-full px-2 text-[10px] font-medium opacity-0 shadow-sm transition group-hover:opacity-100",
+                  "inline-flex h-6 items-center gap-1 rounded-full px-2 text-[10px] font-medium opacity-100 shadow-sm transition sm:opacity-0 sm:group-hover:opacity-100",
                   visibility === "public"
                     ? "bg-white/95 text-blue-600 hover:bg-blue-50"
                     : "bg-white/95 text-gray-700 hover:bg-gray-100",

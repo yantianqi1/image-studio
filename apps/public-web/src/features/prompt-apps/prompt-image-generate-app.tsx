@@ -14,7 +14,7 @@ import { AppShell } from "@/features/shell/app-shell";
 import type { PublicModelSummary } from "@/lib/public-api";
 import { publicApi } from "@/lib/public-api";
 import type { ResourceState } from "@/lib/use-api-resource";
-import { useApiResource } from "@/lib/use-api-resource";
+import { usePublicModels } from "@/lib/use-public-models";
 
 import {
   isPromptImageGenerateSubmitDisabled,
@@ -112,7 +112,7 @@ function usePromptImageGenerateController(
 ): PromptImageGenerateController {
   const [form, setForm] = useState<PromptImageGenerateForm>({ modelCode: "", note: "", primary: "" });
   const [state, setState] = useState<PromptImageGenerateState>({ status: "idle" });
-  const modelsState = useApiResource(() => publicApi.getModels());
+  const modelsState = usePublicModels();
   const imageModelsState = getImageModelsState(modelsState);
   const modelResult = imageModelsState.status === "ready"
     ? resolveImageModel(imageModelsState.data, form.modelCode)

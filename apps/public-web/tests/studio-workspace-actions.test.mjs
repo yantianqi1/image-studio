@@ -16,6 +16,18 @@ const resultsSource = readFileSync(
   new URL("../src/features/studio/studio-results.tsx", import.meta.url),
   "utf8",
 );
+const appShellSource = readFileSync(
+  new URL("../src/features/shell/app-shell.tsx", import.meta.url),
+  "utf8",
+);
+const appHeaderStylesSource = readFileSync(
+  new URL("../src/features/shell/app-header.module.css", import.meta.url),
+  "utf8",
+);
+const characterLibrarySource = readFileSync(
+  new URL("../src/features/studio/studio-character-library.tsx", import.meta.url),
+  "utf8",
+);
 
 function loadRequestMode() {
   const source = readFileSync(
@@ -108,9 +120,38 @@ test("studio surfaces anonymous image concurrency limit as a dismissible notice"
 
 test("studio results reserve space for the fixed mobile composer", () => {
   assert.match(composerSource, /onFixedHeightChange/);
+  assert.match(composerSource, /window\.innerWidth >= FIXED_COMPOSER_STATIC_MIN_WIDTH_PX/);
   assert.match(composerSource, /style\.position === "fixed"/);
   assert.match(pageSource, /composerBottomInset/);
   assert.match(pageSource, /bottomInset=\{composerBottomInset\}/);
   assert.match(resultsSource, /FIXED_COMPOSER_CLEARANCE/);
   assert.match(resultsSource, /paddingBottom: bottomInset \+ FIXED_COMPOSER_CLEARANCE/);
+});
+
+test("studio workspace compacts the shell header and hides the global prompt crafter FAB", () => {
+  assert.match(appShellSource, /GlobalPromptCrafter disabled=\{workspaceMode\}/);
+  assert.match(appShellSource, /workspaceMode: boolean/);
+  assert.match(appHeaderStylesSource, /\.workspaceHeader \.mobileNav \{\n\s+display: none;/);
+  assert.match(appHeaderStylesSource, /\.workspaceHeader \.brandName,/);
+});
+
+test("studio mobile empty workspace renders presets as a grid instead of a sideways strip", () => {
+  assert.match(resultsSource, /hidden text-3xl font-medium leading-tight text-gray-900 sm:block sm:text-5xl/);
+  assert.match(resultsSource, /grid grid-cols-2 gap-3 px-1 text-left lg:grid-cols-4/);
+  assert.match(resultsSource, /PresetSkeletonGrid/);
+  assert.match(resultsSource, /PRESET_SKELETON_COUNT = 4/);
+  assert.match(resultsSource, /grid-cols-1 max-w-\[240px\] sm:max-w-\[360px\]/);
+});
+
+test("studio composer mobile toolbar scrolls and the settings panel expands to a wide sheet", () => {
+  assert.match(composerSource, /overflow-x-auto pb-1 pr-1/);
+  assert.match(composerSource, /shrink-0 sm:relative/);
+  assert.match(composerSource, /left-0 right-0 z-\[80\] max-h-\[min\(58dvh,28rem\)\] w-auto/);
+});
+
+test("studio character library opens as a mobile bottom sheet and keeps delete controls reachable", () => {
+  assert.match(characterLibrarySource, /fixed inset-x-0 bottom-0 z-50 flex h-\[88dvh\] w-full/);
+  assert.match(characterLibrarySource, /grid-rows-\[auto_minmax\(0,1fr\)\]/);
+  assert.match(characterLibrarySource, /grid grid-cols-3 gap-2/);
+  assert.match(characterLibrarySource, /opacity-100[^]*sm:opacity-0[^]*sm:group-hover:opacity-100/);
 });

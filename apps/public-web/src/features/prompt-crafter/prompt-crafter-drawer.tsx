@@ -29,14 +29,6 @@ const PROMPT_STARTERS: readonly Readonly<{ label: string; value: string }>[] = [
 
 type DrawerStatus = "idle" | "streaming" | "error";
 
-export function PromptCrafterFab({ onClick }: Readonly<{ onClick: () => void }>) {
-  return (
-    <button aria-label="打开提示词工坊" className={styles.fab} type="button" onClick={onClick}>
-      <span aria-hidden="true" className={styles.fabIcon}>✦</span>
-    </button>
-  );
-}
-
 export function PromptCrafterDrawer({ onClose }: Readonly<{ onClose: () => void }>) {
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<readonly PromptCrafterMessage[]>([]);

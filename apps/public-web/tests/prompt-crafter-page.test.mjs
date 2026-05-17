@@ -12,6 +12,7 @@ const markdownFile = new URL("../src/features/prompt-crafter/prompt-markdown.ts"
 const markdownViewFile = new URL("../src/features/prompt-crafter/prompt-markdown-view.tsx", import.meta.url);
 const markdownStylesFile = new URL("../src/features/prompt-crafter/prompt-markdown.module.css", import.meta.url);
 const stylesFile = new URL("../src/features/prompt-crafter/prompt-crafter.module.css", import.meta.url);
+const globalPromptCrafterFile = new URL("../src/features/prompt-crafter/global-prompt-crafter.tsx", import.meta.url);
 
 function readRequiredSource(file, label) {
   assert.equal(existsSync(file), true, `${label} should exist`);
@@ -96,6 +97,15 @@ test("prompt crafter drawer persists messages and exposes refresh", () => {
   assert.match(drawerSource, /savePromptCrafterSession/);
   assert.match(drawerSource, /buildPromptCrafterRefreshMessages/);
   assert.match(drawerSource, /刷新/);
+});
+
+test("global prompt crafter loads the drawer only after user intent", () => {
+  const globalSource = readRequiredSource(globalPromptCrafterFile, "global prompt crafter");
+
+  assert.doesNotMatch(globalSource, /from "next\/dynamic"/);
+  assert.match(globalSource, /loadPromptCrafterDrawer\(\)\.then/);
+  assert.match(globalSource, /onPrefetch=\{preloadDrawer\}/);
+  assert.match(globalSource, /onClick=\{openDrawer\}/);
 });
 
 test("prompt crafter refresh resends the latest user turn without stale assistant output", () => {

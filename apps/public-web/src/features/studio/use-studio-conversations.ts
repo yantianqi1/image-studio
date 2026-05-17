@@ -7,6 +7,7 @@ import {
   createConversation,
   deleteConversation,
   getActiveConversationId,
+  getCachedConversations,
   listConversations,
   removeTurnFromConversation,
   retryTurnInConversation,
@@ -20,22 +21,27 @@ import type { StudioConversation, TurnDraft, TurnUpdate } from "@/features/studi
 import { migrateHistoryIfNeeded } from "@/features/studio/studio-migrate-history";
 
 export function useStudioConversations() {
-  const [conversations, setConversations] = useState<readonly StudioConversation[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [hydrated, setHydrated] = useState(false);
+  const cachedConversations = getCachedConversations();
+  const [conversations, setConversations] = useState<readonly StudioConversation[]>(() => cachedConversations ?? []);
+  const [activeId, setActiveId] = useState<string | null>(() => resolveInitialActiveId(cachedConversations ?? []));
+  const [hydrated, setHydrated] = useState(cachedConversations !== null);
 
   // Load from IndexedDB on mount
   useEffect(() => {
+    if (hydrated) return;
+    let active = true;
     listConversations().then((loaded) => {
+      if (!active) return;
       const migrated = migrateHistoryIfNeeded();
       const merged = migrated.length > 0 ? [...migrated, ...loaded] : loaded;
       setConversations(merged);
-      const savedActiveId = getActiveConversationId();
-      const resolvedId = merged.find((c) => c.id === savedActiveId)?.id ?? merged[0]?.id ?? null;
-      setActiveId(resolvedId);
+      setActiveId(resolveInitialActiveId(merged));
       setHydrated(true);
     });
-  }, []);
+    return () => {
+      active = false;
+    };
+  }, [hydrated]);
 
   // Persist to IndexedDB when conversations change
   useEffect(() => {
@@ -150,4 +156,9 @@ export function useStudioConversations() {
     retryTurn,
     retryTurnWithPrompt,
   } as const;
+}
+
+function resolveInitialActiveId(conversations: readonly StudioConversation[]): string | null {
+  const savedActiveId = getActiveConversationId();
+  return conversations.find((c) => c.id === savedActiveId)?.id ?? conversations[0]?.id ?? null;
 }

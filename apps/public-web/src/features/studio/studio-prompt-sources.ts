@@ -74,11 +74,15 @@ const MARKDOWN_PROMPT_PATTERN =
 const IGNORED_MARKET_README_HEADINGS = new Set(["简介", "最新动态", "Menu", "致谢", "Star History"]);
 const NSFW_TEXT_PATTERN =
   /\b(nsfw|nude|naked|lingerie|erotic|seductive|sexy|cleavage|underwear|panties|bra|bikini|ahegao|explicit|sensual|fetish|nipples?|genitals?|buttocks?|thong|topless)\b|裸|色情|情色|性感|诱惑|内衣|内裤|乳|胸|臀|私处|泳衣|比基尼|情趣|丁字裤|翻白眼|吐舌|妩媚|暧昧/i;
+const PROMPT_MARKET_ABORT_MESSAGE = "提示词市场读取已取消";
 
 type AwesomePromptDraft = BananaPrompt & {
   language: PromptMarketLanguage;
   mergeKey: string;
 };
+
+let cachedPromptMarketPrompts: readonly BananaPrompt[] | null = null;
+let promptMarketLoadPromise: Promise<readonly BananaPrompt[]> | null = null;
 
 function normalizePromptMode(value: unknown): BananaPromptMode {
   return value === "edit" ? "edit" : "generate";
@@ -333,10 +337,64 @@ export async function fetchAwesomeGptImage2Prompts(signal?: AbortSignal) {
 }
 
 export async function fetchPromptMarketPrompts(signal?: AbortSignal) {
-  const [bananaPrompts, awesomePrompts] = await Promise.all([
-    fetchBananaPrompts(signal),
-    fetchAwesomeGptImage2Prompts(signal),
-  ]);
+  if (cachedPromptMarketPrompts !== null) {
+    return cachedPromptMarketPrompts;
+  }
 
-  return [...bananaPrompts, ...awesomePrompts];
+  const loadPromise = startPromptMarketLoad();
+  return signal ? awaitPromptMarketPrompts(loadPromise, signal) : loadPromise;
+}
+
+export function refreshPromptMarketPrompts(signal?: AbortSignal) {
+  const loadPromise = startPromptMarketLoad(true);
+  return signal ? awaitPromptMarketPrompts(loadPromise, signal) : loadPromise;
+}
+
+function startPromptMarketLoad(forceRefresh = false) {
+  if (!forceRefresh && promptMarketLoadPromise !== null) {
+    return promptMarketLoadPromise;
+  }
+
+  const loadPromise = loadPromptMarketPrompts().finally(() => {
+    if (promptMarketLoadPromise === loadPromise) {
+      promptMarketLoadPromise = null;
+    }
+  });
+  promptMarketLoadPromise = loadPromise;
+  return loadPromise;
+}
+
+async function loadPromptMarketPrompts() {
+  const [bananaPrompts, awesomePrompts] = await Promise.all([
+    fetchBananaPrompts(),
+    fetchAwesomeGptImage2Prompts(),
+  ]);
+  const prompts = [...bananaPrompts, ...awesomePrompts];
+  cachedPromptMarketPrompts = prompts;
+  return prompts;
+}
+
+function awaitPromptMarketPrompts<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) {
+    return Promise.reject(new DOMException(PROMPT_MARKET_ABORT_MESSAGE, "AbortError"));
+  }
+
+  return new Promise<T>((resolve, reject) => {
+    const handleAbort = () => {
+      signal.removeEventListener("abort", handleAbort);
+      reject(new DOMException(PROMPT_MARKET_ABORT_MESSAGE, "AbortError"));
+    };
+
+    signal.addEventListener("abort", handleAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener("abort", handleAbort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener("abort", handleAbort);
+        reject(error);
+      },
+    );
+  });
 }

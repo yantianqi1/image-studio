@@ -15,7 +15,7 @@ import { AppShell } from "@/features/shell/app-shell";
 import type { PublicModelSummary } from "@/lib/public-api";
 import { publicApi } from "@/lib/public-api";
 import type { ResourceState } from "@/lib/use-api-resource";
-import { useApiResource } from "@/lib/use-api-resource";
+import { usePublicModels } from "@/lib/use-public-models";
 
 import { PosterResultPanel } from "./character-poster-result-panel";
 import {
@@ -87,7 +87,7 @@ function useKoreanIdolContactSheetController(): KoreanIdolContactSheetController
   const [sourceImage, setSourceImage] = useState<GenerationSourceImage | null>(null);
   const [uploadState, setUploadState] = useState<SourceUploadState>({ status: "idle" });
   const [state, setState] = useState<KoreanIdolContactSheetState>({ status: "idle" });
-  const modelsState = useApiResource(() => publicApi.getModels());
+  const modelsState = usePublicModels();
   const imageModelsState = getImageModelsState(modelsState);
   const modelResult = imageModelsState.status === "ready"
     ? resolveImageModel(imageModelsState.data, form.modelCode)

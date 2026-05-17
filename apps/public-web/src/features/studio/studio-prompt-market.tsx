@@ -10,6 +10,7 @@ import {
   BANANA_PROMPTS_SOURCE_URL,
   PROMPT_MARKET_SOURCE_OPTIONS,
   fetchPromptMarketPrompts,
+  refreshPromptMarketPrompts,
   type BananaPrompt,
   type BananaPromptMode,
   type PromptMarketLanguage,
@@ -84,7 +85,7 @@ function PromptPreviewImage({ prompt }: { prompt: BananaPrompt }) {
 }
 
 export function StudioPromptMarket({ open, onOpenChange, onApplyPrompt }: StudioPromptMarketProps) {
-  const [prompts, setPrompts] = useState<BananaPrompt[]>([]);
+  const [prompts, setPrompts] = useState<readonly BananaPrompt[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [keyword, setKeyword] = useState("");
@@ -100,7 +101,7 @@ export function StudioPromptMarket({ open, onOpenChange, onApplyPrompt }: Studio
   const loadPromptData = () => {
     setIsLoading(true);
     setError("");
-    void fetchPromptMarketPrompts()
+    void refreshPromptMarketPrompts()
       .then((items) => setPrompts(items))
       .catch((loadError: unknown) => {
         setError(loadError instanceof Error ? loadError.message : "读取提示词市场失败");

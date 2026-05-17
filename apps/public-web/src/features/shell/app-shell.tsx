@@ -42,14 +42,21 @@ export function AppShell({
 
   return (
     <div className={workspaceMode ? "fixed inset-0 flex h-[100dvh] flex-col overflow-hidden bg-[var(--background)] text-[var(--foreground)]" : "min-h-screen bg-[var(--background)] text-[var(--foreground)]"}>
-      <AppHeader activeHref={activeHref} brandLabel={brandLabel} headerTitle={resolvedHeaderTitle} leadingAction={leadingAction} navAside={navAside} />
+      <AppHeader
+        activeHref={activeHref}
+        brandLabel={brandLabel}
+        headerTitle={resolvedHeaderTitle}
+        leadingAction={leadingAction}
+        navAside={navAside}
+        workspaceMode={workspaceMode}
+      />
 
       <main className={workspaceMode ? "min-h-0 w-full flex-1 overflow-hidden px-2 pb-2 pt-2 sm:px-4 sm:pb-3 lg:px-5" : "mx-auto w-full max-w-[1440px] px-4 pb-10 pt-5 sm:px-6 lg:px-8 lg:pt-6"}>
         {hasHero ? <HeroSection description={description} eyebrow={eyebrow} title={title} /> : null}
         <section className={workspaceMode ? "h-full min-h-0" : hasHero ? "mt-5" : ""}>{children}</section>
       </main>
 
-      <GlobalPromptCrafter />
+      <GlobalPromptCrafter disabled={workspaceMode} />
     </div>
   );
 }
@@ -60,11 +67,12 @@ type AppHeaderProps = Readonly<{
   headerTitle?: string;
   leadingAction?: ReactNode;
   navAside?: ReactNode;
+  workspaceMode: boolean;
 }>;
 
 function AppHeader(props: AppHeaderProps) {
   return (
-    <header className={styles.header}>
+    <header className={props.workspaceMode ? `${styles.header} ${styles.workspaceHeader}` : styles.header}>
       <div className={styles.headerInner}>
         <div className={styles.brandArea}>
           {props.leadingAction}

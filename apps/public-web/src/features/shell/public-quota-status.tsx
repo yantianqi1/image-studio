@@ -1,27 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
-import { PUBLIC_QUOTA_REFRESH_EVENT, publicApi, type PublicQuotaStatus } from "@/lib/public-api";
-import { useApiResource } from "@/lib/use-api-resource";
+import type { PublicQuotaStatus } from "@/lib/public-api";
+import { usePublicQuotaStatus } from "@/lib/use-public-quota-status";
 
 import styles from "./public-quota-status.module.css";
 
 const FULL_PERCENT = 100;
-const REFRESH_STEP = 1;
 const LOW_QUOTA_RATIO = 0.25;
 const LOADING_PERCENT = 42;
 const EMPTY_VALUE = "--";
 
 export function PublicQuotaStatusBadge() {
-  const [refreshKey, setRefreshKey] = useState(0);
-  const state = useApiResource(publicApi.getPublicQuotaStatus, refreshKey);
-
-  useEffect(() => {
-    const refresh = () => setRefreshKey((current) => current + REFRESH_STEP);
-    window.addEventListener(PUBLIC_QUOTA_REFRESH_EVENT, refresh);
-    return () => window.removeEventListener(PUBLIC_QUOTA_REFRESH_EVENT, refresh);
-  }, []);
+  const state = usePublicQuotaStatus();
 
   if (state.status === "ready") {
     return <QuotaStatusView status={state.data} />;
