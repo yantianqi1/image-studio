@@ -84,6 +84,14 @@ test("studio result prompt bubble exposes parameters and edit retry", () => {
   assert.match(pageSource, /retryTurnWithPrompt/);
 });
 
+test("studio compliance retry rewrites the failed prompt before submitting", () => {
+  assert.match(resultsSource, /合规化重试/);
+  assert.match(pageSource, /rewritePromptForCompliance/);
+  assert.match(pageSource, /streamPromptCrafter/);
+  assert.match(pageSource, /retryTurnWithPrompt\(conv\.id, turnId, compliantPrompt\)/);
+  assert.doesNotMatch(pageSource, /Fall through with original prompt/);
+});
+
 test("studio first image turn requests backend generated conversation title", () => {
   assert.match(pageSource, /applyGeneratedTitle/);
   assert.match(pageSource, /job\.title/);

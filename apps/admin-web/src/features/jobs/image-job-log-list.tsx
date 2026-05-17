@@ -119,7 +119,7 @@ function ResultPreview({ result, total }: Readonly<{ result: AdminImageJobResult
         alt={`图片任务结果 ${result.result_index}`}
         height={104}
         loading="lazy"
-        src={result.asset_url}
+        src={result.thumbnail_url}
         unoptimized
         width={154}
       />

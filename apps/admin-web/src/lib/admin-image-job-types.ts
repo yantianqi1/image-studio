@@ -4,6 +4,7 @@ export type AdminImageJobResult = Readonly<{
   result_index: number;
   asset_id: number;
   asset_url: string;
+  thumbnail_url: string;
   revised_prompt: string | null;
   provider_request_id: string | null;
 }>;

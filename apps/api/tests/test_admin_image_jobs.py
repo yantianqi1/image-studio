@@ -1,7 +1,9 @@
 from datetime import datetime, timedelta
+from io import BytesIO
 import inspect
 
 from fastapi.testclient import TestClient
+from PIL import Image
 from sqlalchemy import select
 
 from apps.api.app.domains.auth.service import create_admin_account
@@ -60,6 +62,17 @@ def build_rendered_image_from_job(_session=None, *, prompt: str, model_code: str
     )
 
 
+def build_png_rendered_image_from_job(_session=None, *, prompt: str, model_code: str, **_kwargs) -> RenderedImage:
+    buffer = BytesIO()
+    Image.new("RGB", (1200, 600), color=(31, 41, 55)).save(buffer, format="PNG")
+    return RenderedImage(
+        content=buffer.getvalue(),
+        mime_type="image/png",
+        revised_prompt=prompt,
+        provider_request_id=f"test-png:{model_code}",
+    )
+
+
 def test_admin_image_jobs_include_results(monkeypatch):
     monkeypatch.setattr(image_service, "render_image", build_rendered_image_from_job, raising=False)
     client = build_client()
@@ -76,6 +89,29 @@ def test_admin_image_jobs_include_results(monkeypatch):
     target = next(item for item in jobs if item["id"] == job["id"])
     assert target["results"][0]["asset_url"].startswith("/api/admin/image/assets/")
     assert target["results"][0]["revised_prompt"] == "Admin visible image"
+
+
+def test_admin_image_jobs_expose_thumbnail_results(monkeypatch):
+    monkeypatch.setattr(image_service, "render_image", build_png_rendered_image_from_job, raising=False)
+    client = build_client()
+    register_user(client)
+    seed_admin()
+    job = create_image_job(client, prompt="Admin thumbnail image")
+    worker_image_jobs.run_next_image_job()
+    admin_login(client)
+
+    response = client.get("/api/admin/image/jobs")
+
+    assert response.status_code == 200
+    jobs = response.json()["data"]
+    target = next(item for item in jobs if item["id"] == job["id"])
+    result = target["results"][0]
+    assert result["thumbnail_url"] == f"/api/admin/image/assets/{result['asset_id']}/thumbnail"
+    thumbnail_response = client.get(result["thumbnail_url"])
+    thumbnail = Image.open(BytesIO(thumbnail_response.content))
+    assert thumbnail_response.status_code == 200
+    assert thumbnail_response.headers["content-type"] == "image/jpeg"
+    assert thumbnail.size == (640, 320)
 
 
 def test_admin_image_jobs_paginated_include_parameters_and_costs():

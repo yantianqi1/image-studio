@@ -65,7 +65,7 @@ import { publicApi, type CharacterLibraryItem, type ImageAssetVisibility } from 
 import { cn } from "@/lib/cn";
 import { usePublicModels } from "@/lib/use-public-models";
 import { streamPromptCrafter } from "@/features/prompt-crafter/prompt-crafter-api";
-import { buildPromptComplianceInstruction } from "@/features/studio/studio-prompt-actions";
+import { rewritePromptForCompliance } from "@/features/studio/studio-compliance-retry";
 
 const PRESET_LOAD_DELAY_MS = 800;
 
@@ -770,19 +770,22 @@ export function StudioPage() {
     const turn = conv.turns.find((t) => t.id === turnId);
     if (!turn || !turn.prompt.trim()) return;
 
-    let compliantPrompt = turn.prompt;
+    markConversationSubmitting(conv.id);
+    const progressKey = turnProgressKey(conv.id, turnId);
+    setTurnProgress(progressKey, { message: "正在合规化改写..." });
+    let compliantPrompt = "";
     try {
-      let result = "";
-      const controller = new AbortController();
-      await streamPromptCrafter({
-        messages: [{ role: "user", content: buildPromptComplianceInstruction(turn.prompt) }],
-        signal: controller.signal,
-        onChunk: (chunk) => { result += chunk; },
+      compliantPrompt = await rewritePromptForCompliance({
+        prompt: turn.prompt,
+        streamPrompt: streamPromptCrafter,
       });
-      const trimmed = result.trim();
-      if (trimmed) compliantPrompt = trimmed;
-    } catch {
-      // Fall through with original prompt if compliance rewrite fails
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "合规化重写失败";
+      clearTurnProgress(progressKey);
+      clearConversationSubmitting(conv.id);
+      setSubmissionNotice(message);
+      conversations.updateTurn(conv.id, turnId, { status: "error", error: message });
+      return;
     }
 
     const draft: TurnDraft = {
@@ -798,7 +801,7 @@ export function StudioPage() {
       quality: turn.quality,
       visibility: turn.visibility,
     };
-    conversations.retryTurn(conv.id, turnId);
+    conversations.retryTurnWithPrompt(conv.id, turnId, compliantPrompt);
     void submitExistingTurn({
       contextBeforeTurnId: turn.id,
       conversation: conv,
@@ -806,7 +809,7 @@ export function StudioPage() {
       draft,
       turnId,
     });
-  }, [conversations, submittingConversationIds, submitExistingTurn]);
+  }, [clearConversationSubmitting, conversations, markConversationSubmitting, submittingConversationIds, submitExistingTurn]);
 
   const handleEditFromTurn = useCallback((_turnId: string, image: StoredImage) => {
     const ref: StoredReferenceImage = {

@@ -84,6 +84,7 @@ def result_payload(result, *, asset=None, storage=None) -> dict[str, object]:
 def admin_result_payload(result) -> dict[str, object]:
     payload = result_payload(result)
     payload["asset_url"] = f"/api/admin/image/assets/{result.asset_id}"
+    payload["thumbnail_url"] = f"/api/admin/image/assets/{result.asset_id}/thumbnail"
     return payload
 
 

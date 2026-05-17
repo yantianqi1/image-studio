@@ -14,6 +14,10 @@ const dataHookSource = readFileSync(
   new URL("../src/lib/use-admin-data.ts", import.meta.url),
   "utf8",
 );
+const imageJobTypesSource = readFileSync(
+  new URL("../src/lib/admin-image-job-types.ts", import.meta.url),
+  "utf8",
+);
 const styleSource = readFileSync(
   new URL("../src/features/jobs/image-jobs.css", import.meta.url),
   "utf8",
@@ -39,6 +43,9 @@ test("image job rows expose cost and preview fields", () => {
   assert.match(logListSource, /label: "扣费"/);
   assert.match(logListSource, /label: "成本"/);
   assert.match(logListSource, /label: "毛利"/);
-  assert.match(logListSource, /result\.asset_url/);
+  assert.match(imageJobTypesSource, /thumbnail_url: string/);
+  assert.match(logListSource, /href=\{result\.asset_url\}/);
+  assert.match(logListSource, /src=\{result\.thumbnail_url\}/);
+  assert.doesNotMatch(logListSource, /src=\{result\.asset_url\}/);
   assert.match(styleSource, /object-fit: contain/);
 });

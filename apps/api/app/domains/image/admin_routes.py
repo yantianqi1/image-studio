@@ -6,7 +6,7 @@ from apps.api.app.core.deps import get_db_session
 from apps.api.app.core.response import api_ok
 from apps.api.app.domains.auth.service import require_admin
 from apps.api.app.domains.image.admin_service import list_admin_jobs_paginated, list_admin_jobs_with_results
-from apps.api.app.domains.image.assets import resolve_asset_content
+from apps.api.app.domains.image.assets import resolve_asset_content, resolve_thumbnail_content
 from apps.api.app.domains.image.gallery import (
     delete_asset_by_admin,
     get_asset,
@@ -23,6 +23,8 @@ from apps.api.app.domains.image.stats_service import get_image_job_stats
 from apps.api.app.infra.storage.factory import build_asset_storage
 
 admin_router = APIRouter(tags=["image-admin"])
+
+ADMIN_ASSET_CACHE_HEADERS = {"Cache-Control": "private, max-age=86400"}
 
 
 @admin_router.get("/image-tasks")
@@ -68,7 +70,15 @@ def get_admin_image_asset(asset_id: int, request: Request, session: Session = De
     require_admin(request, session)
     asset = get_asset(session, asset_id)
     content, media_type = resolve_asset_content(asset, build_asset_storage())
-    return Response(content=content, media_type=media_type)
+    return Response(content=content, media_type=media_type, headers=ADMIN_ASSET_CACHE_HEADERS)
+
+
+@admin_router.get("/image/assets/{asset_id}/thumbnail")
+def get_admin_image_asset_thumbnail(asset_id: int, request: Request, session: Session = Depends(get_db_session)):
+    require_admin(request, session)
+    asset = get_asset(session, asset_id)
+    content, media_type = resolve_thumbnail_content(asset, build_asset_storage())
+    return Response(content=content, media_type=media_type, headers=ADMIN_ASSET_CACHE_HEADERS)
 
 
 @admin_router.get("/gallery")
