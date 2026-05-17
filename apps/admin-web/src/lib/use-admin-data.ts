@@ -2,7 +2,7 @@ import useSWR from "swr";
 
 import type { AdminImageJob } from "@/lib/admin-image-job-types";
 import type { AdminUserList, AdminUsersQuery } from "@/lib/admin-users";
-import type { AdminGalleryItem, WorkerSummary } from "@/lib/admin-api";
+import type { AdminGalleryItem, AdminLlmFacilityResponse, WorkerSummary } from "@/lib/admin-api";
 import type { ImageJobStats } from "@/lib/admin-image-job-types";
 
 function buildSearch(params: Record<string, string | number | undefined>) {
@@ -43,6 +43,10 @@ export function useAdminStats() {
   return useSWR<ImageJobStats>("/api/admin/image/stats", {
     refreshInterval: IMAGE_JOBS_REFRESH_INTERVAL_MS,
   });
+}
+
+export function useLlmFacilities() {
+  return useSWR<AdminLlmFacilityResponse>("/api/admin/llm/features");
 }
 
 export function useAdminUsers(query: AdminUsersQuery = {}) {

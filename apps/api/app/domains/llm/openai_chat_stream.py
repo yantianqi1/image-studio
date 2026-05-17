@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 import json
 
@@ -29,7 +29,7 @@ def build_streaming_chat_payload(
     *,
     provider_model: str,
     system_prompt: str,
-    messages: list[dict[str, str]],
+    messages: Sequence[dict[str, object]],
 ) -> dict[str, object]:
     return {
         "model": provider_model,

@@ -66,6 +66,34 @@ export type WorkerSummary = Readonly<{
   }[];
 }>;
 
+export type AdminLlmFeatureModel = Readonly<{
+  id: number;
+  code: string;
+  display_name: string;
+  capability: string;
+  provider_id: number;
+  provider_model: string;
+  public_enabled: boolean;
+  member_price_cents: number;
+  anonymous_price_cents: number;
+}>;
+
+export type AdminLlmFeatureSetting = Readonly<{
+  feature_key: string;
+  display_name: string;
+  description: string;
+  input_mode: "text" | "image" | "multimodal";
+  required_capabilities: readonly string[];
+  default_model_code: string;
+  model_code: string | null;
+  model: AdminLlmFeatureModel | null;
+}>;
+
+export type AdminLlmFacilityResponse = Readonly<{
+  features: readonly AdminLlmFeatureSetting[];
+  models: readonly AdminLlmFeatureModel[];
+}>;
+
 export const adminApi = {
   login(input: { username: string; password: string }) {
     return apiFetch<{ username: string; role: string }>("/api/admin/auth/login", {
@@ -125,6 +153,15 @@ export const adminApi = {
   },
   imageJobStats() {
     return apiFetch<ImageJobStats>("/api/admin/image/stats");
+  },
+  llmFacilities() {
+    return apiFetch<AdminLlmFacilityResponse>("/api/admin/llm/features");
+  },
+  updateLlmFacilities(input: { features: readonly { feature_key: string; model_code: string }[] }) {
+    return apiFetch<AdminLlmFacilityResponse>("/api/admin/llm/features", {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
   },
   workerSummary() {
     return apiFetch<WorkerSummary>("/api/admin/ops/worker-summary");

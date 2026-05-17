@@ -14,6 +14,7 @@ from apps.api.app.core.config import get_settings
 from apps.api.app.core.errors import AppError
 from apps.api.app.domains.llm.catalog import ensure_provider_catalog
 from apps.api.app.domains.llm.client_provider import ClientProviderConfig, build_runtime_provider
+from apps.api.app.domains.llm.feature_settings import get_active_model_by_code, get_llm_feature_model_code
 from apps.api.app.domains.llm.models import Provider, SellableModel
 from apps.api.app.domains.llm.provider_validation import OPENAI_CHAT_COMPATIBLE_PROVIDER_TYPE, OPENAI_COMPATIBLE_PROVIDER_TYPE
 
@@ -36,21 +37,31 @@ def generate_structured_chat(
     session: Session | None,
     *,
     system_prompt: str,
-    user_payload: dict,
+    user_payload: dict | None = None,
     schema_name: str,
     response_schema: dict | None = None,
     client_provider_config: ClientProviderConfig | None = None,
     chat_target: ChatTarget | None = None,
     model_code: str | None = None,
+    feature_key: str | None = None,
+    user_messages: list[dict[str, object]] | None = None,
 ) -> dict:
     target = chat_target or resolve_chat_target_for_config(
         session,
         client_provider_config,
         model_code=model_code,
+        feature_key=feature_key,
     )
     response = post_chat_completion(
         target=target,
-        payload=build_chat_payload(target.provider_model, system_prompt, user_payload, schema_name, response_schema=response_schema),
+        payload=build_chat_payload(
+            target.provider_model,
+            system_prompt,
+            user_payload,
+            schema_name,
+            response_schema=response_schema,
+            user_messages=user_messages,
+        ),
     )
     return parse_chat_response(response, response_schema=response_schema)
 
@@ -60,10 +71,12 @@ def resolve_chat_target_for_config(
     config: ClientProviderConfig | None,
     *,
     model_code: str | None = None,
+    feature_key: str | None = None,
 ) -> ChatTarget:
+    resolved_model_code = resolve_feature_model_code(session, model_code=model_code, feature_key=feature_key)
     if config is not None:
-        return resolve_client_chat_target(config)
-    return resolve_chat_target(require_session(session), model_code=model_code)
+        return resolve_client_chat_target(config, provider_model=resolve_client_provider_model(session, resolved_model_code))
+    return resolve_chat_target(require_session(session), model_code=resolved_model_code)
 
 
 def resolve_chat_target(session: Session, *, model_code: str | None = None) -> ChatTarget:
@@ -84,11 +97,31 @@ def resolve_chat_target(session: Session, *, model_code: str | None = None) -> C
     return build_chat_target(provider=provider, provider_model=model.provider_model or provider.default_model)
 
 
-def resolve_client_chat_target(config: ClientProviderConfig) -> ChatTarget:
+def resolve_client_chat_target(config: ClientProviderConfig, *, provider_model: str | None = None) -> ChatTarget:
     settings = get_settings()
     provider = build_runtime_provider(config)
-    provider_model = settings.openai_chat_model_provider_model or settings.openai_chat_model_code
-    return build_chat_target(provider=provider, provider_model=provider_model)
+    model = provider_model or settings.openai_chat_model_provider_model or settings.openai_chat_model_code
+    return build_chat_target(provider=provider, provider_model=model)
+
+
+def resolve_feature_model_code(
+    session: Session | None,
+    *,
+    model_code: str | None,
+    feature_key: str | None,
+) -> str | None:
+    if model_code is not None:
+        return model_code
+    if feature_key is None:
+        return None
+    return get_llm_feature_model_code(require_session(session), feature_key)
+
+
+def resolve_client_provider_model(session: Session | None, model_code: str | None) -> str | None:
+    if not model_code:
+        return None
+    model = get_active_model_by_code(require_session(session), model_code)
+    return model.provider_model or model.code
 
 
 def build_chat_target(*, provider: Provider, provider_model: str | None) -> ChatTarget:
@@ -146,23 +179,36 @@ def build_target_auth_headers(target: ChatTarget) -> dict[str, str]:
 def build_chat_payload(
     provider_model: str,
     system_prompt: str,
-    user_payload: dict,
+    user_payload: dict | None,
     schema_name: str,
     *,
     response_schema: dict | None = None,
+    user_messages: list[dict[str, object]] | None = None,
 ) -> dict:
-    content = {"input": user_payload}
-    if response_schema is not None:
-        content["required_response_json_schema"] = response_schema
+    messages = build_chat_messages(system_prompt, user_payload, response_schema, user_messages)
     return {
         "model": provider_model,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": json.dumps(content, ensure_ascii=False)},
-        ],
+        "messages": messages,
         "response_format": {"type": "json_object"},
         "metadata": {"schema_name": schema_name},
     }
+
+
+def build_chat_messages(
+    system_prompt: str,
+    user_payload: dict | None,
+    response_schema: dict | None,
+    user_messages: list[dict[str, object]] | None,
+) -> list[dict[str, object]]:
+    if user_messages is not None:
+        return [{"role": "system", "content": system_prompt}, *user_messages]
+    content = {"input": user_payload or {}}
+    if response_schema is not None:
+        content["required_response_json_schema"] = response_schema
+    return [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": json.dumps(content, ensure_ascii=False)},
+    ]
 
 
 def parse_chat_response(response: httpx.Response | object, *, response_schema: dict | None = None) -> dict:

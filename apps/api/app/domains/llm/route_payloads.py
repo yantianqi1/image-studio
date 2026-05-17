@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from apps.api.app.domains.llm.default_pricing import cents_to_price_credits
+from apps.api.app.domains.llm.feature_settings import LLMFeatureDefinition
 from apps.api.app.domains.llm.models import ModelVariant, Provider, SellableModel
 from apps.api.app.domains.llm.openrouter_image_options import OPENROUTER_SIZE_TO_ASPECT_RATIO
 
@@ -119,4 +120,22 @@ def variant_payload(variant: ModelVariant) -> dict[str, object]:
         "price_manually_set": variant.price_manually_set,
         "status": variant.status,
         "created_at": variant.created_at.isoformat() if variant.created_at else None,
+    }
+
+
+def llm_feature_payload(
+    definition: LLMFeatureDefinition,
+    *,
+    model_code: str | None,
+    model: SellableModel | None,
+) -> dict[str, object]:
+    return {
+        "feature_key": definition.key,
+        "display_name": definition.display_name,
+        "description": definition.description,
+        "input_mode": definition.input_mode,
+        "required_capabilities": list(definition.required_capabilities),
+        "default_model_code": definition.default_model_code,
+        "model_code": model_code,
+        "model": sellable_model_payload(model) if model is not None else None,
     }

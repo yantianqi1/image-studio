@@ -31,6 +31,7 @@ const navGroups = [
     label: "Models & Work",
     items: [
       { href: "/admin/providers", label: "Provider", icon: "providers" },
+      { href: "/admin/facilities", label: "设施", icon: "facilities" },
       { href: "/admin/image-jobs", label: "图片任务", icon: "image", aliases: ["/admin/image-tasks"] },
       { href: "/admin/comic-jobs", label: "漫画任务", icon: "comic", aliases: ["/admin/comic-tasks"] },
       { href: "/admin/gallery", label: "公开图库", icon: "gallery" },
@@ -131,6 +132,15 @@ const navIcons = {
       <path d="M4 12h16" />
       <path d="m6.5 6.5 11 11" />
       <path d="m17.5 6.5-11 11" />
+    </svg>
+  ),
+  facilities: (
+    <svg className="admin-nav-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M5 7h14" />
+      <path d="M5 12h14" />
+      <path d="M5 17h14" />
+      <path d="M8 5v14" />
+      <path d="M16 5v14" />
     </svg>
   ),
   image: (

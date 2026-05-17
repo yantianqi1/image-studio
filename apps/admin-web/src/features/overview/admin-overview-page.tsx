@@ -19,7 +19,7 @@ const shortcuts = [
   { href: "/admin/users", label: "用户检索", detail: "搜索、查看、进入详情", token: "users" },
   { href: "/admin/billing", label: "余额核查", detail: "钱包、ledger、调账", token: "money" },
   { href: "/admin/image-jobs", label: "图片队列", detail: "任务状态与结果图", token: "image" },
-  { href: "/admin/providers", label: "模型定价", detail: "Provider 与模型配置", token: "llm" },
+  { href: "/admin/facilities", label: "设施模型", detail: "功能到 LLM 模型映射", token: "llm" },
 ] as const satisfies readonly OverviewItem[];
 
 const overviewSections = [
@@ -42,6 +42,7 @@ const overviewSections = [
     description: "供应商配置和长任务监控放在同一工作面。",
     items: [
       { href: "/admin/providers", label: "Provider 与模型", detail: "供应商、上游模型导入和价格", token: "models" },
+      { href: "/admin/facilities", label: "设施面板", detail: "配置每个 LLM 功能使用的模型", token: "llm" },
       { href: "/admin/image-jobs", label: "图片任务", detail: "图片生成队列、结果和 worker 告警", token: "image" },
       { href: "/admin/comic-jobs", label: "漫画任务", detail: "漫画任务状态和项目执行线索", token: "comic" },
       { href: "/admin/gallery", label: "公开图库", detail: "浏览、下架或删除公开分享的图片", token: "gallery" },

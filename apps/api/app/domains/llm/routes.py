@@ -5,7 +5,14 @@ from apps.api.app.core.deps import get_db_session
 from apps.api.app.core.response import api_ok
 from apps.api.app.domains.auth.service import require_admin
 from apps.api.app.domains.llm.admin_ops import delete_provider, delete_sellable_model
+from apps.api.app.domains.llm.feature_settings import (
+    list_allowed_llm_models,
+    list_llm_feature_definitions,
+    list_llm_feature_model_settings,
+    update_llm_feature_model_settings,
+)
 from apps.api.app.domains.llm.route_payloads import (
+    llm_feature_payload,
     list_public_model_variants,
     provider_payload,
     sellable_model_payload,
@@ -16,6 +23,7 @@ from apps.api.app.domains.llm.route_schemas import (
     CreateSellableModelRequest,
     FetchUpstreamModelsRequest,
     ImportUpstreamModelsRequest,
+    UpdateLLMFeatureModelsRequest,
     UpdateSellableModelRequest,
 )
 from apps.api.app.domains.llm.service import (
@@ -33,6 +41,7 @@ public_router = APIRouter(tags=["llm-public"])
 admin_router = APIRouter(tags=["llm-admin"])
 provider_admin_router = APIRouter(prefix="/providers", tags=["llm-admin-providers"])
 model_admin_router = APIRouter(prefix="/models", tags=["llm-admin-models"])
+facility_admin_router = APIRouter(prefix="/llm/features", tags=["llm-admin-features"])
 
 
 @public_router.get("/models")
@@ -149,6 +158,43 @@ def import_upstream_models_route(
     return api_ok([sellable_model_payload(model) for model in models])
 
 
+@facility_admin_router.get("")
+def get_llm_feature_settings_route(request: Request, session: Session = Depends(get_db_session)):
+    require_admin(request, session)
+    payload = llm_feature_settings_response(session)
+    session.commit()
+    return api_ok(payload)
+
+
+@facility_admin_router.patch("")
+def update_llm_feature_settings_route(
+    payload: UpdateLLMFeatureModelsRequest,
+    request: Request,
+    session: Session = Depends(get_db_session),
+):
+    require_admin(request, session)
+    updates = {item.feature_key: item.model_code for item in payload.features}
+    update_llm_feature_model_settings(session, updates)
+    response = llm_feature_settings_response(session)
+    session.commit()
+    return api_ok(response)
+
+
+def llm_feature_settings_response(session: Session) -> dict[str, object]:
+    definitions = list_llm_feature_definitions()
+    settings = {setting.feature_key: setting for setting in list_llm_feature_model_settings(session)}
+    model_lookup = {model.code: model for model in list_allowed_llm_models(session)}
+    features = [
+        llm_feature_payload(
+            definition,
+            model_code=settings[definition.key].model_code if definition.key in settings else None,
+            model=model_lookup.get(settings[definition.key].model_code) if definition.key in settings else None,
+        )
+        for definition in definitions
+    ]
+    return {"features": features, "models": [sellable_model_payload(model) for model in model_lookup.values()]}
+
+
 @model_admin_router.patch("/{model_code:path}")
 def update_sellable_model_route(
     model_code: str,
@@ -185,5 +231,6 @@ def delete_sellable_model_route(
 
 
 model_admin_router.include_router(variant_router)
+admin_router.include_router(facility_admin_router)
 admin_router.include_router(provider_admin_router)
 admin_router.include_router(model_admin_router)

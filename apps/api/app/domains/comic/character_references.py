@@ -23,6 +23,7 @@ from apps.api.app.domains.llm.client_provider import (
     ClientProviderConfig,
     client_provider_config_from_mapping,
 )
+from apps.api.app.domains.llm.feature_settings import FEATURE_COMIC_CHARACTER_REFERENCE, get_llm_feature_model_code
 
 COMIC_REFERENCES_NOT_READY_CODE = "comic_character_references_not_ready"
 PER_CHARACTER_REFERENCE_MODE = "per_character"
@@ -111,7 +112,7 @@ def create_reference_job(session: Session, *, task: ComicTask, card: ComicCharac
         owner=task_owner(task),
         source=resolve_image_job_source(task=task, client_config=client_config),
         prompt=build_style_aligned_reference_prompt(task=task, prompt=card.multi_view_prompt),
-        model_code="gpt-image-2",
+        model_code=get_llm_feature_model_code(session, FEATURE_COMIC_CHARACTER_REFERENCE),
         requested_count=1,
         mode="generate",
         client_access_id=client_config.client_id if client_config else None,
@@ -135,7 +136,7 @@ def create_shared_reference_job(session: Session, *, task: ComicTask, cards: lis
         owner=task_owner(task),
         source=resolve_image_job_source(task=task, client_config=client_config),
         prompt=build_single_sheet_prompt(cards, style_preset_id=task_style_preset_id(task)),
-        model_code="gpt-image-2",
+        model_code=get_llm_feature_model_code(session, FEATURE_COMIC_CHARACTER_REFERENCE),
         requested_count=1,
         mode="generate",
         client_access_id=client_config.client_id if client_config else None,

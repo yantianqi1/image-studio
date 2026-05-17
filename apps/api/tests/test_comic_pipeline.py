@@ -167,7 +167,9 @@ def test_last_storyboard_image_can_have_fewer_panels_but_not_more() -> None:
 def test_missing_target_image_count_is_derived_from_long_story() -> None:
     task = task_stub(input_payload={"source_type": "text", "source_text": long_story_text(), "style_preset": "neo_chinese", "panels_per_image": 3})
 
-    inputs = parse_pipeline_inputs(task)
+    initialize_database()
+    with session_scope() as session:
+        inputs = parse_pipeline_inputs(session, task)
 
     assert inputs.target_image_count > 1
     assert len(inputs.story_segments) == inputs.target_image_count
@@ -175,7 +177,9 @@ def test_missing_target_image_count_is_derived_from_long_story() -> None:
 
 def test_storyboard_input_requires_one_image_per_story_segment() -> None:
     task = task_stub(input_payload={"source_type": "text", "source_text": long_story_text(), "style_preset": "neo_chinese", "panels_per_image": 3})
-    inputs = parse_pipeline_inputs(task)
+    initialize_database()
+    with session_scope() as session:
+        inputs = parse_pipeline_inputs(session, task)
     analysis = analysis_stub()
     bible = bible_stub()
 

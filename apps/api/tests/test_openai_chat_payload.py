@@ -48,6 +48,28 @@ def test_build_chat_payload_includes_schema_contract() -> None:
     assert payload["metadata"]["schema_name"] == "StoryAnalysis"
 
 
+def test_build_chat_payload_supports_multimodal_messages() -> None:
+    payload = build_chat_payload(
+        "chat-model",
+        "system prompt",
+        None,
+        "StoryAnalysis",
+        user_messages=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "请分析图片"},
+                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}},
+                ],
+            }
+        ],
+    )
+
+    assert payload["messages"][0]["content"] == "system prompt"
+    assert payload["messages"][1]["content"][0]["type"] == "text"
+    assert payload["messages"][1]["content"][1]["type"] == "image_url"
+
+
 def test_parse_chat_response_accepts_markdown_json_object() -> None:
     response = ChatResponse('```json\n{"title_suggestion":"镜中城"}\n```')
 

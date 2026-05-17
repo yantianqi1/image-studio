@@ -16,6 +16,11 @@ from apps.api.app.domains.image.models import Asset
 from apps.api.app.domains.image.repository import get_asset_for_owner
 from apps.api.app.domains.llm import openai_chat_stream
 from apps.api.app.domains.llm.client_provider import ClientProviderConfig
+from apps.api.app.domains.llm.feature_settings import (
+    FEATURE_PROMPT_CRAFTER_REVERSE_IMAGE,
+    FEATURE_PROMPT_CRAFTER_TEXT,
+    get_llm_feature_model_code,
+)
 from apps.api.app.domains.llm.openai_chat_image_messages import build_image_content
 from apps.api.app.domains.llm.openai_chat import ChatTarget, resolve_chat_target_for_config
 from apps.api.app.infra.storage.asset_storage import AssetStorage
@@ -139,7 +144,7 @@ def prepare_prompt_crafter_stream_context(
     client_provider_config: ClientProviderConfig | None = None,
 ) -> PromptCrafterStreamContext:
     validate_prompt_crafter_messages(messages)
-    target = resolve_prompt_crafter_target(session, client_provider_config)
+    target = resolve_prompt_crafter_target(session, client_provider_config, feature_key=FEATURE_PROMPT_CRAFTER_TEXT)
     payload = openai_chat_stream.build_streaming_chat_payload(
         provider_model=target.provider_model,
         system_prompt=build_prompt_crafter_system_prompt(),
@@ -156,7 +161,11 @@ def prepare_prompt_crafter_reverse_image_context(
     note: str,
     client_provider_config: ClientProviderConfig | None = None,
 ) -> PromptCrafterStreamContext:
-    target = resolve_prompt_crafter_target(session, client_provider_config)
+    target = resolve_prompt_crafter_target(
+        session,
+        client_provider_config,
+        feature_key=FEATURE_PROMPT_CRAFTER_REVERSE_IMAGE,
+    )
     storage = build_asset_storage()
     assets = resolve_prompt_crafter_image_assets(session, owner=owner, asset_ids=asset_ids, storage=storage)
     payload = build_prompt_crafter_reverse_image_payload(
@@ -217,16 +226,22 @@ def validate_prompt_crafter_image_asset(asset: Asset, *, storage: AssetStorage) 
         raise AppError(code=PROMPT_CRAFTER_IMAGE_FILE_MISSING_CODE, message="reverse image file is missing", status_code=500)
 
 
-def resolve_prompt_crafter_target(session: Session, client_provider_config: ClientProviderConfig | None) -> ChatTarget:
+def resolve_prompt_crafter_target(
+    session: Session,
+    client_provider_config: ClientProviderConfig | None,
+    *,
+    feature_key: str,
+) -> ChatTarget:
+    model_code = get_llm_feature_model_code(session, feature_key)
     if client_provider_config is None:
-        return resolve_chat_target_for_config(session, None)
+        return resolve_chat_target_for_config(session, None, model_code=model_code)
     typed_config = ClientProviderConfig(
         client_id=client_provider_config.client_id,
         base_url=client_provider_config.base_url,
         api_key=client_provider_config.api_key,
         provider_type=get_settings().openai_provider_type,
     )
-    return resolve_chat_target_for_config(session, typed_config)
+    return resolve_chat_target_for_config(session, typed_config, model_code=model_code)
 
 
 def validate_prompt_crafter_messages(messages: Sequence[dict[str, str]]) -> None:

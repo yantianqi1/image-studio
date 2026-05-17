@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from apps.api.app.core.config import get_settings
 from apps.api.app.core.errors import AppError
+from apps.api.app.domains.llm.feature_settings import FEATURE_IMAGE_JOB_TITLE, get_llm_feature_model_code
 from apps.api.app.domains.llm.openai_chat import generate_structured_chat
 
 IMAGE_JOB_TITLE_MAX_CHARS = 10
@@ -30,14 +30,9 @@ def generate_image_job_title(session: Session, *, prompt: str) -> str:
         user_payload={"prompt": prompt.strip()},
         schema_name="ImageJobTitle",
         response_schema=IMAGE_JOB_TITLE_RESPONSE_SCHEMA,
-        model_code=resolve_image_job_title_model_code(),
+        model_code=get_llm_feature_model_code(session, FEATURE_IMAGE_JOB_TITLE),
     )
     return normalize_generated_title(payload.get("title"))
-
-
-def resolve_image_job_title_model_code() -> str | None:
-    value = get_settings().image_job_title_model_code.strip()
-    return value or None
 
 
 def normalize_generated_title(value: object) -> str:

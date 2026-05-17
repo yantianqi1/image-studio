@@ -14,7 +14,7 @@ from apps.api.app.domains.image.storage_migration import (
 )
 from apps.api.app.infra.db.session import get_engine, get_session_factory, initialize_database
 
-HEAD_REVISION = "20260516_000022"
+HEAD_REVISION = "20260517_000023"
 REPO_ROOT = Path(__file__).resolve().parents[3]
 IMAGE_JOB_PROVIDER_USAGE_COLUMNS = {
     "provider_input_tokens",
@@ -63,6 +63,7 @@ def assert_core_schema(inspector) -> None:
     assert inspector.has_table("site_settings")
     assert_site_settings_schema(inspector)
     assert_sellable_model_schema(inspector)
+    assert_llm_feature_settings_schema(inspector)
     assert_image_job_schema(inspector)
     assert_asset_schema(inspector)
     assert_owner_schema(inspector)
@@ -83,6 +84,12 @@ def assert_sellable_model_schema(inspector) -> None:
     assert {"upstream_cost_credits", "upstream_cost_cents", "profit_margin_basis_points"} <= variant_columns
     sellable_model_indexes = {index["name"] for index in inspector.get_indexes("sellable_models")}
     assert "ix_sellable_models_status" in sellable_model_indexes
+
+
+def assert_llm_feature_settings_schema(inspector) -> None:
+    assert inspector.has_table("llm_feature_model_settings")
+    columns = {column["name"] for column in inspector.get_columns("llm_feature_model_settings")}
+    assert {"id", "feature_key", "model_code", "updated_at"} <= columns
 
 
 def assert_image_job_schema(inspector) -> None:
@@ -172,6 +179,7 @@ def test_initialize_database_runs_alembic_to_head(tmp_path):
     assert inspector.has_table("character_library_entries")
     assert inspector.has_table("anonymous_sessions")
     assert inspector.has_table("site_settings")
+    assert inspector.has_table("llm_feature_model_settings")
 
     sellable_model_columns = {column["name"] for column in inspector.get_columns("sellable_models")}
     assert "status" in sellable_model_columns

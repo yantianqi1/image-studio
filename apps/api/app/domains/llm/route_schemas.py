@@ -48,6 +48,15 @@ class ImportUpstreamModelsRequest(BaseModel):
     anonymous_price_cents: int = Field(ge=0)
 
 
+class LLMFeatureModelUpdateItem(BaseModel):
+    feature_key: str = Field(min_length=1, max_length=64)
+    model_code: str = Field(min_length=1, max_length=128)
+
+
+class UpdateLLMFeatureModelsRequest(BaseModel):
+    features: list[LLMFeatureModelUpdateItem] = Field(min_length=1, max_length=32)
+
+
 class CreateModelVariantRequest(BaseModel):
     size: str = Field(min_length=1, max_length=64)
     quality: str = Field(min_length=1, max_length=32, pattern="^(low|medium|high)$")

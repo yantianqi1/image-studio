@@ -7,7 +7,6 @@ from typing import Any
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
-from apps.api.app.core.config import get_settings
 from apps.api.app.core.errors import AppError
 from apps.api.app.domains.comic.character_references import parse_character_reference_mode
 from apps.api.app.domains.comic.llm_prompts import (
@@ -39,12 +38,18 @@ from apps.api.app.domains.comic.story_segments import build_story_segments, pars
 from apps.api.app.domains.comic.style_presets import DEFAULT_STYLE_PRESET_ID, normalize_style_preset_id
 from apps.api.app.domains.llm import openai_chat
 from apps.api.app.domains.llm.client_provider import ClientProviderConfig, client_provider_config_from_mapping
+from apps.api.app.domains.llm.feature_settings import (
+    FEATURE_COMIC_CHARACTER_BIBLE,
+    FEATURE_COMIC_IMAGE_GENERATION,
+    FEATURE_COMIC_STORY_ANALYSIS,
+    FEATURE_COMIC_STORYBOARD,
+    get_llm_feature_model_code,
+)
 
 COMIC_LLM_SCHEMA_INVALID_ERROR_CODE = "comic_llm_schema_invalid"
 COMIC_LLM_NOT_CONFIGURED_ERROR_CODE = "comic_llm_not_configured"
 DEFAULT_PANELS_PER_IMAGE = 4
 DEFAULT_TARGET_IMAGE_COUNT = 1
-DEFAULT_IMAGE_MODEL_CODE = "gpt-image-2"
 PROMPT_READY_STATUS = "prompt_ready"
 UNSUPPORTED_SOURCE_TYPE_ERROR_CODE = "unsupported_source_type"
 
@@ -63,7 +68,7 @@ class PipelineInputs:
 
 
 def run_comic_pipeline(session: Session, *, task: ComicTask) -> ComicTask:
-    inputs = parse_pipeline_inputs(task)
+    inputs = parse_pipeline_inputs(session, task)
     project = require_project(session, task.project_id)
     analysis = run_story_analysis(session, task=task, inputs=inputs)
     bible = run_character_bible(session, task=task, inputs=inputs, analysis=analysis)
@@ -91,7 +96,7 @@ def run_comic_pipeline(session: Session, *, task: ComicTask) -> ComicTask:
     )
 
 
-def parse_pipeline_inputs(task: ComicTask) -> PipelineInputs:
+def parse_pipeline_inputs(session: Session, task: ComicTask) -> PipelineInputs:
     payload = dict(task.input_payload)
     if payload.get("source_type", "text") == "file":
         raise AppError(code=UNSUPPORTED_SOURCE_TYPE_ERROR_CODE, message="comic file source parsing is not implemented", status_code=422)
@@ -109,7 +114,7 @@ def parse_pipeline_inputs(task: ComicTask) -> PipelineInputs:
         panels_per_image=int(payload.get("panels_per_image") or DEFAULT_PANELS_PER_IMAGE),
         target_image_count=len(story_segments),
         story_segments=story_segments,
-        image_model_code=str(payload.get("image_model_code") or get_settings().openai_image_model_code or DEFAULT_IMAGE_MODEL_CODE),
+        image_model_code=resolve_comic_image_model_code(session, payload),
         character_reference_mode=character_reference_mode,
         client_provider_config=parse_task_client_provider_config(task),
     )
@@ -124,6 +129,7 @@ def run_story_analysis(session: Session, *, task: ComicTask, inputs: PipelineInp
         system_prompt=STORY_ANALYZER_SYSTEM_PROMPT,
         user_payload={"source_text": inputs.source_text},
         client_provider_config=inputs.client_provider_config,
+        feature_key=FEATURE_COMIC_STORY_ANALYSIS,
     )
     analysis = ComicStoryAnalysis(task_id=task.id, project_id=task.project_id, source_text_hash=inputs.source_text_hash, **payload.model_dump())
     return create_story_analysis(session, analysis=analysis)
@@ -138,6 +144,7 @@ def run_character_bible(session: Session, *, task: ComicTask, inputs: PipelineIn
         system_prompt=CHARACTER_DESIGNER_SYSTEM_PROMPT,
         user_payload={"story_analysis": serialize_analysis(analysis), "source_text": inputs.source_text},
         client_provider_config=inputs.client_provider_config,
+        feature_key=FEATURE_COMIC_CHARACTER_BIBLE,
     )
     cards = [build_character_card(task=task, character=character.model_dump()) for character in bible.characters]
     create_character_cards(session, cards=cards)
@@ -146,7 +153,11 @@ def run_character_bible(session: Session, *, task: ComicTask, inputs: PipelineIn
 
 def run_storyboard(session: Session, *, task: ComicTask, inputs: PipelineInputs, analysis: ComicStoryAnalysis, bible: CharacterBible) -> ComicStoryboard:
     publish_task_stage(session, task=task, stage="storyboarding", progress_percent=60)
-    chat_target = openai_chat.resolve_chat_target_for_config(session, inputs.client_provider_config)
+    chat_target = openai_chat.resolve_chat_target_for_config(
+        session,
+        inputs.client_provider_config,
+        model_code=get_llm_feature_model_code(session, FEATURE_COMIC_STORYBOARD),
+    )
     context = build_storyboard_generation_context(inputs=inputs, analysis=analysis, bible=bible)
     storyboard = generate_storyboard_pages(
         context=context,
@@ -188,6 +199,7 @@ def call_structured_llm(
     client_provider_config: ClientProviderConfig | None,
     payload_defaults: dict | None = None,
     chat_target: openai_chat.ChatTarget | None = None,
+    feature_key: str | None = None,
 ):
     try:
         payload = openai_chat.generate_structured_chat(
@@ -198,6 +210,7 @@ def call_structured_llm(
             response_schema=schema.model_json_schema(),
             client_provider_config=client_provider_config,
             chat_target=chat_target,
+            feature_key=feature_key,
         )
         return schema.model_validate(apply_payload_defaults(payload, payload_defaults))
     except AppError as exc:
@@ -216,6 +229,13 @@ def apply_payload_defaults(payload: object, defaults: dict | None) -> object:
     if not isinstance(payload, dict) or not defaults:
         return payload
     return {**defaults, **payload}
+
+
+def resolve_comic_image_model_code(session: Session, payload: dict[str, Any]) -> str:
+    model_code = str(payload.get("image_model_code") or "").strip()
+    if model_code:
+        return model_code
+    return get_llm_feature_model_code(session, FEATURE_COMIC_IMAGE_GENERATION)
 
 
 def publish_task_stage(session: Session, *, task: ComicTask, stage: str, progress_percent: int) -> ComicTask:
