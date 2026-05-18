@@ -18,18 +18,15 @@ def post_image_job(client, *, prompt: str, headers: dict[str, str] | None = None
     )
 
 
-def test_anonymous_image_jobs_accept_two_active_jobs_and_reject_third() -> None:
+def test_anonymous_image_jobs_are_not_limited_by_active_jobs() -> None:
     client = build_client()
 
-    first = post_image_job(client, prompt="Anonymous active job 1")
-    second = post_image_job(client, prompt="Anonymous active job 2")
-    third = post_image_job(client, prompt="Anonymous active job 3")
+    responses = [
+        post_image_job(client, prompt=f"Anonymous active job {index}")
+        for index in range(1, 5)
+    ]
 
-    assert first.status_code == 201
-    assert second.status_code == 201
-    assert third.status_code == 429
-    assert third.json()["error"]["code"] == "anonymous_image_job_concurrency_limit"
-    assert "最多 2 个" in third.json()["error"]["message"]
+    assert [response.status_code for response in responses] == [201, 201, 201, 201]
 
 
 def test_client_provider_image_jobs_are_not_limited_by_anonymous_active_jobs() -> None:
@@ -56,7 +53,7 @@ def test_member_image_jobs_are_not_limited_by_anonymous_active_jobs(monkeypatch)
     assert [response.status_code for response in responses] == [201, 201, 201]
 
 
-def test_worker_claims_at_most_two_running_jobs_per_anonymous_session() -> None:
+def test_worker_claims_all_requested_jobs_for_anonymous_session() -> None:
     build_client()
     with session_scope() as session:
         owner = create_anonymous_owner(session)
@@ -67,11 +64,11 @@ def test_worker_claims_at_most_two_running_jobs_per_anonymous_session() -> None:
 
     claimed_ids = worker_image_jobs.claim_next_image_job_ids(max_jobs=3)
 
-    assert claimed_ids == job_ids[:2]
+    assert claimed_ids == job_ids
     with session_scope() as session:
         jobs = list(session.execute(select(ImageJob).where(ImageJob.id.in_(job_ids))).scalars())
     statuses = [job.status for job in sorted(jobs, key=lambda item: item.id)]
-    assert statuses == ["running", "running", "queued"]
+    assert statuses == ["running", "running", "running"]
 
 
 def create_legacy_anonymous_job(session, *, owner: OwnerContext, prompt: str) -> int:

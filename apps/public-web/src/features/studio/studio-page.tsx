@@ -60,7 +60,6 @@ import {
   listenPromptCrafterUsePrompt,
   readGeneratePromptParam,
 } from "@/features/prompt-crafter/use-prompt";
-import { ApiError } from "@/lib/api-client";
 import { publicApi, type CharacterLibraryItem, type ImageAssetVisibility } from "@/lib/public-api";
 import { cn } from "@/lib/cn";
 import { usePublicModels } from "@/lib/use-public-models";
@@ -87,7 +86,6 @@ const StudioPromptMarket = dynamic(
 const SIDEBAR_COLLAPSED_KEY = "commercial_studio_sidebar_collapsed";
 const SETTINGS_KEY = "commercial_studio_image_settings";
 const NOTICE_AUTO_DISMISS_MS = 6000;
-const ANONYMOUS_IMAGE_CONCURRENCY_LIMIT_ERROR = "anonymous_image_job_concurrency_limit";
 
 type PersistedSettings = {
   aspectRatio: string;
@@ -217,10 +215,6 @@ function throwIfAborted(signal: AbortSignal) {
   if (signal.aborted) {
     throw new DOMException("Studio turn aborted", "AbortError");
   }
-}
-
-function isAnonymousImageConcurrencyLimit(error: unknown): boolean {
-  return error instanceof ApiError && error.code === ANONYMOUS_IMAGE_CONCURRENCY_LIMIT_ERROR;
 }
 
 function getWelcomeAccountGateErrorMessage(error: unknown): string {
@@ -559,9 +553,6 @@ export function StudioPage() {
         conversations.updateTurn(convId, turnId, { status: "cancelled" });
       } else {
         const message = error instanceof Error ? error.message : "生成失败";
-        if (isAnonymousImageConcurrencyLimit(error)) {
-          setSubmissionNotice(message);
-        }
         conversations.updateTurn(convId, turnId, { status: "error", error: message });
       }
     } finally {

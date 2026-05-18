@@ -98,8 +98,8 @@ test("apiFetch preserves API envelope error codes on ApiError", async () => {
         data: null,
         meta: {},
         error: {
-          code: "anonymous_image_job_concurrency_limit",
-          message: "匿名生图任务最多 2 个同时处理中",
+          code: "image_provider_error",
+          message: "图片供应商请求失败",
         },
       },
       { status: 429 },
@@ -108,7 +108,7 @@ test("apiFetch preserves API envelope error codes on ApiError", async () => {
 
   await assert.rejects(
     () => apiFetch("/image/jobs", { method: "POST", body: {} }),
-    (error) => error.code === "anonymous_image_job_concurrency_limit",
+    (error) => error.code === "image_provider_error",
   );
 });
 

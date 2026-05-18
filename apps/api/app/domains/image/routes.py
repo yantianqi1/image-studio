@@ -11,7 +11,6 @@ from apps.api.app.domains.image.assets import (
     resolve_asset_content,
     resolve_thumbnail_content,
 )
-from apps.api.app.domains.image.concurrency import enforce_image_job_submission_limit
 from apps.api.app.domains.image.gallery import (
     delete_owned_asset,
     get_asset_for_read,
@@ -59,7 +58,6 @@ def create_image_job(
     if payload.mode == "edit" or payload.reference_asset_ids or payload.character_library_ids:
         require_uploads_enabled(session)
     source = resolve_image_job_source(owner=owner, has_client_provider=client_config is not None)
-    enforce_image_job_submission_limit(session, owner=owner, source=source)
     character_bundle = resolve_character_reference_bundle(
         session,
         owner=owner,

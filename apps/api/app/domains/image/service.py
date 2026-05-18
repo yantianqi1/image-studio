@@ -17,7 +17,6 @@ from apps.api.app.domains.image.conversation_messages import (
     normalize_conversation_messages,
     validate_conversation_message_assets,
 )
-from apps.api.app.domains.image.concurrency import can_claim_image_job
 from apps.api.app.domains.image.gallery import set_asset_visibility
 from apps.api.app.domains.image.job_builder import CreateImageJobRecordInput, create_image_job_record
 from apps.api.app.domains.image.job_failure import handle_job_failure
@@ -127,9 +126,6 @@ def claim_next_job(session: Session) -> ImageJob | None:
         ).scalars()
     )
     for job_id in job_ids:
-        job = get_job(session, job_id)
-        if not can_claim_image_job(session, job=job):
-            continue
         if claim_job(session, job_id=job_id, current_time=current_time):
             return get_job(session, job_id)
     return None
