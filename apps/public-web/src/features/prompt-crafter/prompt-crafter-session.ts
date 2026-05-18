@@ -32,11 +32,22 @@ export function savePromptCrafterSession(
 export function buildPromptCrafterRefreshMessages(
   messages: readonly PromptCrafterMessage[],
 ): readonly PromptCrafterMessage[] {
-  const lastUserIndex = findLastUserMessageIndex(messages);
+  const validMessages = compactPromptCrafterMessages(messages);
+  const lastUserIndex = findLastUserMessageIndex(validMessages);
   if (lastUserIndex < 0) {
     throw new Error("没有可刷新的提示词对话");
   }
-  return messages.slice(0, lastUserIndex + 1);
+  return validMessages.slice(0, lastUserIndex + 1);
+}
+
+export function buildPromptCrafterVisibleMessages(
+  messages: readonly PromptCrafterMessage[],
+  assistantContent: string,
+): readonly PromptCrafterMessage[] {
+  if (!assistantContent.trim()) {
+    return messages;
+  }
+  return [...messages, { role: "assistant", content: assistantContent }];
 }
 
 function parsePromptCrafterSession(value: unknown): PromptCrafterSession {
@@ -56,7 +67,7 @@ function readMessages(value: unknown): readonly PromptCrafterMessage[] {
   if (!Array.isArray(value)) {
     throw new Error("提示词工坊消息记录格式错误");
   }
-  return value.map(readMessage);
+  return compactPromptCrafterMessages(value.map(readMessage));
 }
 
 function readMessage(value: unknown): PromptCrafterMessage {
@@ -76,6 +87,20 @@ function readString(value: unknown): string {
     throw new Error("提示词工坊文本格式错误");
   }
   return value;
+}
+
+function compactPromptCrafterMessages(messages: readonly PromptCrafterMessage[]): readonly PromptCrafterMessage[] {
+  const validMessages: PromptCrafterMessage[] = [];
+  for (const message of messages) {
+    if (message.content.trim()) {
+      validMessages.push(message);
+      continue;
+    }
+    if (message.role === "user") {
+      throw new Error("提示词工坊用户消息为空");
+    }
+  }
+  return validMessages;
 }
 
 function findLastUserMessageIndex(messages: readonly PromptCrafterMessage[]): number {

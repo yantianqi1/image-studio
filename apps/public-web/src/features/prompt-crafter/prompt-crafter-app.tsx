@@ -16,6 +16,7 @@ import { extractPromptOptionsFromMarkdown } from "./prompt-markdown";
 import { PromptMarkdownView } from "./prompt-markdown-view";
 import {
   buildPromptCrafterRefreshMessages,
+  buildPromptCrafterVisibleMessages,
   readPromptCrafterSession,
   savePromptCrafterSession,
 } from "./prompt-crafter-session";
@@ -129,7 +130,7 @@ export function PromptCrafterApp() {
     setErrorMessage("");
     setStatus("streaming");
     setCopyLabel("复制");
-    setMessages([...nextMessages, { role: "assistant", content: "" }]);
+    setMessages(buildPromptCrafterVisibleMessages(nextMessages, ""));
     try {
       const assets = await Promise.all(reverseFiles.map((file) => publicApi.uploadImageAsset(file)));
       await runAssistantStream({
@@ -308,13 +309,13 @@ async function runAssistantStream(input: Readonly<{
   let assistantContent = "";
   const abortController = new AbortController();
   input.abortRef.current = abortController;
-  input.setMessages([...input.nextMessages, { role: "assistant", content: assistantContent }]);
+  input.setMessages(buildPromptCrafterVisibleMessages(input.nextMessages, assistantContent));
   try {
     await input.stream({
       signal: abortController.signal,
       onChunk: (chunk) => {
         assistantContent += chunk;
-        input.setMessages([...input.nextMessages, { role: "assistant", content: assistantContent }]);
+        input.setMessages(buildPromptCrafterVisibleMessages(input.nextMessages, assistantContent));
       },
     });
     input.setStatus("idle");

@@ -124,6 +124,41 @@ test("prompt crafter refresh resends the latest user turn without stale assistan
   ]);
 });
 
+test("prompt crafter session drops transient empty assistant placeholders", () => {
+  const { readPromptCrafterSession } = loadPromptCrafterSession();
+  const storage = {
+    getItem: () => JSON.stringify({
+      draft: "",
+      reverseNote: "",
+      messages: [
+        { role: "user", content: "做一张咖啡海报" },
+        { role: "assistant", content: "" },
+        { role: "user", content: "加一点胶片质感" },
+        { role: "assistant", content: "第二版" },
+      ],
+    }),
+  };
+
+  assert.deepEqual(JSON.parse(JSON.stringify(readPromptCrafterSession(storage).messages)), [
+    { role: "user", content: "做一张咖啡海报" },
+    { role: "user", content: "加一点胶片质感" },
+    { role: "assistant", content: "第二版" },
+  ]);
+});
+
+test("prompt crafter streaming state does not create empty assistant messages", () => {
+  const { buildPromptCrafterVisibleMessages } = loadPromptCrafterSession();
+  const messages = [{ role: "user", content: "做一张咖啡海报" }];
+
+  assert.deepEqual(JSON.parse(JSON.stringify(buildPromptCrafterVisibleMessages(messages, ""))), [
+    { role: "user", content: "做一张咖啡海报" },
+  ]);
+  assert.deepEqual(JSON.parse(JSON.stringify(buildPromptCrafterVisibleMessages(messages, "第一版"))), [
+    { role: "user", content: "做一张咖啡海报" },
+    { role: "assistant", content: "第一版" },
+  ]);
+});
+
 test("prompt crafter page keeps skill internals out of the UI source", () => {
   const appSource = readRequiredSource(appFile, "prompt crafter app");
 

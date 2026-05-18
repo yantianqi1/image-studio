@@ -12,6 +12,7 @@ import { extractPromptOptionsFromMarkdown } from "./prompt-markdown";
 import { PromptMarkdownView } from "./prompt-markdown-view";
 import {
   buildPromptCrafterRefreshMessages,
+  buildPromptCrafterVisibleMessages,
   readPromptCrafterSession,
   savePromptCrafterSession,
 } from "./prompt-crafter-session";
@@ -243,14 +244,14 @@ async function runStream(input: Readonly<{
   let assistantContent = "";
   const abortController = new AbortController();
   input.abortRef.current = abortController;
-  input.setMessages([...input.nextMessages, { role: "assistant", content: assistantContent }]);
+  input.setMessages(buildPromptCrafterVisibleMessages(input.nextMessages, assistantContent));
   try {
     await streamPromptCrafter({
       messages: input.nextMessages,
       signal: abortController.signal,
       onChunk: (chunk) => {
         assistantContent += chunk;
-        input.setMessages([...input.nextMessages, { role: "assistant", content: assistantContent }]);
+        input.setMessages(buildPromptCrafterVisibleMessages(input.nextMessages, assistantContent));
       },
     });
     input.setStatus("idle");
