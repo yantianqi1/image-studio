@@ -79,8 +79,8 @@ def create_image_job(
         source_asset_id=payload.source_asset_id,
         reference_asset_ids=[*payload.reference_asset_ids, *character_bundle.asset_ids],
         conversation_messages=conversation_message_payloads(payload),
-        client_access_id=client_config.client_id if owner.user_id is None and client_config else None,
-        client_provider_config=client_config if owner.user_id is None else None,
+        client_access_id=client_config.client_id if client_config else None,
+        client_provider_config=client_config,
         visibility=payload.visibility,
         size=payload.size,
         quality=payload.quality,
@@ -221,10 +221,10 @@ async def upload_image_asset(
 
 
 def resolve_image_job_source(*, owner, has_client_provider: bool) -> str:
-    if owner.user_id is not None:
-        return "member"
     if has_client_provider:
         return CLIENT_PROVIDER_SOURCE
+    if owner.user_id is not None:
+        return "member"
     return "anonymous"
 
 

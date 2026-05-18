@@ -163,7 +163,7 @@ def create_task_endpoint(
         session,
         payload,
         owner=owner,
-        client_provider_config=client_config if owner.user_id is None else None,
+        client_provider_config=client_config,
         client_provider_type=get_settings().openai_provider_type,
         request_ip_hash=resolve_comic_task_request_ip_hash(request, owner=owner),
         commit=False,
