@@ -32,7 +32,7 @@ function loadPromptCrafterApi(fetchImpl) {
     module: { exports: {} },
     require: (path) => {
       if (path === "@/lib/client-provider-config") {
-        return { getClientProviderRequestHeaders: () => ({ "X-Client-Provider": "test" }) };
+        throw new Error("prompt crafter API must not read client provider headers");
       }
       throw new Error(`Unexpected require: ${path}`);
     },
@@ -61,7 +61,7 @@ test("prompt crafter reverse image API streams from the image endpoint", async (
 
   assert.equal(calls[0].url, "/api/public/prompt-crafter/reverse-image/stream");
   assert.equal(calls[0].options.method, "POST");
-  assert.equal(calls[0].options.headers.get("X-Client-Provider"), "test");
+  assert.equal(calls[0].options.headers.get("x-client-provider-api-key"), null);
   assert.deepEqual(JSON.parse(calls[0].options.body), {
     asset_ids: [7, 8],
     note: "保留产品文字",

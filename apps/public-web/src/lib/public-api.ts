@@ -62,6 +62,7 @@ export const publicApi = {
     return apiFetch<TaskItem>("/comic/tasks", {
       method: "POST",
       body: input,
+      includeClientProviderHeaders: true,
     }).then((task) => {
       notifyPublicQuotaRefresh();
       return task;
@@ -97,6 +98,7 @@ export const publicApi = {
     return apiFetch<ImageGenerationResponse>("/image/jobs", {
       method: "POST",
       body: input,
+      includeClientProviderHeaders: true,
     }).then((job) => {
       rememberImageJobClientProvider(job);
       notifyPublicQuotaRefresh();

@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 
 from apps.api.app.core.deps import get_db_session
 from apps.api.app.domains.auth.ownership import ensure_anonymous_owner
-from apps.api.app.domains.llm.client_provider import read_client_provider_config
 from apps.api.app.domains.prompt_crafter.service import (
     stream_prompt_crafter_reverse_image_sse_completion,
     stream_prompt_crafter_sse_completion,
@@ -37,14 +36,12 @@ class PromptCrafterReverseImageStreamRequest(BaseModel):
 @public_router.post("/chat/stream")
 def stream_prompt_crafter_chat(
     payload: PromptCrafterStreamRequest,
-    request: Request,
     session: Session = Depends(get_db_session),
 ):
     messages = [message.model_dump() for message in payload.messages]
     stream = stream_prompt_crafter_sse_completion(
         session,
         messages=messages,
-        client_provider_config=read_client_provider_config(request),
     )
     return StreamingResponse(stream, media_type="text/event-stream", headers=PROMPT_CRAFTER_STREAM_HEADERS)
 
@@ -62,7 +59,6 @@ def stream_prompt_crafter_reverse_image(
         owner=owner,
         asset_ids=payload.asset_ids,
         note=payload.note,
-        client_provider_config=read_client_provider_config(request),
     )
     session.commit()
     return StreamingResponse(stream, media_type="text/event-stream", headers=PROMPT_CRAFTER_STREAM_HEADERS)

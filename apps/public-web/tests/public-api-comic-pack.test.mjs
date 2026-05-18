@@ -85,6 +85,28 @@ test("publicApi reads public quota status from quota endpoint", async () => {
   assert.equal(status.remaining_count, 16);
 });
 
+test("publicApi creates comic tasks with client provider headers enabled", async () => {
+  const calls = [];
+  const { publicApi } = loadPublicApi({
+    apiFetch: async (path, options) => {
+      calls.push({ path, includeClientProviderHeaders: options.includeClientProviderHeaders, body: options.body });
+      return { id: "task-1" };
+    },
+    apiUpload: unexpectedApiUpload,
+    apiDownload: unexpectedApiDownload,
+  });
+
+  await publicApi.createComicTask({
+    title: "Comic",
+    sourceText: "Source",
+    stylePrompt: "Style",
+  });
+
+  assert.equal(calls[0].path, "/comic/tasks");
+  assert.equal(calls[0].includeClientProviderHeaders, true);
+  assert.equal(calls[0].body.title, "Comic");
+});
+
 function unexpectedApiFetch() {
   throw new Error("apiFetch should not be called");
 }

@@ -1,5 +1,3 @@
-import { getClientProviderRequestHeaders } from "@/lib/client-provider-config";
-
 export type PromptCrafterMessage = Readonly<{
   role: "user" | "assistant";
   content: string;
@@ -90,11 +88,7 @@ export async function readPromptCrafterEventStream(
 export const readPromptCrafterTextStream = readPromptCrafterEventStream;
 
 function buildPromptCrafterHeaders(): Headers {
-  const headers = new Headers({ Accept: "text/event-stream", "Content-Type": "application/json" });
-  for (const [key, value] of Object.entries(getClientProviderRequestHeaders())) {
-    headers.set(key, value);
-  }
-  return headers;
+  return new Headers({ Accept: "text/event-stream", "Content-Type": "application/json" });
 }
 
 async function readPromptCrafterChunks(input: Readonly<{

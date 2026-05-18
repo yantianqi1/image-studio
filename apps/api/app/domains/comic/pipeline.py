@@ -37,7 +37,6 @@ from apps.api.app.domains.comic.structured_outputs import CharacterBible, StoryA
 from apps.api.app.domains.comic.story_segments import build_story_segments, parse_target_image_count
 from apps.api.app.domains.comic.style_presets import DEFAULT_STYLE_PRESET_ID, normalize_style_preset_id
 from apps.api.app.domains.llm import openai_chat
-from apps.api.app.domains.llm.client_provider import ClientProviderConfig, client_provider_config_from_mapping
 from apps.api.app.domains.llm.feature_settings import (
     FEATURE_COMIC_CHARACTER_BIBLE,
     FEATURE_COMIC_IMAGE_GENERATION,
@@ -64,7 +63,6 @@ class PipelineInputs:
     story_segments: list[dict[str, Any]]
     image_model_code: str
     character_reference_mode: str
-    client_provider_config: ClientProviderConfig | None
 
 
 def run_comic_pipeline(session: Session, *, task: ComicTask) -> ComicTask:
@@ -116,7 +114,6 @@ def parse_pipeline_inputs(session: Session, task: ComicTask) -> PipelineInputs:
         story_segments=story_segments,
         image_model_code=resolve_comic_image_model_code(session, payload),
         character_reference_mode=character_reference_mode,
-        client_provider_config=parse_task_client_provider_config(task),
     )
 
 
@@ -128,7 +125,6 @@ def run_story_analysis(session: Session, *, task: ComicTask, inputs: PipelineInp
         schema_name="StoryAnalysis",
         system_prompt=STORY_ANALYZER_SYSTEM_PROMPT,
         user_payload={"source_text": inputs.source_text},
-        client_provider_config=inputs.client_provider_config,
         feature_key=FEATURE_COMIC_STORY_ANALYSIS,
     )
     analysis = ComicStoryAnalysis(task_id=task.id, project_id=task.project_id, source_text_hash=inputs.source_text_hash, **payload.model_dump())
@@ -143,7 +139,6 @@ def run_character_bible(session: Session, *, task: ComicTask, inputs: PipelineIn
         schema_name="CharacterBible",
         system_prompt=CHARACTER_DESIGNER_SYSTEM_PROMPT,
         user_payload={"story_analysis": serialize_analysis(analysis), "source_text": inputs.source_text},
-        client_provider_config=inputs.client_provider_config,
         feature_key=FEATURE_COMIC_CHARACTER_BIBLE,
     )
     cards = [build_character_card(task=task, character=character.model_dump()) for character in bible.characters]
@@ -155,7 +150,7 @@ def run_storyboard(session: Session, *, task: ComicTask, inputs: PipelineInputs,
     publish_task_stage(session, task=task, stage="storyboarding", progress_percent=60)
     chat_target = openai_chat.resolve_chat_target_for_config(
         session,
-        inputs.client_provider_config,
+        None,
         model_code=get_llm_feature_model_code(session, FEATURE_COMIC_STORYBOARD),
     )
     context = build_storyboard_generation_context(inputs=inputs, analysis=analysis, bible=bible)
@@ -167,7 +162,6 @@ def run_storyboard(session: Session, *, task: ComicTask, inputs: PipelineInputs,
             schema_name="Storyboard",
             system_prompt=STORYBOARD_DIRECTOR_SYSTEM_PROMPT,
             user_payload=user_payload,
-            client_provider_config=inputs.client_provider_config,
             payload_defaults={"style_preset": inputs.style_preset, "panels_per_image": inputs.panels_per_image},
             chat_target=chat_target,
         ),
@@ -196,7 +190,6 @@ def call_structured_llm(
     schema_name: str,
     system_prompt: str,
     user_payload: dict,
-    client_provider_config: ClientProviderConfig | None,
     payload_defaults: dict | None = None,
     chat_target: openai_chat.ChatTarget | None = None,
     feature_key: str | None = None,
@@ -208,7 +201,6 @@ def call_structured_llm(
             user_payload=user_payload,
             schema_name=schema_name,
             response_schema=schema.model_json_schema(),
-            client_provider_config=client_provider_config,
             chat_target=chat_target,
             feature_key=feature_key,
         )
@@ -242,13 +234,6 @@ def publish_task_stage(session: Session, *, task: ComicTask, stage: str, progres
     update_task_stage(session, task=task, stage=stage, progress_percent=progress_percent)
     session.commit()
     return task
-
-
-def parse_task_client_provider_config(task: ComicTask) -> ClientProviderConfig | None:
-    task_config = getattr(task, "client_provider_config", None)
-    if not task_config:
-        return None
-    return client_provider_config_from_mapping(task_config)
 
 
 def validate_storyboard_panel_counts(storyboard: Storyboard, *, expected_panels_per_image: int) -> None:

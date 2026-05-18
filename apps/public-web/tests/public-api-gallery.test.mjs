@@ -70,7 +70,7 @@ test("publicApi sends image job visibility", async () => {
   const calls = [];
   const { publicApi } = loadPublicApi({
     apiFetch: async (path, options) => {
-      calls.push({ path, body: options.body });
+      calls.push({ path, body: options.body, includeClientProviderHeaders: options.includeClientProviderHeaders });
       return { id: 1, status: "queued" };
     },
     apiUpload: unexpectedApiUpload,
@@ -81,6 +81,7 @@ test("publicApi sends image job visibility", async () => {
 
   assert.equal(calls[0].path, "/image/jobs");
   assert.equal(calls[0].body.visibility, "public");
+  assert.equal(calls[0].includeClientProviderHeaders, true);
 });
 
 test("publicApi logs out through auth logout endpoint", async () => {

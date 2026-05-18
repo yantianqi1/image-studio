@@ -4,7 +4,7 @@ import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
 
-function loadPromptCrafterApi() {
+function loadPromptCrafterApi(fetchImpl = undefined) {
   const source = readFileSync(
     new URL("../src/features/prompt-crafter/prompt-crafter-api.ts", import.meta.url),
     "utf8",
@@ -17,6 +17,7 @@ function loadPromptCrafterApi() {
   }).outputText;
   const sandbox = {
     Error,
+    fetch: fetchImpl,
     Headers,
     Response,
     TextDecoder,
@@ -24,7 +25,7 @@ function loadPromptCrafterApi() {
     module: { exports: {} },
     require: (path) => {
       if (path === "@/lib/client-provider-config") {
-        return { getClientProviderRequestHeaders: () => ({ "x-client-id": "browser-1" }) };
+        throw new Error("prompt crafter API must not read client provider headers");
       }
       throw new Error(`Unexpected require: ${path}`);
     },
@@ -41,6 +42,22 @@ test("buildPromptCrafterStreamPayload preserves chat messages", () => {
     JSON.stringify(buildPromptCrafterStreamPayload([{ role: "user", content: "咖啡包装" }])),
     JSON.stringify({ messages: [{ role: "user", content: "咖啡包装" }] }),
   );
+});
+
+test("prompt crafter chat stream does not forward client provider headers", async () => {
+  const calls = [];
+  const { streamPromptCrafter } = loadPromptCrafterApi(async (url, options) => {
+    calls.push({ url, options });
+    return new Response('event: done\ndata: {}\n\n', { status: 200, headers: { "content-type": "text/event-stream" } });
+  });
+
+  await streamPromptCrafter({
+    messages: [{ role: "user", content: "咖啡包装海报" }],
+    onChunk: () => undefined,
+  });
+
+  assert.equal(calls[0].options.headers.get("x-client-id"), null);
+  assert.equal(calls[0].options.headers.get("x-client-provider-api-key"), null);
 });
 
 test("readPromptCrafterEventStream emits decoded SSE chunks as they arrive", async () => {

@@ -41,7 +41,7 @@ test("apiFetch returns the data field from successful API envelopes", async () =
   await assert.deepEqual(await apiFetch("/models"), models);
 });
 
-test("apiFetch includes saved client provider headers", async () => {
+test("apiFetch omits saved client provider headers by default", async () => {
   const captured = {};
   const { apiFetch } = loadApiClient(async (_, init) => {
     captured.headers = init.headers;
@@ -53,6 +53,24 @@ test("apiFetch includes saved client provider headers", async () => {
   });
 
   await apiFetch("/models");
+
+  assert.equal(captured.headers.get("x-client-id"), null);
+  assert.equal(captured.headers.get("x-client-provider-base-url"), null);
+  assert.equal(captured.headers.get("x-client-provider-api-key"), null);
+});
+
+test("apiFetch includes saved client provider headers only when requested", async () => {
+  const captured = {};
+  const { apiFetch } = loadApiClient(async (_, init) => {
+    captured.headers = init.headers;
+    return Response.json({ data: [], meta: {}, error: null });
+  }, {
+    "x-client-id": "browser-1",
+    "x-client-provider-base-url": "https://client.example/v1",
+    "x-client-provider-api-key": "sk-client",
+  });
+
+  await apiFetch("/image/jobs", { method: "POST", body: {}, includeClientProviderHeaders: true });
 
   assert.equal(captured.headers.get("x-client-id"), "browser-1");
   assert.equal(captured.headers.get("x-client-provider-base-url"), "https://client.example/v1");
@@ -94,7 +112,7 @@ test("apiFetch preserves API envelope error codes on ApiError", async () => {
   );
 });
 
-test("apiDownload returns binary responses with client provider headers", async () => {
+test("apiDownload returns binary responses without client provider headers by default", async () => {
   const captured = {};
   const { apiDownload } = loadApiClient(async (endpoint, init) => {
     captured.endpoint = endpoint;
@@ -107,6 +125,6 @@ test("apiDownload returns binary responses with client provider headers", async 
   const blob = await apiDownload("/comic/tasks/task-1/character-references/export");
 
   assert.equal(captured.endpoint, "/api/public/comic/tasks/task-1/character-references/export");
-  assert.equal(captured.headers.get("x-client-id"), "browser-1");
+  assert.equal(captured.headers.get("x-client-id"), null);
   assert.equal(await blob.text(), "zip-bytes");
 });

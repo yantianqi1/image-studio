@@ -7,6 +7,7 @@ export type ApiRequestOptions = Readonly<{
   body?: unknown;
   token?: string;
   signal?: AbortSignal;
+  includeClientProviderHeaders?: boolean;
 }>;
 
 export class ApiError extends Error {
@@ -56,7 +57,9 @@ function buildHeaders(options: ApiRequestOptions) {
     headers.set("Authorization", `Bearer ${options.token}`);
   }
 
-  appendClientProviderHeaders(headers);
+  if (options.includeClientProviderHeaders) {
+    appendClientProviderHeaders(headers);
+  }
   return headers;
 }
 
@@ -147,7 +150,7 @@ export async function apiFetch<T>(
 
 export async function apiDownload(
   path: string,
-  options: Pick<ApiRequestOptions, "signal" | "token"> = {},
+  options: Pick<ApiRequestOptions, "signal" | "token" | "includeClientProviderHeaders"> = {},
 ): Promise<Blob> {
   const endpoint = buildPublicUrl(path);
   const headers = new Headers({ Accept: "application/zip" });
@@ -155,7 +158,9 @@ export async function apiDownload(
   if (options.token) {
     headers.set("Authorization", `Bearer ${options.token}`);
   }
-  appendClientProviderHeaders(headers);
+  if (options.includeClientProviderHeaders) {
+    appendClientProviderHeaders(headers);
+  }
 
   const response = await fetch(endpoint, {
     method: "GET",
@@ -176,7 +181,7 @@ export async function apiDownload(
 export async function apiUpload<T>(
   path: string,
   formData: FormData,
-  options: Pick<ApiRequestOptions, "signal" | "token"> = {},
+  options: Pick<ApiRequestOptions, "signal" | "token" | "includeClientProviderHeaders"> = {},
 ): Promise<T> {
   const endpoint = buildPublicUrl(path);
   const headers = new Headers({ Accept: "application/json" });
@@ -184,7 +189,9 @@ export async function apiUpload<T>(
   if (options.token) {
     headers.set("Authorization", `Bearer ${options.token}`);
   }
-  appendClientProviderHeaders(headers);
+  if (options.includeClientProviderHeaders) {
+    appendClientProviderHeaders(headers);
+  }
 
   const response = await fetch(endpoint, {
     method: "POST",

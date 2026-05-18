@@ -43,6 +43,19 @@ def test_real_pipeline_persists_structured_outputs(monkeypatch) -> None:
         assert storyboard.panels_per_image == 3
 
 
+def test_comic_pipeline_llm_steps_ignore_client_provider_config(monkeypatch) -> None:
+    client = create_comic_client()
+    task = create_task(client)
+    calls = install_llm_outputs(monkeypatch)
+
+    worker_comic_tasks.run_next_comic_task()
+
+    assert client.get(f"/api/public/comic/tasks/{task['id']}").json()["data"]["status"] == "completed"
+    assert all(call.get("client_provider_config") is None for call in calls)
+    storyboard_call = next(call for call in calls if call["schema_name"] == "Storyboard")
+    assert storyboard_call["chat_target"].base_url != "https://comic-pipeline.example/v1"
+
+
 def test_invalid_llm_schema_marks_task_failed(monkeypatch) -> None:
     client = create_comic_client()
     task = create_task(client)
@@ -276,6 +289,7 @@ def install_llm_outputs(monkeypatch, storyboard_payload: dict | None = None):
         return outputs[kwargs["schema_name"]]
 
     monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("OPENAI_PROVIDER_KEY", "sk-test")
     get_settings.cache_clear()
     monkeypatch.setattr("apps.api.app.domains.llm.openai_chat.generate_structured_chat", fake_generate)
     return calls
@@ -303,6 +317,7 @@ def install_segment_storyboard_outputs(monkeypatch, panel_counts: dict[int, int]
         return build_storyboard_payload(panel_count=panel_count, image_index=segment_index)
 
     monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("OPENAI_PROVIDER_KEY", "sk-test")
     get_settings.cache_clear()
     monkeypatch.setattr("apps.api.app.domains.llm.openai_chat.generate_structured_chat", fake_generate)
     return calls

@@ -116,6 +116,38 @@ def test_admin_can_update_prompt_crafter_model_and_runtime_uses_it(monkeypatch) 
     assert captured["payload"]["model"] == "upstream-facility-chat"
 
 
+def test_prompt_crafter_ignores_client_provider_headers(monkeypatch) -> None:
+    client = build_client()
+    seed_admin()
+    admin_login(client)
+    provider = create_provider(client)
+    create_model(client, provider_id=int(provider["id"]), capability="chat", code="facility-chat")
+    captured: dict[str, object] = {}
+
+    def fake_stream_chat_completion(*, target, payload) -> Iterator[str]:
+        captured["target_base_url"] = target.base_url
+        captured["target_api_key"] = target.api_key
+        captured["payload"] = payload
+        yield "ok"
+
+    monkeypatch.setenv("OPENAI_PROVIDER_KEY", "sk-test")
+    monkeypatch.setattr(prompt_crafter_service.openai_chat_stream, "stream_chat_completion", fake_stream_chat_completion)
+
+    stream_response = client.post(
+        "/api/public/prompt-crafter/chat/stream",
+        headers={
+            "x-client-id": "browser-1",
+            "x-client-provider-base-url": "https://client.example/v1",
+            "x-client-provider-api-key": "sk-client",
+        },
+        json={"messages": [{"role": "user", "content": "咖啡包装"}]},
+    )
+
+    assert stream_response.status_code == 200
+    assert captured["target_base_url"] != "https://client.example/v1"
+    assert captured["target_api_key"] != "sk-client"
+
+
 def test_admin_rejects_feature_model_with_wrong_capability() -> None:
     client = build_client()
     seed_admin()
