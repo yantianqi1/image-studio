@@ -83,6 +83,22 @@ test("publicApi sends image job visibility", async () => {
   assert.equal(calls[0].body.visibility, "public");
 });
 
+test("publicApi logs out through auth logout endpoint", async () => {
+  const calls = [];
+  const { publicApi } = loadPublicApi({
+    apiFetch: async (path, options) => {
+      calls.push({ path, method: options?.method ?? "GET" });
+      return { logged_out: true };
+    },
+    apiUpload: unexpectedApiUpload,
+    apiDownload: unexpectedApiDownload,
+  });
+
+  await publicApi.logout();
+
+  assert.deepEqual(calls, [{ path: "/auth/logout", method: "POST" }]);
+});
+
 function unexpectedApiUpload() {
   throw new Error("apiUpload should not be called");
 }

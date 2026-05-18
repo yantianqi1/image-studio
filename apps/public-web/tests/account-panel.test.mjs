@@ -10,6 +10,7 @@ const accountShellSource = readSource("../src/features/wallet/account-shell.tsx"
 const accountTopNavigationSource = readSource("../src/features/wallet/account-top-navigation.tsx");
 const accountLoginSource = readSource("../src/features/wallet/account-login-page.tsx");
 const personalCenterSource = readSource("../src/features/wallet/account-personal-center.tsx");
+const publicApiSource = readSource("../src/lib/public-api.ts");
 
 const unauthorizedForbiddenTerms = [
   "钱包余额",
@@ -112,6 +113,9 @@ test("authenticated account branch renders the personal center modules only afte
   assert.match(authenticatedActions, /共享额度/);
   assert.match(authenticatedActions, /设置/);
   assert.match(authenticatedActions, /ChevronDown/);
+  assert.match(authenticatedActions, /LogoutButton/);
+  assert.match(accountTopNavigationSource, /退出登录/);
+  assert.match(accountTopNavigationSource, /LogOut/);
 
   for (const term of deprecatedSecurityTerms) {
     assert.doesNotMatch(personalCenterSource, new RegExp(term));
@@ -126,6 +130,8 @@ test("wallet panel keeps existing API client wiring", () => {
   assert.match(walletDashboardSource, /publicApi\.getPublicQuotaStatus/);
   assert.match(walletDashboardSource, /publicApi\.login/);
   assert.match(walletDashboardSource, /publicApi\.register/);
+  assert.match(walletDashboardSource, /publicApi\.logout/);
+  assert.match(publicApiSource, /apiFetch<[^>]+>\("\/auth\/logout"/);
   assert.match(walletDashboardSource, /notifyComicOwnerChanged\(\)/);
 });
 

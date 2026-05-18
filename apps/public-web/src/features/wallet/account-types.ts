@@ -30,6 +30,11 @@ export const EMPTY_QUOTA: PublicQuotaStatus = {
 export type AuthMode = "password" | "code";
 export type AuthIntent = "login" | "register";
 export type AccountSession = Readonly<{ user: LoginResponse }>;
+export type AccountLogoutState = Readonly<
+  | { status: "idle" }
+  | { status: "submitting" }
+  | { message: string; status: "error" }
+>;
 
 export type AuthState =
   | Readonly<{ status: "idle" }>
@@ -57,4 +62,10 @@ export type AccountResources = Readonly<{
   quotaState: ResourceState<PublicQuotaStatus>;
   tasksState: ResourceState<readonly ImageGenerationResponse[]>;
   walletState: ResourceState<WalletSummary>;
+}>;
+
+export type AccountLogoutController = Readonly<{
+  isLoggingOut: boolean;
+  onLogout: () => void;
+  errorMessage: string;
 }>;

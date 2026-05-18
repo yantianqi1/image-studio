@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { ChevronDown, HelpCircle, Settings } from "lucide-react";
+import { ChevronDown, HelpCircle, LogOut, Settings } from "lucide-react";
 
 import { BrandMark } from "@/features/shell/brand-mark";
 
-import type { AccountSession, AccountResources } from "./account-types";
+import type { AccountLogoutController, AccountSession, AccountResources } from "./account-types";
 import { getDisplayName, getQuotaValueLabel, getUserInitial } from "./account-utils";
 
 const TOP_NAV_LINKS = [
@@ -14,6 +14,7 @@ const TOP_NAV_LINKS = [
 ] as const;
 
 export function renderTopNavigation(props: Readonly<{
+  logout?: AccountLogoutController;
   resources?: Pick<AccountResources, "quotaState">;
   session: AccountSession | null;
 }>) {
@@ -25,7 +26,7 @@ export function renderTopNavigation(props: Readonly<{
           {TOP_NAV_LINKS.map((item) => <TopNavLink item={item} key={item.href} />)}
         </nav>
         {props.session
-          ? renderAuthenticatedTopActions({ resources: props.resources, session: props.session })
+          ? renderAuthenticatedTopActions({ logout: props.logout, resources: props.resources, session: props.session })
           : renderGuestTopActions()}
       </div>
     </header>
@@ -72,6 +73,7 @@ function renderGuestTopActions() {
 }
 
 function renderAuthenticatedTopActions(props: Readonly<{
+  logout?: AccountLogoutController;
   resources?: Pick<AccountResources, "quotaState">;
   session: AccountSession;
 }>) {
@@ -84,6 +86,7 @@ function renderAuthenticatedTopActions(props: Readonly<{
         <Settings className="size-4" />
         设置
       </button>
+      {props.logout ? <LogoutButton logout={props.logout} /> : null}
       <button className="flex min-w-0 items-center gap-2 rounded-full border border-slate-200 bg-white py-1.5 pl-1.5 pr-2 text-sm font-semibold text-slate-900 shadow-sm sm:pr-3" type="button">
         <span className="grid size-8 place-items-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-white">
           {getUserInitial(props.session.user)}
@@ -92,5 +95,23 @@ function renderAuthenticatedTopActions(props: Readonly<{
         <ChevronDown className="size-4 text-slate-400" />
       </button>
     </div>
+  );
+}
+
+function LogoutButton(props: Readonly<{ logout: AccountLogoutController }>) {
+  const label = props.logout.isLoggingOut ? "退出中" : "退出登录";
+  return (
+    <button
+      aria-label="退出登录"
+      className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold text-slate-700 shadow-sm hover:border-slate-300 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-60 sm:px-3 sm:text-sm"
+      disabled={props.logout.isLoggingOut}
+      title="退出登录"
+      type="button"
+      onClick={props.logout.onLogout}
+    >
+      <LogOut className="size-4" />
+      <span className="hidden sm:inline">{label}</span>
+      <span className="sm:hidden">退出</span>
+    </button>
   );
 }

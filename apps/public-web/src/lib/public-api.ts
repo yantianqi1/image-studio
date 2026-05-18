@@ -188,6 +188,11 @@ export const publicApi = {
       body: input,
     });
   },
+  logout() {
+    return apiFetch<{ logged_out: boolean }>("/auth/logout", {
+      method: "POST",
+    });
+  },
   redeemCode(input: RedeemCodeRequest) {
     return apiFetch<WalletSummary>("/redeem/redeem", {
       method: "POST",

@@ -14,6 +14,8 @@ import { renderPersonalCenterPage } from "./account-personal-center";
 import {
   EMPTY_QUOTA,
   EMPTY_WALLET,
+  type AccountLogoutController,
+  type AccountLogoutState,
   type AccountResources,
   type AccountSession,
   type AuthController,
@@ -26,17 +28,25 @@ import { isUnauthorizedState } from "./account-utils";
 export function WalletDashboard() {
   const [refreshKey, setRefreshKey] = useState(0);
   const searchParams = useSearchParams();
+  const refreshAccount = () => setRefreshKey((current) => current + 1);
   const userState = useApiResource(() => publicApi.getCurrentUser(), refreshKey);
   const resources = useAccountResources(userState, refreshKey);
+  const logout = useAccountLogout({ onLoggedOut: refreshAccount });
   const auth = useAccountAuth({
     initialIntent: searchParams.get("mode") === "register" ? "register" : "login",
-    onAuthenticated: () => setRefreshKey((current) => current + 1),
+    onAuthenticated: refreshAccount,
   });
 
   if (userState.status === "ready") {
     const session: AccountSession = { user: userState.data };
     return renderAccountShell({
-      children: renderPersonalCenterPage({ resources, session }),
+      children: (
+        <>
+          {logout.errorMessage ? renderLogoutError(logout.errorMessage) : null}
+          {renderPersonalCenterPage({ resources, session })}
+        </>
+      ),
+      logout,
       resources: { quotaState: resources.quotaState },
       session,
     });
@@ -81,6 +91,30 @@ function useAccountResources(userState: ResourceState<LoginResponse>, refreshKey
       refreshKey,
       userState,
     }),
+  };
+}
+
+function useAccountLogout(input: Readonly<{ onLoggedOut: () => void }>): AccountLogoutController {
+  const [state, setState] = useState<AccountLogoutState>({ status: "idle" });
+
+  async function handleLogout() {
+    if (state.status === "submitting") return;
+    setState({ status: "submitting" });
+
+    try {
+      await publicApi.logout();
+      notifyComicOwnerChanged();
+      setState({ status: "idle" });
+      input.onLoggedOut();
+    } catch (error: unknown) {
+      setState({ status: "error", message: error instanceof Error ? error.message : "退出登录失败" });
+    }
+  }
+
+  return {
+    errorMessage: state.status === "error" ? state.message : "",
+    isLoggingOut: state.status === "submitting",
+    onLogout: handleLogout,
   };
 }
 
@@ -159,6 +193,15 @@ function renderAccountLoadError(state: Extract<ResourceState<LoginResponse>, { s
     <div className="mx-auto max-w-xl rounded-[28px] border border-white/80 bg-white p-6 shadow-sm">
       <p className="text-lg font-bold text-slate-950">账户读取失败</p>
       <p className="mt-2 text-sm text-slate-500">{state.message}</p>
+    </div>
+  );
+}
+
+function renderLogoutError(message: string) {
+  return (
+    <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">
+      <p className="font-semibold">退出登录失败</p>
+      <p className="mt-1">{message}</p>
     </div>
   );
 }
