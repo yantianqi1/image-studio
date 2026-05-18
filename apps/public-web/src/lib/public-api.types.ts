@@ -26,7 +26,6 @@ export type ImageGenerationRequest = Readonly<{
   character_library_ids?: readonly number[];
   conversation_messages?: readonly ImageConversationMessage[];
   visibility?: ImageAssetVisibility;
-  auto_title?: boolean;
 }>;
 
 export type ImageConversationContentPart = Readonly<
@@ -61,6 +60,8 @@ export type ImageGenerationResponse = Readonly<{
   source_asset_id?: number | null;
   client_provider_base_url?: string | null;
   created_at?: string;
+  available_at?: string;
+  started_at?: string | null;
 }>;
 
 export type UploadedImageAsset = Readonly<{

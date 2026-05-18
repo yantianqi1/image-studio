@@ -728,7 +728,7 @@ function GenerationSkeleton({
           {index === 0 && (
             <>
               <p className="text-xs font-medium text-gray-600">
-                {progress?.message || (status === "queued" ? "准备中..." : "生成中...")}
+                {progress?.message || (status === "queued" ? "等待生成服务接手..." : "生成中...")}
               </p>
               {busyStartMs != null && <LiveTimer startMs={busyStartMs} />}
             </>

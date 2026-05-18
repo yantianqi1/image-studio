@@ -34,7 +34,6 @@ from apps.api.app.domains.image.service import (
     list_job_results_for_owner,
     list_jobs_for_owner,
 )
-from apps.api.app.domains.image.title_generation import generate_image_job_title
 from apps.api.app.domains.llm.client_provider import CLIENT_PROVIDER_SOURCE, read_client_provider_config
 from apps.api.app.domains.public_quota.constants import PUBLIC_QUOTA_FEATURE_IMAGE
 from apps.api.app.domains.public_quota.service import consume_public_quota, resolve_request_ip
@@ -64,12 +63,10 @@ def create_image_job(
         character_ids=payload.character_library_ids,
         prompt=payload.prompt,
     )
-    title = generate_image_job_title(session, prompt=payload.prompt) if payload.auto_title else None
     job = create_job(
         session,
         owner=owner,
         source=source,
-        title=title,
         prompt=character_bundle.prompt,
         model_code=payload.model_code,
         requested_count=payload.requested_count,

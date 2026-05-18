@@ -16,6 +16,10 @@ const resultsSource = readFileSync(
   new URL("../src/features/studio/studio-results.tsx", import.meta.url),
   "utf8",
 );
+const studioPollingSource = readFileSync(
+  new URL("../src/features/studio/studio-job-polling.ts", import.meta.url),
+  "utf8",
+);
 const appShellSource = readFileSync(
   new URL("../src/features/shell/app-shell.tsx", import.meta.url),
   "utf8",
@@ -92,11 +96,17 @@ test("studio compliance retry rewrites the failed prompt before submitting", () 
   assert.doesNotMatch(pageSource, /Fall through with original prompt/);
 });
 
-test("studio first image turn requests backend generated conversation title", () => {
-  assert.match(pageSource, /applyGeneratedTitle/);
-  assert.match(pageSource, /job\.title/);
-  assert.match(pageSource, /renameConversation/);
-  assert.match(pageSource, /autoTitle:\s*input\.applyGeneratedTitle/);
+test("studio first image turn does not block on backend generated conversation title", () => {
+  assert.doesNotMatch(pageSource, /applyGeneratedTitle/);
+  assert.doesNotMatch(pageSource, /job\.title/);
+  assert.doesNotMatch(pageSource, /autoTitle:\s*input\.applyGeneratedTitle/);
+});
+
+test("studio queued state exposes worker handoff instead of generic preparation", () => {
+  assert.doesNotMatch(resultsSource, /准备中\.\.\./);
+  assert.match(resultsSource, /等待生成服务接手/);
+  assert.match(studioPollingSource, /生成服务暂未接手/);
+  assert.match(pageSource, /getTurnStatusForImageJob/);
 });
 
 test("studio request mode infers edit only when image workspace has references", () => {

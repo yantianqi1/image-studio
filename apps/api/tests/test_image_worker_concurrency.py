@@ -12,24 +12,30 @@ from apps.worker.worker import main as worker_main
 from apps.api.tests.test_image_jobs import build_client, build_rendered_image, register_user
 
 
-def test_worker_run_once_processes_three_image_jobs_concurrently(monkeypatch) -> None:
+EXPECTED_UNLIMITED_JOB_COUNT = 4
+
+
+def test_worker_run_once_processes_all_claimable_image_jobs_concurrently(monkeypatch) -> None:
     monkeypatch.setenv("SIGNUP_BONUS_CENTS", "1000")
     client = build_client()
     register_user(client, email="worker-concurrency@example.com")
     job_ids = [
         create_member_job(client, prompt=f"Concurrent image {index}")["id"]
-        for index in range(1, 4)
+        for index in range(1, EXPECTED_UNLIMITED_JOB_COUNT + 1)
     ]
     tracker = RenderConcurrencyTracker()
     monkeypatch.setattr(image_service, "render_image", tracker.render, raising=False)
 
     message = worker_main.run_once()
 
-    assert message == f"Processed image jobs {job_ids[0]}, {job_ids[1]}, {job_ids[2]}."
-    assert tracker.max_active == 3
+    assert message == f"Processed image jobs {', '.join(str(job_id) for job_id in job_ids)}."
+    assert tracker.max_active == EXPECTED_UNLIMITED_JOB_COUNT
     with session_scope() as session:
         jobs = list(session.execute(select(ImageJob).where(ImageJob.id.in_(job_ids))).scalars())
-        assert [job.status for job in sorted(jobs, key=lambda job: job.id)] == ["succeeded", "succeeded", "succeeded"]
+        assert [job.status for job in sorted(jobs, key=lambda job: job.id)] == [
+            "succeeded"
+            for _ in range(EXPECTED_UNLIMITED_JOB_COUNT)
+        ]
 
 
 class RenderConcurrencyTracker:

@@ -53,6 +53,7 @@ import {
   type StoredReferenceImage,
   type StudioTurn,
   type TurnDraft,
+  type TurnStatus,
 } from "@/features/studio/studio-types";
 import { useStudioConversations } from "@/features/studio/use-studio-conversations";
 import {
@@ -104,7 +105,6 @@ type PollSubmittedImageJobInput = Readonly<{
 }>;
 
 type SubmitExistingTurnInput = Readonly<{
-  applyGeneratedTitle?: boolean;
   contextBeforeTurnId?: string;
   conversation: StudioConversation | null;
   conversationId: string;
@@ -207,9 +207,13 @@ function imageJobResultsToStoredImages(results: CompletedImageJob["results"]): S
 
 function getImageJobProgressMessage(status: string): string {
   if (status === "queued" || status === "pending") {
-    return "排队中...";
+    return "等待生成服务接手...";
   }
   return "生成中...";
+}
+
+function getTurnStatusForImageJob(status: string): TurnStatus {
+  return status === "queued" || status === "pending" ? "queued" : "generating";
 }
 
 function isAbortError(error: unknown): boolean {
@@ -574,7 +578,7 @@ export function StudioPage() {
             elapsedMs: elapsed,
           });
           conversations.updateTurn(input.conversationId, input.turnId, {
-            status: "generating",
+            status: getTurnStatusForImageJob(updatedJob.status),
             taskId: updatedJob.id,
             taskStatus: updatedJob.status,
           });
@@ -647,7 +651,6 @@ export function StudioPage() {
       setTurnProgress(progressKey, { message: "提交生成请求..." });
 
       const job = await publicApi.generateImage(buildImageJobRequest({
-        autoTitle: input.applyGeneratedTitle,
         contextBeforeTurnId,
         draft,
         conversation,
@@ -655,11 +658,8 @@ export function StudioPage() {
       }));
       throwIfAborted(abortController.signal);
 
-      if (input.applyGeneratedTitle && job.title) {
-        conversations.renameConversation(convId, job.title);
-      }
-      conversations.updateTurn(convId, turnId, { status: "generating", taskId: job.id });
-      setTurnProgress(progressKey, { message: "已提交，等待生成..." });
+      conversations.updateTurn(convId, turnId, { status: getTurnStatusForImageJob(job.status), taskId: job.id });
+      setTurnProgress(progressKey, { message: "已提交，等待生成服务接手..." });
 
       didStartPolling = true;
       void pollSubmittedImageJob({
@@ -686,13 +686,10 @@ export function StudioPage() {
   }, [clearConversationSubmitting, conversations, markConversationSubmitting, pollSubmittedImageJob]);
 
   const submitDraft = useCallback(async (draft: TurnDraft) => {
-    const shouldApplyGeneratedTitle =
-      conversations.activeConversation === null || conversations.activeConversation.turns.length === 0;
     const { turnId, conversationId: convId } = conversations.addTurn(draft);
     if (!convId || !turnId) return;
 
     await submitExistingTurn({
-      applyGeneratedTitle: shouldApplyGeneratedTitle,
       conversation: conversations.activeConversation,
       conversationId: convId,
       draft,

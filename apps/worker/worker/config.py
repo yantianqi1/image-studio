@@ -7,7 +7,6 @@ class WorkerSettings(BaseSettings):
     app_env: str = "development"
     worker_name: str = "commercial-studio-worker"
     worker_poll_interval_seconds: float = 1.0
-    worker_image_job_concurrency: int = 3
     worker_stale_running_job_seconds: int = 300
     worker_stale_job_alert_threshold: int = 1
 

@@ -81,6 +81,28 @@ test("waitForImageJobResults exposes succeeded job without result rows", async (
   );
 });
 
+test("waitForImageJobResults reports a queued job that was not claimed by the worker", async () => {
+  const { waitForImageJobResults } = loadPolling();
+  const staleCreatedAt = new Date(Date.now() - 8 * 60 * 1000).toISOString().replace(/Z$/, "");
+  const api = {
+    async getImageJob(jobId) {
+      return { id: jobId, status: "queued", created_at: staleCreatedAt, started_at: null, error_message: null };
+    },
+    async getImageJobResults() {
+      throw new Error("should not fetch results for a queued job");
+    },
+  };
+
+  await assert.rejects(
+    () => waitForImageJobResults(api, 14, {
+      sleep: async () => {
+        throw new Error("queued worker handoff should fail before sleeping");
+      },
+    }),
+    /生成服务暂未接手/,
+  );
+});
+
 test("waitForImageJobResults stops polling when aborted during sleep", async () => {
   const { waitForImageJobResults } = loadPolling();
   const controller = new AbortController();

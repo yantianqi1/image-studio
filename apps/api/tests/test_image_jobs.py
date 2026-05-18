@@ -178,33 +178,19 @@ def test_create_image_job_stays_queued_until_worker_runs():
     assert locked_cents == 77
 
 
-def test_auto_titled_image_job_generates_configured_short_title(monkeypatch):
-    captured: dict[str, object] = {}
+def test_auto_title_does_not_block_image_job_creation(monkeypatch):
+    def fail_if_posted(*_args, **_kwargs):
+        raise AssertionError("image job creation must not call title LLM")
 
-    def fake_post(url: str, *, headers, json, timeout: float):
-        captured["url"] = url
-        captured["headers"] = headers
-        captured["json"] = json
-        captured["timeout"] = timeout
-        payload = {"choices": [{"message": {"content": '{"title":"雨夜少女"}'}}]}
-        return FakeHttpResponse(status_code=200, payload=payload, headers={})
-
-    monkeypatch.setenv("OPENAI_PROVIDER_KEY", "sk-test")
-    monkeypatch.setenv("OPENAI_CHAT_MODEL_CODE", "title-model")
-    monkeypatch.setenv("OPENAI_CHAT_MODEL_PROVIDER_MODEL", "title-provider-model")
-    monkeypatch.setenv("IMAGE_JOB_TITLE_MODEL_CODE", "title-model")
-    monkeypatch.setattr("apps.api.app.domains.llm.openai_chat.httpx.post", fake_post)
+    monkeypatch.setattr("apps.api.app.domains.llm.openai_chat.httpx.post", fail_if_posted)
     client = build_client()
 
     job = create_auto_titled_image_job(client, prompt="画一个雨夜街头的少女，电影感光影")
 
-    assert job["title"] == "雨夜少女"
-    assert captured["json"]["model"] == "title-provider-model"
-    assert "10个汉字以内" in captured["json"]["messages"][0]["content"]
-    assert "画一个雨夜街头的少女" in captured["json"]["messages"][1]["content"]
+    assert job["title"] is None
     with session_scope() as session:
         stored_job = session.get(ImageJob, job["id"])
-        assert stored_job.title == "雨夜少女"
+        assert stored_job.title is None
 
 
 def test_anonymous_image_job_uses_server_provider_when_enabled():

@@ -22,7 +22,7 @@ def run_once() -> str:
     comic_action = run_next_comic_orchestration()
     if comic_action is not None:
         return f"Processed comic orchestration {comic_action}."
-    image_job_ids = run_next_image_jobs(max_workers=get_settings().worker_image_job_concurrency)
+    image_job_ids = run_next_image_jobs()
     if len(image_job_ids) == 1:
         return f"Processed image job {image_job_ids[0]}."
     if len(image_job_ids) > 1:
