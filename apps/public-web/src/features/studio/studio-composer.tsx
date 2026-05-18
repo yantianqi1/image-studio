@@ -295,11 +295,10 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
       }
       if (imageFiles.length === 0) return;
       event.preventDefault();
-      const newImages: StoredReferenceImage[] = [];
-      for (const file of imageFiles) {
+      const newImages = await Promise.all(imageFiles.map(async (file): Promise<StoredReferenceImage> => {
         const dataUrl = await readFileAsDataUrl(file);
-        newImages.push({ name: file.name || "pasted-image.png", dataUrl, mimeType: file.type });
-      }
+        return { name: file.name || "pasted-image.png", dataUrl, mimeType: file.type };
+      }));
       onReferenceImagesChange([...referenceImages, ...newImages]);
     },
     [onReferenceImagesChange, referenceImages],
@@ -309,11 +308,10 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
     async (event: ChangeEvent<HTMLInputElement>) => {
       const files = event.target.files;
       if (!files?.length) return;
-      const newImages: StoredReferenceImage[] = [];
-      for (const file of Array.from(files)) {
+      const newImages = await Promise.all(Array.from(files).map(async (file): Promise<StoredReferenceImage> => {
         const dataUrl = await readFileAsDataUrl(file);
-        newImages.push({ name: file.name, dataUrl, mimeType: file.type });
-      }
+        return { name: file.name, dataUrl, mimeType: file.type };
+      }));
       onReferenceImagesChange([...referenceImages, ...newImages]);
       event.target.value = "";
     },

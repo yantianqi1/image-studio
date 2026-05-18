@@ -268,3 +268,46 @@ test("uploadPendingReferenceImages uploads data url references", async () => {
   assert.equal(images[0].assetUrl, "/api/public/image/assets/42");
   assert.equal(images[0].thumbnailUrl, "/api/public/image/assets/42/thumbnail");
 });
+
+test("uploadPendingReferenceImages starts reference uploads without waiting serially", async () => {
+  const { uploadPendingReferenceImages } = loadStudioImageRequest();
+  const startedFiles = [];
+  const resolvers = [];
+  const fetchImage = async () => ({
+    ok: true,
+    blob: () => Promise.resolve(new Blob(["png"], { type: "image/png" })),
+  });
+  const uploadImageAsset = async (file) => {
+    startedFiles.push(file.name);
+    const id = startedFiles.length;
+    return new Promise((resolve) => {
+      resolvers.push(() => resolve({
+        id,
+        asset_url: `/api/public/image/assets/${id}`,
+        thumbnail_url: `/api/public/image/assets/${id}/thumbnail`,
+        mime_type: file.type,
+        created_at: "2026-05-15T00:00:00.000Z",
+      }));
+    });
+  };
+
+  const promise = uploadPendingReferenceImages(
+    [
+      { name: "ref-1.png", dataUrl: "data:image/png;base64,AAAA", mimeType: "image/png" },
+      { name: "ref-2.png", dataUrl: "data:image/png;base64,BBBB", mimeType: "image/png" },
+    ],
+    uploadImageAsset,
+    fetchImage,
+  );
+
+  await new Promise((resolve) => setTimeout(resolve, 10));
+
+  assert.deepEqual(startedFiles, ["ref-1.png", "ref-2.png"]);
+
+  resolvers.forEach((resolve) => resolve());
+  const images = await promise;
+
+  assert.equal(images.length, 2);
+  assert.equal(images[0].assetId, 1);
+  assert.equal(images[1].assetId, 2);
+});

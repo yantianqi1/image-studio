@@ -62,11 +62,9 @@ export async function uploadPendingReferenceImages(
   uploadImageAsset: UploadImageAsset,
   fetchImage: FetchImage = fetch,
 ): Promise<StoredReferenceImage[]> {
-  const results: StoredReferenceImage[] = [];
-  for (const image of images) {
-    results.push(await uploadReferenceImage(image, uploadImageAsset, fetchImage));
-  }
-  return results;
+  return Promise.all(
+    images.map((image) => uploadReferenceImage(image, uploadImageAsset, fetchImage)),
+  );
 }
 
 function withOptionalImageFields(

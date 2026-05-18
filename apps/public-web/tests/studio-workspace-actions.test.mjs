@@ -119,6 +119,11 @@ test("studio starts image polling without blocking new submissions", () => {
   assert.doesNotMatch(pageSource, /await waitForImageJobResults\(publicApi, job\.id/);
 });
 
+test("studio reads multiple reference images concurrently", () => {
+  assert.match(composerSource, /Promise\.all\([\s\S]*imageFiles\.map/);
+  assert.match(composerSource, /Promise\.all\([\s\S]*Array\.from\(files\)\.map/);
+});
+
 test("studio does not preserve anonymous image concurrency limit handling", () => {
   assert.doesNotMatch(pageSource, /anonymous.*concurrency/i);
   assert.doesNotMatch(pageSource, /ApiError/);
