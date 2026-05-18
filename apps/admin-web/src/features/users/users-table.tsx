@@ -1,4 +1,5 @@
 import { EmptyState } from "@/features/ui/empty-state";
+import { LoadingState } from "@/features/ui/loading-state";
 import { StatusPill } from "@/features/ui/status-pill";
 import type { AdminUser } from "@/lib/admin-api";
 import { formatDateTime } from "./user-format";
@@ -13,7 +14,7 @@ export function UsersTable({
   onSelectUser: (user: AdminUser) => void;
 }>) {
   if (loading) {
-    return <div className="users-table-state">正在读取用户...</div>;
+    return <LoadingState title="正在读取用户" />;
   }
   if (users.length === 0) {
     return <EmptyState title="没有匹配用户" description="当前搜索和状态筛选没有返回用户记录。" />;

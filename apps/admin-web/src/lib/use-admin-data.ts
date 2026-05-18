@@ -2,7 +2,15 @@ import useSWR from "swr";
 
 import type { AdminImageJob } from "@/lib/admin-image-job-types";
 import type { AdminUserList, AdminUsersQuery } from "@/lib/admin-users";
-import type { AdminGalleryItem, AdminLlmFacilityResponse, WorkerSummary } from "@/lib/admin-api";
+import type {
+  AdminAuditLogList,
+  AdminGalleryItem,
+  AdminLlmFacilityResponse,
+  AdminRedeemBatchCode,
+  AdminRedeemBatchDetail,
+  AdminRedeemBatchSummary,
+  WorkerSummary,
+} from "@/lib/admin-api";
 import type { ImageJobStats } from "@/lib/admin-image-job-types";
 
 function buildSearch(params: Record<string, string | number | undefined>) {
@@ -23,8 +31,28 @@ type PaginatedJobs = {
   page_size: number;
 };
 
+export type AdminComicTask = Readonly<{
+  id: string;
+  project_id: string;
+  chapter_id: string | null;
+  scene_id: string | null;
+  task_type: string;
+  status: string;
+  stage: string;
+  progress_percent: number;
+  error_code: string | null;
+  error_message: string | null;
+  attempt_count: number;
+  max_attempts: number;
+  created_at: string;
+  updated_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+}>;
+
 const IMAGE_JOBS_REFRESH_INTERVAL_MS = 5000;
 const WORKER_SUMMARY_REFRESH_INTERVAL_MS = 15000;
+const COMIC_TASKS_REFRESH_INTERVAL_MS = 15000;
 
 export function useAdminJobs(params: { page?: number; page_size?: number; status?: string } = {}) {
   const search = buildSearch({ ...params, paginated: 1 });
@@ -42,6 +70,12 @@ export function useWorkerSummary() {
 export function useAdminStats() {
   return useSWR<ImageJobStats>("/api/admin/image/stats", {
     refreshInterval: IMAGE_JOBS_REFRESH_INTERVAL_MS,
+  });
+}
+
+export function useAdminComicTasks() {
+  return useSWR<readonly AdminComicTask[]>("/api/admin/comic/tasks", {
+    refreshInterval: COMIC_TASKS_REFRESH_INTERVAL_MS,
   });
 }
 
@@ -108,10 +142,36 @@ type RedeemCode = {
   status: string;
   redeemed_by_user_id: number | null;
   redeemed_at: string | null;
+  created_at: string;
 };
 
 export function useRedeemCodes() {
   return useSWR<readonly RedeemCode[]>("/api/admin/redeem/codes");
+}
+
+export function useRedeemBatches() {
+  return useSWR<readonly AdminRedeemBatchSummary[]>("/api/admin/redeem/batches");
+}
+
+export function useRedeemBatch(batchId: number | null) {
+  return useSWR<AdminRedeemBatchDetail>(batchId ? `/api/admin/redeem/batches/${batchId}` : null);
+}
+
+export function useRedeemBatchCodes(batchId: number | null) {
+  return useSWR<readonly AdminRedeemBatchCode[]>(batchId ? `/api/admin/redeem/batches/${batchId}/codes` : null);
+}
+
+export function useAdminAuditLogs(query: {
+  action?: string;
+  target_type?: string;
+  target_id?: string;
+  admin_user_id?: number;
+  created_from?: string;
+  created_to?: string;
+  page?: number;
+  page_size?: number;
+} | null = {}) {
+  return useSWR<AdminAuditLogList>(query ? `/api/admin/audit-logs${buildSearch(query)}` : null);
 }
 
 type SiteSettings = {

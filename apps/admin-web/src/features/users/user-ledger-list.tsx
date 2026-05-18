@@ -1,7 +1,8 @@
 import { EmptyState } from "@/features/ui/empty-state";
 import { ErrorBox } from "@/features/ui/error-box";
+import { LoadingState } from "@/features/ui/loading-state";
 import type { AdminWalletLedgerEntry } from "@/lib/admin-api";
-import { formatCents, formatDateTime } from "./user-format";
+import { formatCredits, formatDateTime } from "./user-format";
 
 export function UserLedgerList({
   entries,
@@ -13,7 +14,7 @@ export function UserLedgerList({
   loading: boolean;
 }>) {
   if (loading) {
-    return <div className="users-detail-state">正在读取账本...</div>;
+    return <LoadingState title="正在读取账本" />;
   }
   if (error) {
     return <ErrorBox message={error} />;
@@ -41,7 +42,8 @@ function LedgerRow({ entry }: Readonly<{ entry: AdminWalletLedgerEntry }>) {
         <span className="users-secondary-text">{entry.reference_type} · {entry.reference_id}</span>
       </span>
       <span className="users-ledger-amount">
-        {formatCents(entry.amount_cents)}
+        {entry.amount_credits >= 0 ? "+" : ""}
+        {formatCredits(entry.amount_credits)}
         <small>{formatDateTime(entry.created_at)}</small>
       </span>
     </div>

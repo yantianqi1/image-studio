@@ -1,6 +1,8 @@
 const statusOptions = [
   { value: "", label: "全部状态" },
   { value: "active", label: "active" },
+  { value: "disabled", label: "disabled" },
+  { value: "deleted", label: "deleted" },
   { value: "suspended", label: "suspended" },
 ] as const;
 

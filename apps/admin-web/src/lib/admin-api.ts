@@ -1,5 +1,7 @@
 import { apiFetch, apiUpload } from "@/lib/api-client";
+import { adminAuditApi } from "@/lib/admin-audit-api";
 import type { AdminImageJob, ImageJobStats } from "@/lib/admin-image-job-types";
+import { adminRedeemApi } from "@/lib/admin-redeem-api";
 import { adminProviderApi } from "@/lib/admin-provider-api";
 import { buildUsersSearch, type AdminUserList, type AdminUsersQuery, type AdminWallet, type AdminWalletLedgerEntry } from "@/lib/admin-users";
 
@@ -10,6 +12,8 @@ export type {
   VariantMatrix,
   VariantMatrixGroup,
 } from "@/lib/admin-provider-api";
+export type { AdminRedeemBatch, AdminRedeemBatchCode, AdminRedeemBatchDetail, AdminRedeemBatchSummary, AdminRedeemCode } from "@/lib/admin-redeem";
+export type { AdminAuditLog, AdminAuditLogList, AdminAuditLogsQuery } from "@/lib/admin-audit-api";
 export type { AdminUser, AdminUserList, AdminUsersQuery, AdminWallet, AdminWalletLedgerEntry } from "@/lib/admin-users";
 
 export type AdminGalleryItem = Readonly<{
@@ -94,6 +98,11 @@ export type AdminLlmFacilityResponse = Readonly<{
   models: readonly AdminLlmFeatureModel[];
 }>;
 
+export type AdminUserStatusUpdateInput = Readonly<{
+  status: "active" | "disabled" | "deleted";
+  reason: string;
+}>;
+
 export const adminApi = {
   login(input: { username: string; password: string }) {
     return apiFetch<{ username: string; role: string }>("/api/admin/auth/login", {
@@ -113,6 +122,15 @@ export const adminApi = {
     const search = buildUsersSearch(query);
     return apiFetch<AdminUserList>(`/api/admin/users${search}`);
   },
+  updateUserStatus(userId: number, input: AdminUserStatusUpdateInput) {
+    return apiFetch<{ id: number; email: string; display_name: string; status: string; created_at: string }>(
+      `/api/admin/users/${userId}/status`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      },
+    );
+  },
   wallet(userId: number) {
     return apiFetch<AdminWallet>(`/api/admin/billing/wallets/${userId}`);
   },
@@ -120,6 +138,9 @@ export const adminApi = {
     return apiFetch<readonly AdminWalletLedgerEntry[]>(`/api/admin/billing/wallets/${userId}/ledger`);
   },
   adjustWallet(userId: number, input: { amount_cents: number; reason: string }) {
+    return adminApi.adjustUserWallet(userId, input);
+  },
+  adjustUserWallet(userId: number, input: { amount_cents: number; reason: string }) {
     return apiFetch<{ balance_cents: number; locked_cents: number; currency: string }>(
       `/api/admin/billing/wallets/${userId}/adjustments`,
       {
@@ -128,25 +149,8 @@ export const adminApi = {
       },
     );
   },
-  createRedeemBatch(input: { name: string; credit_amount_cents: number; codes: string[] }) {
-    return apiFetch<{ id: number; name: string; credit_amount_cents: number; credit_amount_credits: number }>("/api/admin/redeem/batches", {
-      method: "POST",
-      body: JSON.stringify(input),
-    });
-  },
-  redeemCodes() {
-    return apiFetch<
-      readonly {
-        id: number;
-        code: string;
-        credit_amount_cents: number;
-        credit_amount_credits: number;
-        status: string;
-        redeemed_by_user_id: number | null;
-        redeemed_at: string | null;
-      }[]
-    >("/api/admin/redeem/codes");
-  },
+  ...adminRedeemApi,
+  ...adminAuditApi,
   ...adminProviderApi,
   imageJobs() {
     return apiFetch<readonly AdminImageJob[]>("/api/admin/image/jobs");

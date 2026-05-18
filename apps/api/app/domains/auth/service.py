@@ -13,6 +13,9 @@ from apps.api.app.core.security import hash_password, issue_session_token, sha25
 from apps.api.app.domains.auth.models import AdminSession, AdminUser, User, UserSession
 from apps.api.app.domains.auth.schemas import AdminUserListOptions
 
+ACTIVE_USER_STATUS = "active"
+SELF_PROTECTED_STATUS_UPDATES = frozenset({"disabled", "deleted"})
+
 
 @dataclass(frozen=True)
 class AdminUserListResult:
@@ -20,6 +23,12 @@ class AdminUserListResult:
     total: int
     page: int
     page_size: int
+
+
+@dataclass(frozen=True)
+class UserStatusUpdateResult:
+    user: User
+    previous_status: str
 
 
 def create_user(session: Session, *, email: str, password: str) -> User:
@@ -42,6 +51,7 @@ def authenticate_user(session: Session, *, email: str, password: str) -> User:
     user = find_user_by_email(session, email)
     if user is None or not verify_password(password, user.password_hash):
         raise AppError(code="invalid_credentials", message="invalid credentials", status_code=401)
+    require_active_user(user)
     return user
 
 
@@ -49,6 +59,7 @@ def get_user_by_token(session: Session, token: str | None) -> User:
     user = find_user_by_token(session, token)
     if user is None:
         raise AppError(code="unauthorized", message="authentication required", status_code=401)
+    require_active_user(user)
     return user
 
 
@@ -133,6 +144,43 @@ def list_users(session: Session, options: AdminUserListOptions) -> AdminUserList
     statement = select(User).where(*filters).order_by(User.id.asc()).offset(offset).limit(options.page_size)
     users = list(session.execute(statement).scalars())
     return AdminUserListResult(items=users, total=total, page=options.page, page_size=options.page_size)
+
+
+def update_user_status(
+    session: Session,
+    *,
+    user_id: int,
+    status: str,
+    reason: str,
+    actor_admin_username: str | None = None,
+) -> UserStatusUpdateResult:
+    user = session.get(User, user_id)
+    if user is None:
+        raise AppError(code="user_not_found", message="user not found", status_code=404)
+    if not reason.strip():
+        raise AppError(code="reason_required", message="reason is required", status_code=422)
+    previous_status = user.status
+    if is_self_status_update(user, actor_admin_username, status):
+        raise AppError(
+            code="self_status_update_forbidden",
+            message="cannot disable or delete current user",
+            status_code=403,
+        )
+    user.status = status
+    session.flush()
+    return UserStatusUpdateResult(user=user, previous_status=previous_status)
+
+
+def require_active_user(user: User) -> None:
+    if user.status == ACTIVE_USER_STATUS:
+        return
+    raise AppError(code="user_not_active", message="user is not active", status_code=403)
+
+
+def is_self_status_update(user: User, actor_admin_username: str | None, status: str) -> bool:
+    if actor_admin_username is None or status not in SELF_PROTECTED_STATUS_UPDATES:
+        return False
+    return user.email.casefold() == actor_admin_username.casefold()
 
 
 def build_user_filters(options: AdminUserListOptions) -> tuple[ColumnElement[bool], ...]:

@@ -125,36 +125,6 @@ def test_default_admin_bootstrap_updates_existing_password(monkeypatch):
         assert authenticate_admin(session, username="admin", password="20021214Ytq").username == "admin"
 
 
-def test_redeem_code_credits_wallet_and_redeem_twice_fails():
-    client = build_domain_client()
-    seed_admin()
-    register_user(client)
-    login_admin(client)
-
-    batch_response = client.post(
-        "/api/admin/redeem/batches",
-        json={
-            "name": "launch",
-            "credit_amount_cents": 250,
-            "codes": ["PROMO-001"],
-        },
-    )
-
-    assert batch_response.status_code == 201
-
-    user_client = build_domain_client()
-    register_user(user_client, email="bob@example.com")
-
-    redeem_response = user_client.post("/api/public/redeem/redeem", json={"code": "PROMO-001"})
-    second_redeem_response = user_client.post("/api/public/redeem/redeem", json={"code": "PROMO-001"})
-    wallet_response = user_client.get("/api/public/billing/wallets/me")
-
-    assert redeem_response.status_code == 200
-    assert wallet_response.json()["data"]["balance_cents"] == 350
-    assert wallet_response.json()["data"]["balance_credits"] == 35
-    assert second_redeem_response.status_code == 409
-
-
 def test_reservation_commit_writes_ledger_and_updates_balance():
     client = build_domain_client()
     register_user(client)

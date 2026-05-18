@@ -16,3 +16,11 @@ class WalletAdjustmentRequest(BaseModel):
         if value == 0:
             raise ValueError("amount_cents must not be 0")
         return value
+
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("reason is required")
+        return stripped

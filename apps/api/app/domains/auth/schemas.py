@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from typing import Literal
 from typing import Optional
 
 from pydantic import BaseModel, Field
+from pydantic import field_validator
 
 ADMIN_USER_DEFAULT_PAGE = 1
 ADMIN_USER_DEFAULT_PAGE_SIZE = 25
@@ -28,3 +30,16 @@ class AdminUserListOptions(BaseModel):
     status: Optional[str] = Field(default=None, min_length=1, max_length=32)
     page: int = Field(default=ADMIN_USER_DEFAULT_PAGE, ge=1)
     page_size: int = Field(default=ADMIN_USER_DEFAULT_PAGE_SIZE, ge=1, le=ADMIN_USER_MAX_PAGE_SIZE)
+
+
+class AdminUserStatusUpdateRequest(BaseModel):
+    status: Literal["active", "disabled", "deleted"]
+    reason: str = Field(min_length=1, max_length=255)
+
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("reason is required")
+        return stripped

@@ -10,7 +10,7 @@ from apps.api.app.domains.auth.anonymous_sessions import (
     ensure_anonymous_session,
     get_anonymous_session_by_token,
 )
-from apps.api.app.domains.auth.service import find_user_by_token
+from apps.api.app.domains.auth.service import find_user_by_token, require_active_user
 
 
 @dataclass(frozen=True)
@@ -45,7 +45,10 @@ def ensure_anonymous_owner(request: Request, response: Response, session: Sessio
 def resolve_user_id(request: Request, session: Session) -> int | None:
     token = request.cookies.get(get_settings().user_session_cookie_name)
     user = find_user_by_token(session, token) if token else None
-    return user.id if user is not None else None
+    if user is None:
+        return None
+    require_active_user(user)
+    return user.id
 
 
 def set_anonymous_session_cookie(response: Response, token: str) -> None:

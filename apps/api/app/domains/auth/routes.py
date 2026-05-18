@@ -6,10 +6,17 @@ from sqlalchemy.orm import Session
 from apps.api.app.core.config import get_settings
 from apps.api.app.core.deps import get_db_session
 from apps.api.app.core.response import api_ok
-from apps.api.app.domains.auth.schemas import AdminLoginRequest, AdminUserListOptions, LoginRequest, RegisterRequest
+from apps.api.app.domains.auth.schemas import (
+    AdminLoginRequest,
+    AdminUserListOptions,
+    AdminUserStatusUpdateRequest,
+    LoginRequest,
+    RegisterRequest,
+)
 from apps.api.app.domains.auth.anonymous_sessions import ensure_anonymous_session, get_anonymous_session_by_token
 from apps.api.app.domains.auth.ownership import delete_anonymous_session_cookie, set_anonymous_session_cookie
 from apps.api.app.domains.auth.ownership_migration import migrate_anonymous_owner_to_user
+from apps.api.app.domains.audit.service import record_admin_action
 from apps.api.app.domains.auth.service import (
     admin_payload,
     authenticate_admin,
@@ -22,6 +29,7 @@ from apps.api.app.domains.auth.service import (
     get_user_by_token,
     require_admin,
     list_users,
+    update_user_status,
     user_payload,
 )
 from apps.api.app.domains.billing.service import create_wallet
@@ -128,6 +136,35 @@ def admin_users(
             "page_size": result.page_size,
         }
     )
+
+
+@admin_router.patch("/users/{user_id}/status")
+def admin_update_user_status(
+    user_id: int,
+    payload: AdminUserStatusUpdateRequest,
+    request: Request,
+    session: Session = Depends(get_db_session),
+):
+    admin = require_admin(request, session)
+    result = update_user_status(
+        session,
+        user_id=user_id,
+        status=payload.status,
+        reason=payload.reason,
+        actor_admin_username=admin.username,
+    )
+    action = "user.soft_delete" if payload.status == "deleted" else "user.status.update"
+    record_admin_action(
+        session,
+        admin_user_id=admin.id,
+        action=action,
+        target_type="user",
+        target_id=user_id,
+        reason=payload.reason,
+        metadata={"status_from": result.previous_status, "status_to": result.user.status},
+    )
+    session.commit()
+    return api_ok(user_payload(result.user))
 
 
 def set_admin_session_cookie(response: Response, token: str) -> None:

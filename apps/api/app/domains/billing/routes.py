@@ -5,6 +5,7 @@ from apps.api.app.core.config import get_settings
 from apps.api.app.core.deps import get_db_session
 from apps.api.app.core.response import api_ok
 from apps.api.app.domains.auth.service import get_user_by_token, require_admin
+from apps.api.app.domains.audit.service import record_admin_action
 from apps.api.app.domains.billing.schemas import ReservationCreateRequest, WalletAdjustmentRequest
 from apps.api.app.domains.billing.service import (
     adjust_wallet_balance,
@@ -95,7 +96,10 @@ def admin_adjust_wallet(
     request: Request,
     session: Session = Depends(get_db_session),
 ):
-    require_admin(request, session)
+    admin = require_admin(request, session)
+    current_wallet = get_wallet(session, user_id=user_id)
+    balance_before = current_wallet.balance_cents
+    locked_before = current_wallet.locked_cents
     wallet = adjust_wallet_balance(
         session,
         user_id=user_id,
@@ -103,6 +107,21 @@ def admin_adjust_wallet(
         reason=payload.reason,
         reference_type="admin_adjustment",
         reference_id=str(user_id),
+    )
+    record_admin_action(
+        session,
+        admin_user_id=admin.id,
+        action="user.wallet.adjust",
+        target_type="user",
+        target_id=user_id,
+        reason=payload.reason,
+        metadata={
+            "amount_cents": payload.amount_cents,
+            "balance_before_cents": balance_before,
+            "balance_after_cents": wallet.balance_cents,
+            "locked_before_cents": locked_before,
+            "locked_after_cents": wallet.locked_cents,
+        },
     )
     session.commit()
     return api_ok(wallet_payload(wallet))

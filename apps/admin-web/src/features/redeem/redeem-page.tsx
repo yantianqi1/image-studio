@@ -1,97 +1,102 @@
 "use client";
 
+import { useState } from "react";
+
 import { AdminShell } from "@/features/shell/admin-shell";
+import { AdminSection } from "@/features/ui/admin-page";
 import { ErrorBox } from "@/features/ui/error-box";
-import { Panel } from "@/features/ui/panel";
-import { adminApi } from "@/lib/admin-api";
-import { useRedeemCodes } from "@/lib/use-admin-data";
+import { StatusPill } from "@/features/ui/status-pill";
+import type { AdminRedeemBatch, AdminRedeemBatchSummary } from "@/lib/admin-api";
+import { useRedeemBatches } from "@/lib/use-admin-data";
 import { useToast } from "@/lib/toast-context";
+import { RedeemBatchDetailDrawer } from "./redeem-batch-detail-drawer";
+import { RedeemBatchList } from "./redeem-batch-list";
+import { RedeemCreateBatchPanel } from "./redeem-create-batch-panel";
+import { copyCodeLines, downloadCodesCsv, errorText } from "./redeem-utils";
 
 export function RedeemPage() {
-  const { data: codes = [], error: loadError, mutate } = useRedeemCodes();
+  const { data: batches = [], error: batchesError, isLoading: batchesLoading, mutate: mutateBatches } = useRedeemBatches();
+  const [latestBatch, setLatestBatch] = useState<AdminRedeemBatch | null>(null);
+  const [selectedBatch, setSelectedBatch] = useState<AdminRedeemBatchSummary | null>(null);
   const toast = useToast();
 
-  return (
-    <AdminShell
-      title="激活码与批次"
-      description="后台可以创建批次、查看兑换码状态和兑换用户。"
-    >
-      <div className="col-span-12 lg:col-span-5">
-        <Panel
-          title="创建激活码批次"
-          description="提交 /api/admin/redeem/batches"
-        >
-          <form
-            className="grid gap-3"
-            action={async (formData) => {
-              try {
-                const batch = await adminApi.createRedeemBatch({
-                  name: String(formData.get("name") ?? ""),
-                  credit_amount_cents: Number(formData.get("amount_credits") ?? "0") * 10,
-                  codes: String(formData.get("codes") ?? "")
-                    .split(",")
-                    .map((item) => item.trim())
-                    .filter(Boolean),
-                });
-                toast.success(`批次 ${batch.name} 已创建`);
-                mutate();
-              } catch (nextError) {
-                toast.error(
-                  nextError instanceof Error
-                    ? nextError.message
-                    : "创建批次失败",
-                );
-              }
-            }}
-          >
-            <input className="admin-input" name="name" placeholder="批次名称" />
-            <input
-              className="admin-input"
-              name="amount_credits"
-              placeholder="额度（10 额度 = 1 元）"
-              type="number"
-              min="1"
-            />
-            <textarea
-              className="admin-input min-h-24 resize-y"
-              name="codes"
-              placeholder="逗号分隔多个兑换码"
-            />
-            <button className="admin-button" type="submit">
-              创建批次
-            </button>
-          </form>
-          {loadError ? <div className="mt-3"><ErrorBox message={loadError instanceof Error ? loadError.message : "读取兑换码失败"} /></div> : null}
-        </Panel>
-      </div>
+  async function handleCreated(batch: AdminRedeemBatch) {
+    setLatestBatch(batch);
+    await mutateBatches();
+    toast.success(`批次 ${batch.name} 已创建`);
+  }
 
-      <div className="col-span-12 lg:col-span-7">
-        <Panel
-          title="兑换码列表"
-          description="读取 /api/admin/redeem/codes"
-        >
-          <div className="grid gap-2">
-            {codes.map((code) => (
-              <div key={code.id} className="admin-card flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="font-mono text-sm truncate">{code.code}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    {code.redeemed_by_user_id
-                      ? `已兑换 · user #${code.redeemed_by_user_id}`
-                      : "未兑换"}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-xs font-semibold">{code.credit_amount_credits} 额度</span>
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${code.status === "redeemed" ? "bg-emerald-50 text-emerald-600" : "bg-gray-100 text-gray-500"}`}>
-                    {code.status}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Panel>
+  return (
+    <AdminShell title="激活码与批次" description="后台可生成激活码批次，查看批次统计、兑换码和审计记录。">
+      <div className="col-span-12 xl:col-span-5 grid gap-4 content-start">
+        <RedeemCreateBatchPanel onCreated={handleCreated} />
+        {latestBatch ? <LatestBatchPanel batch={latestBatch} onCopy={(codes) => copyLatestCodes(codes, toast)} /> : null}
+        {batchesError ? <ErrorBox message={errorText(batchesError, "读取批次失败")} /> : null}
       </div>
+      <div className="col-span-12 xl:col-span-7">
+        <RedeemBatchList batches={batches} error={batchesError} loading={batchesLoading} onSelectBatch={setSelectedBatch} />
+      </div>
+      <RedeemBatchDetailDrawer
+        batch={selectedBatch}
+        onClose={() => setSelectedBatch(null)}
+        onBatchChanged={mutateBatches}
+      />
     </AdminShell>
   );
+}
+
+function LatestBatchPanel({
+  batch,
+  onCopy,
+}: Readonly<{
+  batch: AdminRedeemBatch;
+  onCopy: (codes: readonly string[]) => Promise<void>;
+}>) {
+  return (
+    <AdminSection title={`本次生成：${batch.name}`} description="创建成功后可立即复制全部兑换码。">
+      <div className="flex justify-end gap-2">
+        <button className="admin-button admin-button-secondary" type="button" onClick={() => void onCopy(batch.codes)}>
+          一键复制全部
+        </button>
+        <button className="admin-button admin-button-secondary" type="button" onClick={() => downloadLatestBatch(batch)}>
+          下载 CSV
+        </button>
+      </div>
+      <div className="mt-3 grid gap-2">
+        {batch.codes.map((code) => (
+          <div key={code} className="admin-card flex items-center justify-between gap-3">
+            <span className="font-mono text-sm truncate">{code}</span>
+            <StatusPill status="unused" />
+          </div>
+        ))}
+      </div>
+    </AdminSection>
+  );
+}
+
+async function copyLatestCodes(codes: readonly string[], toast: ReturnType<typeof useToast>) {
+  if (!codes.length) {
+    toast.error("没有可复制的兑换码");
+    return;
+  }
+  await copyCodeLines(codes);
+  toast.success("已复制全部兑换码");
+}
+
+function downloadLatestBatch(batch: AdminRedeemBatch) {
+  downloadCodesCsv(`${batch.name}-codes.csv`, batch.codes.map((code, index) => toBatchCodeRow(batch, code, index)));
+}
+
+function toBatchCodeRow(batch: AdminRedeemBatch, code: string, index: number) {
+  return {
+    id: index + 1,
+    code,
+    credit_amount_cents: batch.credit_amount_cents,
+    credit_amount_credits: batch.credit_amount_credits,
+    status: "unused",
+    redeemed_by_user_id: null,
+    redeemed_at: null,
+    expires_at: batch.expires_at,
+    created_at: batch.created_at,
+  };
 }

@@ -6,7 +6,7 @@ const facilitiesSource = readFileSync(
   new URL("../src/features/facilities/llm-facilities-page.tsx", import.meta.url),
   "utf8",
 );
-const navSource = readFileSync(new URL("../src/features/shell/admin-nav.tsx", import.meta.url), "utf8");
+const navSource = readFileSync(new URL("../src/features/shell/admin-navigation.tsx", import.meta.url), "utf8");
 const apiSource = readFileSync(new URL("../src/lib/admin-api.ts", import.meta.url), "utf8");
 
 test("admin facilities page wires the llm feature model mapping panel", () => {

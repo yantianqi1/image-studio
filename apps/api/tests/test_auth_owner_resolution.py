@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from apps.api.app.core.deps import get_db_session
 from apps.api.app.core.response import api_ok
 from apps.api.app.domains.auth.anonymous_sessions import AnonymousSession
+from apps.api.app.domains.auth.models import User
 from apps.api.app.domains.auth.ownership import ensure_anonymous_owner, resolve_request_owner
 from apps.api.app.infra.db.session import initialize_database, session_scope
 from apps.api.app.main import create_app
@@ -86,6 +87,24 @@ def test_client_provider_headers_do_not_resolve_identity_owner():
     assert owner_response.json()["data"] == {"user_id": None, "anonymous_session_id": None}
 
 
+def test_inactive_logged_in_user_is_not_downgraded_to_anonymous_owner():
+    client = build_owner_client()
+    register_response = client.post(
+        "/api/public/auth/register",
+        json={"email": "disabled-owner@example.com", "password": "top-secret"},
+    )
+    user_id = register_response.json()["data"]["id"]
+    disable_user(user_id)
+
+    probe_response = client.get("/owner-probe")
+    ensure_response = client.post("/owner-ensure")
+
+    assert probe_response.status_code == 403
+    assert probe_response.json()["error"]["code"] == "user_not_active"
+    assert ensure_response.status_code == 403
+    assert ensure_response.json()["error"]["code"] == "user_not_active"
+
+
 def revoke_anonymous_session(session_id: int) -> None:
     with session_scope() as session:
         session.execute(
@@ -93,3 +112,8 @@ def revoke_anonymous_session(session_id: int) -> None:
             .where(AnonymousSession.id == session_id)
             .values(revoked_at=datetime.utcnow())
         )
+
+
+def disable_user(user_id: int) -> None:
+    with session_scope() as session:
+        session.execute(update(User).where(User.id == user_id).values(status="disabled"))

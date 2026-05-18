@@ -129,6 +129,71 @@
   padding: 1.1rem 1.35rem 1.6rem;
 }
 
+.admin-topbar {
+  display: flex;
+  min-height: 64px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--admin-border);
+  padding: 0 0 0.85rem;
+}
+
+.admin-topbar-location {
+  min-width: 0;
+}
+
+.admin-topbar-kicker {
+  color: var(--admin-text-subtle);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.admin-topbar-title-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.3rem;
+}
+
+.admin-topbar-title {
+  color: var(--foreground);
+  font-size: 1.02rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.admin-topbar-token {
+  border: 1px solid var(--admin-border);
+  border-radius: 999px;
+  background: var(--admin-surface);
+  color: var(--admin-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0.25rem 0.45rem;
+  white-space: nowrap;
+}
+
+.admin-topbar-description {
+  color: var(--admin-muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  margin-top: 0.28rem;
+}
+
+.admin-topbar-actions {
+  flex-shrink: 0;
+}
+
+.admin-page {
+  min-width: 0;
+}
+
 .admin-page-toolbar {
   display: flex;
   min-height: 56px;

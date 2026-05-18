@@ -18,6 +18,8 @@ const statusToneMap: Record<string, StatusTone> = {
   pending: "warning",
   suspended: "warning",
   disabled: "neutral",
+  deleted: "danger",
+  soft_deleted: "danger",
   failed: "danger",
   error: "danger",
 };

@@ -4,7 +4,7 @@ import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
 
-const navSource = readFileSync(new URL("../src/features/shell/admin-nav.tsx", import.meta.url), "utf8");
+const navSource = readFileSync(new URL("../src/features/shell/admin-navigation.tsx", import.meta.url), "utf8");
 const routeSource = readFileSync(
   new URL("../src/app/admin/(protected)/character-library/page.tsx", import.meta.url),
   "utf8",
@@ -33,8 +33,10 @@ function loadAdminApi(apiClient) {
     module: { exports: {} },
     require: (path) => {
       if (path === "@/lib/api-client") return apiClient;
+      if (path === "@/lib/admin-audit-api") return { adminAuditApi: {} };
       if (path === "@/lib/admin-image-job-types") return {};
       if (path === "@/lib/admin-provider-api") return { adminProviderApi: {} };
+      if (path === "@/lib/admin-redeem-api") return { adminRedeemApi: {} };
       if (path === "@/lib/admin-users") return { buildUsersSearch: () => "" };
       throw new Error(`Unexpected require: ${path}`);
     },

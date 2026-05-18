@@ -5,7 +5,7 @@ import { adminApi } from "@/lib/admin-api";
 export function AdminLogoutButton() {
   return (
     <button
-      className="admin-nav-link admin-nav-logout w-full text-left"
+      className="admin-nav-link admin-nav-logout"
       type="button"
       onClick={async () => {
         await adminApi.logout();

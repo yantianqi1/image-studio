@@ -63,7 +63,11 @@ export function UsersPage() {
           />
         </Panel>
       </div>
-      <UserDetailDrawer user={selectedUser} onClose={() => setSelectedUser(null)} />
+      <UserDetailDrawer
+        user={selectedUser}
+        onUsersRefresh={() => refreshUsers({ setLoading, setError, setRefreshToken })}
+        onClose={() => setSelectedUser(null)}
+      />
     </AdminShell>
   );
 }
