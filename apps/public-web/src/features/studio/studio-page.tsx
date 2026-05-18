@@ -60,7 +60,7 @@ import {
   listenPromptCrafterUsePrompt,
   readGeneratePromptParam,
 } from "@/features/prompt-crafter/use-prompt";
-import { publicApi, type CharacterLibraryItem, type ImageAssetVisibility } from "@/lib/public-api";
+import { publicApi, type CharacterLibraryItem, type ImageAssetVisibility, type UploadedImageAsset } from "@/lib/public-api";
 import { cn } from "@/lib/cn";
 import { usePublicModels } from "@/lib/use-public-models";
 import { streamPromptCrafter } from "@/features/prompt-crafter/prompt-crafter-api";
@@ -110,6 +110,11 @@ type SubmitExistingTurnInput = Readonly<{
   conversationId: string;
   draft: TurnDraft;
   turnId: string;
+}>;
+
+type ReferenceImagePatch = Partial<Omit<StoredReferenceImage, "uploadState" | "uploadError">> & Readonly<{
+  uploadState?: StoredReferenceImage["uploadState"] | undefined;
+  uploadError?: string | undefined;
 }>;
 
 function readSidebarCollapsed(): boolean {
@@ -219,6 +224,67 @@ function throwIfAborted(signal: AbortSignal) {
 
 function getWelcomeAccountGateErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "账户状态读取失败";
+}
+
+function getReferenceUploadBlockingMessage(referenceImages: readonly StoredReferenceImage[]): string | null {
+  if (referenceImages.some((image) => image.uploadState === "error")) {
+    return "参考图上传失败，请先移除后重新选择。";
+  }
+  if (referenceImages.some((image) => !image.assetId)) {
+    return "参考图还在上传中，请稍后再发送。";
+  }
+  return null;
+}
+
+function getReferenceUploadErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "参考图上传失败";
+}
+
+function createReferenceUploadId() {
+  return crypto.randomUUID();
+}
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("读取文件失败"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function getReferenceUploadPatch(uploaded: UploadedImageAsset): ReferenceImagePatch {
+  return {
+    assetId: uploaded.id,
+    assetUrl: uploaded.asset_url,
+    thumbnailUrl: uploaded.thumbnail_url ?? uploaded.asset_url,
+    uploadState: undefined,
+    uploadError: undefined,
+  };
+}
+
+function getStoredReferenceUploadPatch(uploaded: StoredReferenceImage): ReferenceImagePatch {
+  if (!uploaded.assetId) {
+    throw new Error("参考图上传失败：缺少资产编号");
+  }
+  return {
+    assetId: uploaded.assetId,
+    ...(uploaded.assetUrl ? { assetUrl: uploaded.assetUrl } : {}),
+    ...(uploaded.thumbnailUrl ? { thumbnailUrl: uploaded.thumbnailUrl } : {}),
+    uploadState: undefined,
+    uploadError: undefined,
+  };
+}
+
+function stripReferenceImageUploadState(image: StoredReferenceImage): StoredReferenceImage {
+  return {
+    name: image.name,
+    ...(image.assetId !== undefined ? { assetId: image.assetId } : {}),
+    ...(image.assetUrl ? { assetUrl: image.assetUrl } : {}),
+    ...(image.thumbnailUrl ? { thumbnailUrl: image.thumbnailUrl } : {}),
+    ...(image.mimeType ? { mimeType: image.mimeType } : {}),
+    ...(image.assetId === undefined && image.dataUrl ? { dataUrl: image.dataUrl } : {}),
+  };
 }
 
 export function StudioPage() {
@@ -411,6 +477,63 @@ export function StudioPage() {
     }
   }, [selectedModel]);
 
+  const updateReferenceImageByLocalId = useCallback((localId: string, patch: ReferenceImagePatch) => {
+    setReferenceImages((prev) =>
+      prev.map((image) => (image.localId === localId ? { ...image, ...patch } : image)),
+    );
+  }, []);
+
+  const startReferencePreviewRead = useCallback((localId: string, file: File) => {
+    void readFileAsDataUrl(file)
+      .then((dataUrl) => updateReferenceImageByLocalId(localId, { dataUrl }))
+      .catch((error: unknown) => {
+        console.error("Failed to read reference image preview", error);
+      });
+  }, [updateReferenceImageByLocalId]);
+
+  const startLocalReferenceUpload = useCallback((localId: string, file: File) => {
+    void publicApi.uploadImageAsset(file)
+      .then((uploaded) => updateReferenceImageByLocalId(localId, getReferenceUploadPatch(uploaded)))
+      .catch((error: unknown) => {
+        updateReferenceImageByLocalId(localId, {
+          uploadState: "error",
+          uploadError: getReferenceUploadErrorMessage(error),
+        });
+      });
+  }, [updateReferenceImageByLocalId]);
+
+  const startRemoteReferenceUpload = useCallback((image: StoredReferenceImage) => {
+    const localId = image.localId;
+    if (!localId) return;
+    void uploadPendingReferenceImages([image], publicApi.uploadImageAsset)
+      .then(([uploaded]) => {
+        if (!uploaded) throw new Error("参考图上传失败：缺少上传结果");
+        updateReferenceImageByLocalId(localId, getStoredReferenceUploadPatch(uploaded));
+      })
+      .catch((error: unknown) => {
+        updateReferenceImageByLocalId(localId, {
+          uploadState: "error",
+          uploadError: getReferenceUploadErrorMessage(error),
+        });
+      });
+  }, [updateReferenceImageByLocalId]);
+
+  const handleReferenceFilesSelected = useCallback((files: readonly File[]) => {
+    const pending = files.map((file): StoredReferenceImage => ({
+      localId: createReferenceUploadId(),
+      name: file.name || "pasted-image.png",
+      mimeType: file.type,
+      uploadState: "uploading",
+    }));
+    setReferenceImages((prev) => [...prev, ...pending]);
+    pending.forEach((image, index) => {
+      const file = files[index];
+      if (!image.localId || !file) return;
+      startReferencePreviewRead(image.localId, file);
+      startLocalReferenceUpload(image.localId, file);
+    });
+  }, [startLocalReferenceUpload, startReferencePreviewRead]);
+
   const markConversationSubmitting = useCallback((conversationId: string) => {
     setSubmittingConversationIds((prev) => new Set(prev).add(conversationId));
   }, []);
@@ -516,12 +639,10 @@ export function StudioPage() {
     let didStartPolling = false;
 
     try {
-      if (draft.referenceImages.length > 0) {
-        setTurnProgress(progressKey, { message: "上传参考图..." });
+      const referenceUploadMessage = getReferenceUploadBlockingMessage(draft.referenceImages);
+      if (referenceUploadMessage) {
+        throw new Error(referenceUploadMessage);
       }
-      const uploadedRefs = await uploadPendingReferenceImages(draft.referenceImages, publicApi.uploadImageAsset);
-      throwIfAborted(abortController.signal);
-      conversations.updateTurn(convId, turnId, { referenceImages: uploadedRefs });
 
       setTurnProgress(progressKey, { message: "提交生成请求..." });
 
@@ -530,7 +651,7 @@ export function StudioPage() {
         contextBeforeTurnId,
         draft,
         conversation,
-        referenceImages: uploadedRefs,
+        referenceImages: draft.referenceImages,
       }));
       throwIfAborted(abortController.signal);
 
@@ -592,7 +713,7 @@ export function StudioPage() {
       prompt: trimmedPrompt,
       model: resolvedModel,
       mode: resolveStudioDraftMode({ composerMode: mode, referenceCount: referenceImages.length }),
-      referenceImages: [...referenceImages],
+      referenceImages: referenceImages.map(stripReferenceImageUploadState),
       characterLibraryIds: selectedCharacter ? [selectedCharacter.id] : [],
       characterReferences: selectedCharacter
         ? [{ id: selectedCharacter.id, name: selectedCharacter.name, thumbnailUrl: selectedCharacter.thumbnail_url }]
@@ -636,6 +757,11 @@ export function StudioPage() {
   const handleSubmit = useCallback(() => {
     const draft = createCurrentDraft();
     if (!draft || isActiveConversationSubmitting || welcomeAccountGateChecking) return;
+    const referenceUploadMessage = getReferenceUploadBlockingMessage(referenceImages);
+    if (referenceUploadMessage) {
+      setSubmissionNotice(referenceUploadMessage);
+      return;
+    }
 
     setWelcomeAccountGateChecking(true);
     void shouldShowWelcomeAccountDialog()
@@ -654,6 +780,7 @@ export function StudioPage() {
     createCurrentDraft,
     isActiveConversationSubmitting,
     openWelcomeAccountDialog,
+    referenceImages,
     submitPreparedDraft,
     welcomeAccountGateChecking,
   ]);
@@ -833,17 +960,19 @@ export function StudioPage() {
   const handleApplyPrompt = useCallback((prompt: BananaPrompt) => {
     setPrompt(cleanPromptText(prompt.prompt));
     setMode("generate");
-    // If the prompt has reference images, fetch them and set as reference images
     if (prompt.referenceImageUrls.length > 0) {
       const refs: StoredReferenceImage[] = prompt.referenceImageUrls.map((url, i) => ({
+        localId: createReferenceUploadId(),
         name: `ref-${i + 1}`,
         assetUrl: url,
         thumbnailUrl: url,
+        uploadState: "uploading",
       }));
       setReferenceImages(refs);
+      refs.forEach(startRemoteReferenceUpload);
     }
     setPromptMarketOpen(false);
-  }, []);
+  }, [startRemoteReferenceUpload]);
 
   const handleApplyPresetCard = useCallback((presetId: string) => {
     const card = presetCards.find((c) => c.id === presetId);
@@ -941,6 +1070,7 @@ export function StudioPage() {
             onResolutionChange={setResolution}
             onQualityChange={setQuality}
             onCountChange={setCount}
+            onReferenceFilesSelected={handleReferenceFilesSelected}
             onReferenceImagesChange={handleReferenceImagesChange}
             onClearCharacter={() => setSelectedCharacter(null)}
             onSubmit={handleSubmit}

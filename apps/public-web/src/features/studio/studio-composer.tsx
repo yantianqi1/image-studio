@@ -29,7 +29,6 @@ import {
 } from "react";
 
 import { cn } from "@/lib/cn";
-import { formatCredits } from "@/lib/formatters";
 import { streamPromptCrafter } from "@/features/prompt-crafter/prompt-crafter-api";
 import {
   buildPromptComplianceInstruction,
@@ -38,9 +37,7 @@ import {
 import { ASPECT_RATIO_OPTIONS, QUALITY_OPTIONS } from "@/features/studio/studio-options";
 import {
   buildModelAspectRatioOptions,
-  findModelVariant,
   getModelQualityOptions,
-  getModelStartingPriceCents,
 } from "@/features/studio/studio-models";
 import {
   MAX_COUNT,
@@ -72,6 +69,7 @@ type StudioComposerProps = Readonly<{
   onResolutionChange: (resolution: string) => void;
   onQualityChange: (quality: string) => void;
   onCountChange: (count: number) => void;
+  onReferenceFilesSelected: (files: readonly File[]) => void;
   onReferenceImagesChange: (images: readonly StoredReferenceImage[]) => void;
   onClearCharacter: () => void;
   onSubmit: () => void;
@@ -89,6 +87,18 @@ const PROMPT_AREA_MIN_HEIGHT = 76;
 const PROMPT_AREA_DEFAULT_HEIGHT = 112;
 const PROMPT_AREA_MOBILE_DEFAULT_HEIGHT = 84;
 const PROMPT_AREA_MAX_HEIGHT = 320;
+const CENTS_PER_CREDIT = 10;
+
+type PricedModelVariant = Readonly<{
+  size: string;
+  quality: string;
+  member_price_cents: number;
+}>;
+
+type PricedModelSummary = PublicModelSummary & Readonly<{
+  member_price_cents?: number;
+  variants?: readonly PricedModelVariant[];
+}>;
 
 function getPromptAreaMaxHeight() {
   if (typeof window === "undefined") return PROMPT_AREA_MAX_HEIGHT;
@@ -103,10 +113,43 @@ function clampPromptAreaHeight(height: number) {
   return Math.min(Math.max(height, PROMPT_AREA_MIN_HEIGHT), getPromptAreaMaxHeight());
 }
 
-function getSubmitLabel(mode: ComposerMode, isSubmitting: boolean, hasRefs: boolean) {
-  if (isSubmitting) return "处理中";
-  if (mode === "chat") return "发送";
-  if (hasRefs) return "参考生图";
+function formatCredits(value: number) {
+  return `${new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 2 }).format(value)} 额度`;
+}
+
+function findPricedModelVariant(
+  model: PublicModelSummary | null,
+  size: string,
+  quality: string,
+): PricedModelVariant | null {
+  const pricedModel = model as PricedModelSummary | null;
+  return pricedModel?.variants?.find((variant) => variant.size === size && variant.quality === quality) ?? null;
+}
+
+function getModelStartingPriceCents(model: PublicModelSummary | null): number | null {
+  if (!model) return null;
+  const pricedModel = model as PricedModelSummary;
+  const prices = pricedModel.variants?.map((variant) => variant.member_price_cents) ?? [];
+  if (prices.length > 0) return Math.min(...prices);
+  return pricedModel.member_price_cents ?? null;
+}
+
+function formatModelPriceLabel(cents: number | null) {
+  return cents === null ? "" : formatCredits(cents / CENTS_PER_CREDIT);
+}
+
+function getSubmitLabel(input: Readonly<{
+  mode: ComposerMode;
+  isSubmitting: boolean;
+  hasRefs: boolean;
+  hasPendingReferenceUploads: boolean;
+  hasReferenceUploadErrors: boolean;
+}>) {
+  if (input.isSubmitting) return "处理中";
+  if (input.hasReferenceUploadErrors) return "上传失败";
+  if (input.hasPendingReferenceUploads) return "上传中";
+  if (input.mode === "chat") return "发送";
+  if (input.hasRefs) return "参考生图";
   return "生成图片";
 }
 
@@ -168,6 +211,7 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
     onResolutionChange,
     onQualityChange,
     onCountChange,
+    onReferenceFilesSelected,
     onReferenceImagesChange,
     onClearCharacter,
     onSubmit,
@@ -204,14 +248,25 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
   const resolutions = activeRatio?.resolutions ?? [];
   const modelQualityOptions = getModelQualityOptions(selectedModel, resolution);
   const qualityOptions = modelQualityOptions.length > 0 ? modelQualityOptions : QUALITY_OPTIONS;
-  const activeVariant = findModelVariant(selectedModel, resolution, quality);
-  const activeBasePriceLabel = activeVariant
-    ? formatCredits(activeVariant.member_price_cents / 10)
-    : selectedModel
-      ? formatCredits(selectedModel.member_price_cents / 10)
-      : "";
-  const isDisabled = isSubmitting || !prompt.trim() || modelsState.status !== "ready";
-  const submitLabel = getSubmitLabel("generate", isSubmitting, referenceImages.length > 0);
+  const activeVariant = findPricedModelVariant(selectedModel, resolution, quality);
+  const activeBasePriceLabel = formatModelPriceLabel(
+    activeVariant?.member_price_cents ?? getModelStartingPriceCents(selectedModel),
+  );
+  const hasPendingReferenceUploads = referenceImages.some((image) => !image.assetId);
+  const hasReferenceUploadErrors = referenceImages.some((image) => image.uploadState === "error");
+  const isDisabled =
+    isSubmitting
+    || !prompt.trim()
+    || modelsState.status !== "ready"
+    || hasPendingReferenceUploads
+    || hasReferenceUploadErrors;
+  const submitLabel = getSubmitLabel({
+    mode: "generate",
+    isSubmitting,
+    hasRefs: referenceImages.length > 0,
+    hasPendingReferenceUploads,
+    hasReferenceUploadErrors,
+  });
 
   // Close model menu on outside click
   useEffect(() => {
@@ -283,7 +338,7 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
   );
 
   const handlePaste = useCallback(
-    async (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
       const items = event.clipboardData?.items;
       if (!items) return;
       const imageFiles: File[] = [];
@@ -295,27 +350,19 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
       }
       if (imageFiles.length === 0) return;
       event.preventDefault();
-      const newImages = await Promise.all(imageFiles.map(async (file): Promise<StoredReferenceImage> => {
-        const dataUrl = await readFileAsDataUrl(file);
-        return { name: file.name || "pasted-image.png", dataUrl, mimeType: file.type };
-      }));
-      onReferenceImagesChange([...referenceImages, ...newImages]);
+      onReferenceFilesSelected(imageFiles);
     },
-    [onReferenceImagesChange, referenceImages],
+    [onReferenceFilesSelected],
   );
 
   const handleFileSelect = useCallback(
-    async (event: ChangeEvent<HTMLInputElement>) => {
+    (event: ChangeEvent<HTMLInputElement>) => {
       const files = event.target.files;
       if (!files?.length) return;
-      const newImages = await Promise.all(Array.from(files).map(async (file): Promise<StoredReferenceImage> => {
-        const dataUrl = await readFileAsDataUrl(file);
-        return { name: file.name, dataUrl, mimeType: file.type };
-      }));
-      onReferenceImagesChange([...referenceImages, ...newImages]);
+      onReferenceFilesSelected(Array.from(files));
       event.target.value = "";
     },
-    [onReferenceImagesChange, referenceImages],
+    [onReferenceFilesSelected],
   );
 
   const handleRemoveReference = useCallback(
@@ -447,29 +494,55 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
               </button>
             </div>
           ) : null}
-          {referenceImages.map((img, index) => (
-            <div key={img.name + index} className="relative size-14 shrink-0 sm:size-16">
-              <button
-                type="button"
-                className="group size-14 overflow-hidden rounded-xl border border-gray-200 bg-gray-50 transition hover:border-gray-300 sm:size-16"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={img.dataUrl || img.assetUrl || img.thumbnailUrl || ""}
-                  alt={img.name}
-                  className="h-full w-full object-cover"
-                />
-              </button>
-              <button
-                type="button"
-                onClick={() => handleRemoveReference(index)}
-                className="absolute -right-1 -top-1 z-10 inline-flex size-5 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 shadow-sm transition hover:border-gray-300 hover:text-gray-800"
-                aria-label={`移除 ${img.name}`}
-              >
-                <X className="size-3" />
-              </button>
-            </div>
-          ))}
+          {referenceImages.map((img, index) => {
+            const previewUrl = img.dataUrl || img.thumbnailUrl || img.assetUrl || "";
+            return (
+              <div key={img.localId ?? img.name + index} className="relative size-14 shrink-0 sm:size-16">
+                <button
+                  type="button"
+                  className={cn(
+                    "group relative size-14 overflow-hidden rounded-xl border bg-gray-50 transition hover:border-gray-300 sm:size-16",
+                    img.uploadState === "error" ? "border-red-300" : "border-gray-200",
+                  )}
+                  title={img.uploadError ?? img.name}
+                >
+                  {previewUrl ? (
+                    <>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={previewUrl}
+                        alt={img.name}
+                        className="h-full w-full object-cover"
+                      />
+                    </>
+                  ) : (
+                    <span className="flex h-full w-full items-center justify-center text-gray-400">
+                      <Loader2 className="size-4 animate-spin" />
+                    </span>
+                  )}
+                  {img.uploadState === "uploading" ? (
+                    <span className="absolute inset-x-1 bottom-1 inline-flex items-center justify-center gap-1 rounded-full bg-gray-950/70 px-1.5 py-0.5 text-[10px] font-medium text-white">
+                      <Loader2 className="size-3 animate-spin" />
+                      上传中
+                    </span>
+                  ) : null}
+                  {img.uploadState === "error" ? (
+                    <span className="absolute inset-x-1 bottom-1 rounded-full bg-red-600 px-1.5 py-0.5 text-center text-[10px] font-medium text-white">
+                      上传失败
+                    </span>
+                  ) : null}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveReference(index)}
+                  className="absolute -right-1 -top-1 z-10 inline-flex size-5 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 shadow-sm transition hover:border-gray-300 hover:text-gray-800"
+                  aria-label={`移除 ${img.name}`}
+                >
+                  <X className="size-3" />
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -549,7 +622,7 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
                     <div className="absolute bottom-[calc(100%+8px)] left-0 z-[80] max-h-[45dvh] w-[218px] overflow-y-auto rounded-2xl border border-gray-200 bg-white p-1.5 shadow-lg">
                       {modelsState.data.map((m) => {
                         const active = m.code === model;
-                        const priceLabel = formatCredits(getModelStartingPriceCents(m) / 10);
+                        const priceLabel = formatModelPriceLabel(getModelStartingPriceCents(m));
                         return (
                           <button
                             key={m.id}
@@ -565,7 +638,9 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
                           >
                             <span className="min-w-0">
                               <span className="block truncate">{m.display_name}</span>
-                              <span className="block text-[11px] font-medium text-gray-400">基础 {priceLabel}/张起</span>
+                              {priceLabel ? (
+                                <span className="block text-[11px] font-medium text-gray-400">基础 {priceLabel}/张起</span>
+                              ) : null}
                             </span>
                             {active && <Check className="size-4 shrink-0" />}
                           </button>
@@ -925,13 +1000,4 @@ async function collectPromptRewrite(instruction: string, signal: AbortSignal): P
 
 function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError";
-}
-
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error("读取文件失败"));
-    reader.readAsDataURL(file);
-  });
 }

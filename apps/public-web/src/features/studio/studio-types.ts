@@ -5,12 +5,15 @@ export type TurnStatus = "queued" | "generating" | "success" | "error" | "cancel
 export type ComposerMode = "generate" | "chat";
 
 export type StoredReferenceImage = Readonly<{
+  localId?: string;
   name: string;
   assetId?: number;
   assetUrl?: string;
   thumbnailUrl?: string;
   dataUrl?: string;
   mimeType?: string;
+  uploadState?: "uploading" | "error";
+  uploadError?: string;
 }>;
 
 export type StoredCharacterReference = Readonly<{

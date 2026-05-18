@@ -119,9 +119,19 @@ test("studio starts image polling without blocking new submissions", () => {
   assert.doesNotMatch(pageSource, /await waitForImageJobResults\(publicApi, job\.id/);
 });
 
-test("studio reads multiple reference images concurrently", () => {
-  assert.match(composerSource, /Promise\.all\([\s\S]*imageFiles\.map/);
-  assert.match(composerSource, /Promise\.all\([\s\S]*Array\.from\(files\)\.map/);
+test("studio queues multiple reference images immediately on selection", () => {
+  assert.match(pageSource, /const pending = files\.map/);
+  assert.match(pageSource, /setReferenceImages\(\(prev\) => \[\.\.\.prev, \.\.\.pending\]\)/);
+  assert.match(pageSource, /pending\.forEach/);
+});
+
+test("studio uploads reference images when they are selected instead of waiting for submit", () => {
+  assert.match(composerSource, /onReferenceFilesSelected/);
+  assert.match(composerSource, /上传中/);
+  assert.match(composerSource, /上传失败/);
+  assert.match(pageSource, /handleReferenceFilesSelected/);
+  assert.match(pageSource, /onReferenceFilesSelected=\{handleReferenceFilesSelected\}/);
+  assert.doesNotMatch(pageSource, /uploadPendingReferenceImages\(draft\.referenceImages/);
 });
 
 test("studio does not preserve anonymous image concurrency limit handling", () => {
