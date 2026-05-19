@@ -18,3 +18,9 @@ test("client provider controls move raw inputs into settings popover", () => {
   assert.match(popoverSource, /OpenAI 兼容 URL/);
   assert.match(popoverSource, /API Key/);
 });
+
+test("settings popover closes on outside pointer interaction", () => {
+  assert.match(popoverSource, /addEventListener\("pointerdown"/);
+  assert.match(popoverSource, /popover\.contains\(target\)/);
+  assert.match(popoverSource, /popover\.removeAttribute\("open"\)/);
+});

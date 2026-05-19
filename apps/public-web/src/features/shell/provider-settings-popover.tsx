@@ -1,6 +1,6 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useRef, useSyncExternalStore, type RefObject } from "react";
 
 import {
   CLIENT_PROVIDER_DRAFT_CHANGED_EVENT,
@@ -16,8 +16,11 @@ const EMPTY_DRAFT: ClientProviderDraft = { baseUrl: "", apiKey: "" };
 const EMPTY_DRAFT_SNAPSHOT = JSON.stringify(EMPTY_DRAFT);
 
 export function ProviderSettingsPopover() {
+  const popoverRef = useRef<HTMLDetailsElement>(null);
   const draft = parseClientProviderDraftSnapshot(useClientProviderDraftSnapshot());
   const enabled = hasCompleteClientProviderConfig(draft);
+
+  useCloseDetailsOnOutsidePointerDown(popoverRef);
 
   function updateDraft(nextDraft: ClientProviderDraft) {
     saveClientProviderDraft(nextDraft);
@@ -30,7 +33,7 @@ export function ProviderSettingsPopover() {
   }
 
   return (
-    <details className={styles.popover}>
+    <details className={styles.popover} ref={popoverRef}>
       <summary className={styles.trigger} aria-label="通道设置">
         <span className={styles.statusDot} data-enabled={enabled ? "true" : "false"} aria-hidden="true" />
         <span className={styles.triggerText}>通道设置</span>
@@ -41,6 +44,25 @@ export function ProviderSettingsPopover() {
       </div>
     </details>
   );
+}
+
+function useCloseDetailsOnOutsidePointerDown(ref: RefObject<HTMLDetailsElement | null>) {
+  useEffect(() => {
+    function closeOnOutsidePointerDown(event: PointerEvent) {
+      const popover = ref.current;
+      const target = event.target;
+      if (!popover?.open || !(target instanceof Node)) {
+        return;
+      }
+      if (popover.contains(target)) {
+        return;
+      }
+      popover.removeAttribute("open");
+    }
+
+    document.addEventListener("pointerdown", closeOnOutsidePointerDown);
+    return () => document.removeEventListener("pointerdown", closeOnOutsidePointerDown);
+  }, [ref]);
 }
 
 function SettingsHeader({ enabled }: Readonly<{ enabled: boolean }>) {
