@@ -96,10 +96,11 @@ test("studio compliance retry rewrites the failed prompt before submitting", () 
   assert.doesNotMatch(pageSource, /Fall through with original prompt/);
 });
 
-test("studio first image turn does not block on backend generated conversation title", () => {
-  assert.doesNotMatch(pageSource, /applyGeneratedTitle/);
-  assert.doesNotMatch(pageSource, /job\.title/);
-  assert.doesNotMatch(pageSource, /autoTitle:\s*input\.applyGeneratedTitle/);
+test("studio first image turn requests async backend generated conversation title", () => {
+  assert.match(pageSource, /applyGeneratedTitle/);
+  assert.match(pageSource, /updatedJob\.title/);
+  assert.match(pageSource, /renameConversation/);
+  assert.match(pageSource, /autoTitle:\s*input\.applyGeneratedTitle/);
 });
 
 test("studio queued state exposes worker handoff instead of generic preparation", () => {

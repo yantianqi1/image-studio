@@ -1,5 +1,6 @@
 from apps.api.app.domains.billing.credits import cents_to_price_credits
 from apps.api.app.domains.image.assets import resolve_asset_public_urls
+from apps.api.app.domains.image.title_generation import PENDING_IMAGE_JOB_TITLE
 
 
 def admin_job_payload(job, *, results) -> dict[str, object]:
@@ -14,7 +15,7 @@ def job_payload(job) -> dict[str, object]:
         "user_id": job.user_id,
         "source": job.source,
         "mode": job.mode,
-        "title": job.title,
+        "title": resolve_job_title(job),
         "prompt": job.prompt,
         "model_code": job.model_code,
         "visibility": job.visibility,
@@ -51,6 +52,10 @@ def resolve_job_client_provider_base_url(job) -> str | None:
         return None
     base_url = config.get("base_url")
     return base_url if isinstance(base_url, str) and base_url.strip() else None
+
+
+def resolve_job_title(job) -> str | None:
+    return None if job.title == PENDING_IMAGE_JOB_TITLE else job.title
 
 
 ASSET_DOWNLOAD_EXTENSIONS = {

@@ -26,6 +26,7 @@ export type ImageGenerationRequest = Readonly<{
   character_library_ids?: readonly number[];
   conversation_messages?: readonly ImageConversationMessage[];
   visibility?: ImageAssetVisibility;
+  auto_title?: boolean;
 }>;
 
 export type ImageConversationContentPart = Readonly<

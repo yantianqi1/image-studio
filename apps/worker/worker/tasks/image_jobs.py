@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+import logging
 
+from apps.api.app.domains.image.models import ImageJob
 from apps.api.app.domains.image.service import claim_next_job, process_claimed_job
+from apps.api.app.domains.image.title_generation import PENDING_IMAGE_JOB_TITLE, generate_image_job_title
 from apps.api.app.infra.db.session import session_scope
+
+logger = logging.getLogger(__name__)
 
 
 def run_next_image_job() -> int | None:
@@ -50,6 +55,35 @@ def claim_next_image_job_ids(*, max_jobs: int) -> list[int]:
 
 
 def process_claimed_image_job(job_id: int) -> int:
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        title_future = executor.submit(generate_requested_image_job_title, job_id)
+        render_future = executor.submit(process_claimed_image_job_render, job_id)
+        render_future.result()
+        log_title_generation_failure(job_id=job_id, future=title_future)
+    return job_id
+
+
+def process_claimed_image_job_render(job_id: int) -> int:
     with session_scope() as session:
         process_claimed_job(session, job_id=job_id)
     return job_id
+
+
+def generate_requested_image_job_title(job_id: int) -> int | None:
+    with session_scope() as session:
+        job = session.get(ImageJob, job_id)
+        if not should_generate_image_job_title(job):
+            return None
+        job.title = generate_image_job_title(session, prompt=job.prompt)
+        return job_id
+
+
+def should_generate_image_job_title(job: ImageJob | None) -> bool:
+    return bool(job and job.title == PENDING_IMAGE_JOB_TITLE)
+
+
+def log_title_generation_failure(*, job_id: int, future) -> None:
+    try:
+        future.result()
+    except Exception:
+        logger.exception("image job title generation failed", extra={"image_job_id": job_id})

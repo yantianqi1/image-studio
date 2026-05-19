@@ -7,6 +7,7 @@ from apps.api.app.domains.llm.feature_settings import FEATURE_IMAGE_JOB_TITLE, g
 from apps.api.app.domains.llm.openai_chat import generate_structured_chat
 
 IMAGE_JOB_TITLE_MAX_CHARS = 10
+PENDING_IMAGE_JOB_TITLE = "__image_job_title_pending__"
 IMAGE_JOB_TITLE_SYSTEM_PROMPT = """
 你是创作台历史记录标题生成器。根据用户本次生图提示词，生成一个极短中文标题。
 

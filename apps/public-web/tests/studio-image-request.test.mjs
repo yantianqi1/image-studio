@@ -212,7 +212,7 @@ test("buildImageJobRequest forwards selected character library ids", () => {
   assert.equal(request.prompt, "让角色在花园里读书");
 });
 
-test("buildImageJobRequest does not request blocking backend title generation", () => {
+test("buildImageJobRequest opts into async backend title generation", () => {
   const { buildImageJobRequest } = loadStudioImageRequest();
   const draft = {
     prompt: "雨夜街头的人像海报",
@@ -230,9 +230,10 @@ test("buildImageJobRequest does not request blocking backend title generation", 
     draft,
     conversation: null,
     referenceImages: [],
+    autoTitle: true,
   });
 
-  assert.equal("auto_title" in request, false);
+  assert.equal(request.auto_title, true);
   assert.equal(request.size, "1024x1536");
   assert.equal(request.quality, "high");
 });

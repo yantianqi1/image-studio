@@ -97,6 +97,7 @@ type PersistedSettings = {
 
 type PollSubmittedImageJobInput = Readonly<{
   abortController?: AbortController;
+  applyGeneratedTitle?: boolean;
   conversationId: string;
   initialMessage?: string;
   jobId: number;
@@ -105,6 +106,7 @@ type PollSubmittedImageJobInput = Readonly<{
 }>;
 
 type SubmitExistingTurnInput = Readonly<{
+  applyGeneratedTitle?: boolean;
   contextBeforeTurnId?: string;
   conversation: StudioConversation | null;
   conversationId: string;
@@ -571,6 +573,9 @@ export function StudioPage() {
       const completed = await waitForImageJobResults(publicApi, input.jobId, {
         signal: abortController.signal,
         onJobUpdate: (updatedJob) => {
+          if (input.applyGeneratedTitle && updatedJob.title) {
+            conversations.renameConversation(input.conversationId, updatedJob.title);
+          }
           if (updatedJob.status === "succeeded") return;
           const elapsed = Date.now() - input.startTime;
           setTurnProgress(progressKey, {
@@ -591,6 +596,9 @@ export function StudioPage() {
         taskStatus: completed.job.status,
         images: imageJobResultsToStoredImages(completed.results),
       });
+      if (input.applyGeneratedTitle && completed.job.title) {
+        conversations.renameConversation(input.conversationId, completed.job.title);
+      }
     } catch (error: unknown) {
       if (error instanceof DOMException && error.name === "AbortError") {
         return;
@@ -651,6 +659,7 @@ export function StudioPage() {
       setTurnProgress(progressKey, { message: "提交生成请求..." });
 
       const job = await publicApi.generateImage(buildImageJobRequest({
+        autoTitle: input.applyGeneratedTitle,
         contextBeforeTurnId,
         draft,
         conversation,
@@ -658,12 +667,16 @@ export function StudioPage() {
       }));
       throwIfAborted(abortController.signal);
 
+      if (input.applyGeneratedTitle && job.title) {
+        conversations.renameConversation(convId, job.title);
+      }
       conversations.updateTurn(convId, turnId, { status: getTurnStatusForImageJob(job.status), taskId: job.id });
       setTurnProgress(progressKey, { message: "已提交，等待生成服务接手..." });
 
       didStartPolling = true;
       void pollSubmittedImageJob({
         abortController,
+        applyGeneratedTitle: input.applyGeneratedTitle,
         conversationId: convId,
         jobId: job.id,
         startTime: Date.now(),
@@ -686,10 +699,13 @@ export function StudioPage() {
   }, [clearConversationSubmitting, conversations, markConversationSubmitting, pollSubmittedImageJob]);
 
   const submitDraft = useCallback(async (draft: TurnDraft) => {
+    const shouldApplyGeneratedTitle =
+      conversations.activeConversation === null || conversations.activeConversation.turns.length === 0;
     const { turnId, conversationId: convId } = conversations.addTurn(draft);
     if (!convId || !turnId) return;
 
     await submitExistingTurn({
+      applyGeneratedTitle: shouldApplyGeneratedTitle,
       conversation: conversations.activeConversation,
       conversationId: convId,
       draft,
