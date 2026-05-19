@@ -16,7 +16,6 @@ EXPECTED_UNLIMITED_JOB_COUNT = 4
 
 
 def test_worker_run_once_processes_all_claimable_image_jobs_concurrently(monkeypatch) -> None:
-    monkeypatch.setenv("SIGNUP_BONUS_CENTS", "1000")
     client = build_client()
     register_user(client, email="worker-concurrency@example.com")
     job_ids = [
@@ -36,6 +35,63 @@ def test_worker_run_once_processes_all_claimable_image_jobs_concurrently(monkeyp
             "succeeded"
             for _ in range(EXPECTED_UNLIMITED_JOB_COUNT)
         ]
+
+
+def test_worker_run_once_processes_image_jobs_when_comic_task_is_claimed(monkeypatch) -> None:
+    calls: list[str] = []
+
+    def process_comic_task() -> str:
+        calls.append("comic-task")
+        return "comic-task-1"
+
+    def process_comic_orchestration() -> None:
+        calls.append("comic-orchestration")
+        return None
+
+    def process_image_jobs() -> list[int]:
+        calls.append("image-jobs")
+        return [101, 102]
+
+    monkeypatch.setattr(worker_main, "run_next_comic_task", process_comic_task)
+    monkeypatch.setattr(worker_main, "run_next_comic_orchestration", process_comic_orchestration)
+    monkeypatch.setattr(worker_main, "run_next_image_jobs", process_image_jobs)
+
+    message = worker_main.run_once()
+
+    assert sorted(calls) == ["comic-orchestration", "comic-task", "image-jobs"]
+    assert message == "Processed comic task comic-task-1; Processed image jobs 101, 102."
+
+
+def test_serve_forever_starts_independent_worker_branches(monkeypatch) -> None:
+    submitted_branches: list[str] = []
+    max_workers_seen: list[int] = []
+
+    class CompletedFuture:
+        def result(self) -> None:
+            return None
+
+    class CapturingExecutor:
+        def __init__(self, *, max_workers: int) -> None:
+            max_workers_seen.append(max_workers)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback) -> None:
+            return None
+
+        def submit(self, _fn, *, branch, poll_interval_seconds):
+            assert poll_interval_seconds == 1.0
+            submitted_branches.append(branch.name)
+            return CompletedFuture()
+
+    monkeypatch.setattr(worker_main, "ThreadPoolExecutor", CapturingExecutor)
+    monkeypatch.setattr(worker_main, "wait_for_worker_branch_failure", lambda _futures: None)
+
+    worker_main.serve_forever()
+
+    assert max_workers_seen == [3]
+    assert submitted_branches == ["comic-task", "comic-orchestration", "image-jobs"]
 
 
 class RenderConcurrencyTracker:
