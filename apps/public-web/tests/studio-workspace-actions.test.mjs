@@ -103,10 +103,11 @@ test("studio first image turn requests async backend generated conversation titl
   assert.match(pageSource, /autoTitle:\s*input\.applyGeneratedTitle/);
 });
 
-test("studio queued state exposes worker handoff instead of generic preparation", () => {
+test("studio busy state does not expose worker handoff or queue copy", () => {
   assert.doesNotMatch(resultsSource, /准备中\.\.\./);
-  assert.match(resultsSource, /等待生成服务接手/);
-  assert.match(studioPollingSource, /生成服务暂未接手/);
+  assert.doesNotMatch(resultsSource, /等待生成服务接手/);
+  assert.doesNotMatch(studioPollingSource, /生成服务暂未接手/);
+  assert.doesNotMatch(studioPollingSource, /任务队列/);
   assert.match(pageSource, /getTurnStatusForImageJob/);
 });
 

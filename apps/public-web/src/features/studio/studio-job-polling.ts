@@ -12,8 +12,6 @@ const TERMINAL_FAILED_STATUS = "failed";
 const TERMINAL_SUCCEEDED_STATUS = "succeeded";
 const MISSING_RESULTS_MESSAGE = "生成任务已完成，但没有返回图片结果";
 const MAX_POLL_DURATION_MS = 5 * 60 * 1000;
-const QUEUE_HANDOFF_TIMEOUT_MS = 45 * 1000;
-const WORKER_HANDOFF_TIMEOUT_MESSAGE = "生成服务暂未接手，请检查 worker 进程或任务队列。";
 
 type Sleep = (milliseconds: number, signal?: AbortSignal) => Promise<void>;
 type JobUpdateHandler = (job: ImageGenerationResponse) => void;
@@ -91,38 +89,8 @@ export async function waitForImageJobResults(
       }
       return { job, results };
     }
-    assertWorkerHandoffIsFresh(job);
     await sleep(POLL_INTERVAL_MS, options.signal);
   }
-}
-
-function assertWorkerHandoffIsFresh(job: ImageGenerationResponse) {
-  if (job.status !== "queued" || job.started_at) {
-    return;
-  }
-  const queuedAtMs = parseJobTimestamp(job.available_at ?? job.created_at);
-  if (queuedAtMs === null) {
-    return;
-  }
-  if (Date.now() - queuedAtMs > QUEUE_HANDOFF_TIMEOUT_MS) {
-    throw new Error(WORKER_HANDOFF_TIMEOUT_MESSAGE);
-  }
-}
-
-function parseJobTimestamp(value: string | undefined): number | null {
-  if (!value) {
-    return null;
-  }
-  const normalized = normalizeIsoTimestamp(value);
-  const timestamp = new Date(normalized).getTime();
-  return Number.isNaN(timestamp) ? null : timestamp;
-}
-
-function normalizeIsoTimestamp(value: string): string {
-  if (/[zZ]|[+-]\d{2}:\d{2}$/.test(value)) {
-    return value;
-  }
-  return `${value}Z`;
 }
 
 function throwIfAborted(signal: AbortSignal | undefined) {

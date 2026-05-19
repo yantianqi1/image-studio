@@ -81,26 +81,27 @@ test("waitForImageJobResults exposes succeeded job without result rows", async (
   );
 });
 
-test("waitForImageJobResults reports a queued job that was not claimed by the worker", async () => {
+test("waitForImageJobResults keeps polling queued jobs without worker handoff errors", async () => {
   const { waitForImageJobResults } = loadPolling();
   const staleCreatedAt = new Date(Date.now() - 8 * 60 * 1000).toISOString().replace(/Z$/, "");
+  let pollCount = 0;
   const api = {
     async getImageJob(jobId) {
+      pollCount += 1;
+      if (pollCount === 2) {
+        return { id: jobId, status: "succeeded", created_at: staleCreatedAt, started_at: staleCreatedAt, error_message: null };
+      }
       return { id: jobId, status: "queued", created_at: staleCreatedAt, started_at: null, error_message: null };
     },
     async getImageJobResults() {
-      throw new Error("should not fetch results for a queued job");
+      return [{ id: 1, job_id: 14, result_index: 1, asset_id: 2, asset_url: "/asset/2" }];
     },
   };
 
-  await assert.rejects(
-    () => waitForImageJobResults(api, 14, {
-      sleep: async () => {
-        throw new Error("queued worker handoff should fail before sleeping");
-      },
-    }),
-    /生成服务暂未接手/,
-  );
+  const completed = await waitForImageJobResults(api, 14, { sleep: async () => undefined });
+
+  assert.equal(completed.job.status, "succeeded");
+  assert.equal(completed.results.length, 1);
 });
 
 test("waitForImageJobResults stops polling when aborted during sleep", async () => {

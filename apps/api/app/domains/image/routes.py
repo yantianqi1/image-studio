@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, File, Query, Request, Response, UploadFile, status
 from sqlalchemy.orm import Session
 
+from apps.api.app.core.errors import AppError
 from apps.api.app.core.deps import get_db_session
 from apps.api.app.core.response import api_ok
 from apps.api.app.domains.auth.ownership import ensure_anonymous_owner, resolve_request_owner
@@ -11,6 +12,7 @@ from apps.api.app.domains.image.assets import (
     resolve_asset_content,
     resolve_thumbnail_content,
 )
+from apps.api.app.domains.image.direct_rendering import render_job_immediately
 from apps.api.app.domains.image.gallery import (
     delete_owned_asset,
     get_asset_for_read,
@@ -90,6 +92,11 @@ def create_image_job(
             reference_type="image_job",
             reference_id=str(job.id),
         )
+    try:
+        render_job_immediately(session, job=job)
+    except AppError:
+        session.commit()
+        raise
     session.commit()
     return api_ok(job_payload(job))
 

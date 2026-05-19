@@ -209,7 +209,7 @@ function imageJobResultsToStoredImages(results: CompletedImageJob["results"]): S
 
 function getImageJobProgressMessage(status: string): string {
   if (status === "queued" || status === "pending") {
-    return "等待生成服务接手...";
+    return "正在向生图模型发送请求...";
   }
   return "生成中...";
 }
@@ -671,7 +671,7 @@ export function StudioPage() {
         conversations.renameConversation(convId, job.title);
       }
       conversations.updateTurn(convId, turnId, { status: getTurnStatusForImageJob(job.status), taskId: job.id });
-      setTurnProgress(progressKey, { message: "已提交，等待生成服务接手..." });
+      setTurnProgress(progressKey, { message: "生成结果同步中..." });
 
       didStartPolling = true;
       void pollSubmittedImageJob({

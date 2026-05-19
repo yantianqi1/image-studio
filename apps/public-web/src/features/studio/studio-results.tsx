@@ -75,27 +75,6 @@ function formatTurnTime(iso: string) {
   }).format(date);
 }
 
-function formatElapsed(ms: number | undefined) {
-  if (!ms) return "";
-  const seconds = Math.floor(ms / 1000);
-  if (seconds < 60) return `${seconds}s`;
-  return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
-}
-
-function LiveTimer({ startMs }: { startMs: number }) {
-  const [now, setNow] = useState(Date.now);
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, []);
-  const elapsed = now - startMs;
-  return (
-    <p className="rounded-full bg-white/70 px-2.5 py-1 font-mono text-xs tabular-nums text-gray-400">
-      已等待 {formatElapsed(elapsed)}
-    </p>
-  );
-}
-
 export const StudioResults = memo(function StudioResults({
   conversation,
   progressByTurnKey,
@@ -315,7 +294,6 @@ const TurnCard = memo(function TurnCard({
 }>) {
   const modeInfo = MODE_LABELS[turn.mode] ?? MODE_LABELS.generate;
   const isBusy = turn.status === "queued" || turn.status === "generating";
-  const busyStartMs = isBusy ? new Date(turn.createdAt).getTime() : null;
   const [editingPrompt, setEditingPrompt] = useState(false);
   const [promptDraft, setPromptDraft] = useState(turn.prompt);
 
@@ -456,7 +434,6 @@ const TurnCard = memo(function TurnCard({
                   resolution={turn.resolution}
                   progress={i === 0 ? progress : undefined}
                   status={turn.status}
-                  busyStartMs={i === 0 ? busyStartMs : null}
                   index={i}
                 />
               ))}
@@ -698,14 +675,12 @@ function GenerationSkeleton({
   resolution,
   progress,
   status,
-  busyStartMs,
   index,
 }: Readonly<{
   aspectRatio: string;
   resolution: string;
   progress: TurnProgress | undefined;
   status: string;
-  busyStartMs: number | null;
   index: number;
 }>) {
   const aspectPadding = getAspectPadding(aspectRatio, resolution);
@@ -728,9 +703,8 @@ function GenerationSkeleton({
           {index === 0 && (
             <>
               <p className="text-xs font-medium text-gray-600">
-                {progress?.message || (status === "queued" ? "等待生成服务接手..." : "生成中...")}
+                {progress?.message || (status === "queued" ? "正在向生图模型发送请求..." : "生成中...")}
               </p>
-              {busyStartMs != null && <LiveTimer startMs={busyStartMs} />}
             </>
           )}
         </div>
