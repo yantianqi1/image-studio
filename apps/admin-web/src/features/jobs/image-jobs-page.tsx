@@ -42,7 +42,7 @@ export function ImageJobsPage() {
   return (
     <AdminShell
       title="图片任务"
-      description="按提示词、参数扣费和结果图逐条审阅生成记录。"
+      description="按提示词、参数、上游成本和结果图逐条审阅生成记录。"
       actions={<RefreshButton loading={jobsLoading} onRefresh={() => mutateJobs()} />}
     >
       <div className="col-span-12 grid gap-4">
@@ -119,7 +119,7 @@ function RefreshButton({ loading, onRefresh }: Readonly<{
 }>) {
   return (
     <div className="image-jobs-toolbar">
-      <span>自动刷新 5s</span>
+      <span>自动刷新 5 秒</span>
       <button className="admin-button" disabled={loading} type="button" onClick={onRefresh}>
         {loading ? "刷新中" : "刷新"}
       </button>

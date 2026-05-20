@@ -10,11 +10,9 @@ import {
   type ImageFormState,
   type ImageQuality,
 } from "@/features/home/generation-workbench.types";
-import { formatCredits } from "@/lib/formatters";
-import type { PublicModelSummary, WalletSummary } from "@/lib/public-api";
+import type { PublicModelSummary } from "@/lib/public-api";
 import type { ResourceState } from "@/lib/use-api-resource";
 
-const UNAUTHORIZED_STATUS = 401;
 export const SIDEBAR_COLLAPSED_STORAGE_KEY = "commercial_studio_history_sidebar_collapsed";
 
 export const INITIAL_FORM: ImageFormState = {
@@ -79,17 +77,6 @@ export function resolveSubmissionModel({
     return { error: "所选模型不存在，请重新选择后再提交。" } as const;
   }
   return { model: selectedModel } as const;
-}
-
-export function getWalletLabel(walletState: ResourceState<WalletSummary>) {
-  if (walletState.status === "error" && walletState.statusCode === UNAUTHORIZED_STATUS) {
-    return "未登录";
-  }
-  if (walletState.status !== "ready") {
-    return "余额 --";
-  }
-
-  return formatCredits(walletState.data.balance_credits);
 }
 
 export function getStateFromHistory(history: GenerationHistoryItem | null): GenerationState {

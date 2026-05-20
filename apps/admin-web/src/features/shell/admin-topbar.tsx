@@ -12,10 +12,10 @@ export function AdminTopbar() {
   return (
     <header className="admin-topbar">
       <div className="admin-topbar-location">
-        <p className="admin-topbar-kicker">{location?.group.label ?? "Dashboard"}</p>
+        <p className="admin-topbar-kicker">{location?.group.label ?? "后台"}</p>
         <div className="admin-topbar-title-row">
           <h1 className="admin-topbar-title">{location?.item.label ?? "后台工作台"}</h1>
-          <span className="admin-topbar-token">{location?.item.token ?? "admin"}</span>
+          <span className="admin-topbar-token">{location?.item.token ?? "管理端"}</span>
         </div>
         <p className="admin-topbar-description">{location?.item.detail ?? location?.group.description ?? "后台操作入口"}</p>
       </div>

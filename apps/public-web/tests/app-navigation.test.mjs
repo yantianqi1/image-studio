@@ -48,7 +48,7 @@ test("app navigation features 图库 before 创作台", () => {
   assert.equal(APP_NAV_ITEMS[3].label, "应用");
   assert.equal(
     APP_MOBILE_NAV_ITEMS.map((item) => item.label).join(","),
-    "图库,创作台,漫画,应用,我的",
+    "图库,创作台,漫画,应用",
   );
   assert.equal(APP_MOBILE_NAV_ITEMS.find((item) => item.label === "应用")?.href, "/apps");
   assert.doesNotMatch(
@@ -65,7 +65,7 @@ test("app navigation features 图库 before 创作台", () => {
 test("app shell renders a mobile module switch below the header row", () => {
   assert.match(appShellSource, /<MobileNav activeHref=\{props\.activeHref\} \/>/);
   assert.match(appShellSource, /function MobileNav/);
-  assert.match(appHeaderStylesSource, /grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\)/);
+  assert.match(appHeaderStylesSource, /grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/);
 });
 
 test("studio workspace keeps mobile history and parameters inside the viewport", () => {

@@ -3,9 +3,6 @@
 import { useState } from "react";
 
 import { Panel } from "@/features/ui/panel";
-import { formatPriceCents } from "@/features/providers/price-format";
-import { VariantQuickActions } from "@/features/providers/variant-quick-actions";
-import { VariantPanel } from "@/features/providers/variant-panel";
 import { adminApi } from "@/lib/admin-api";
 
 type Provider = Awaited<ReturnType<typeof adminApi.providers>>[number];
@@ -29,7 +26,7 @@ export function ModelCreatePanel({
   onCreated: (message: string) => Promise<void>;
 }) {
   return (
-    <Panel title="新增可售模型" description="绑定供应商、模型名和价格。">
+    <Panel title="新增模型" description="绑定供应商、模型名和可见性。">
       <form
         className="grid gap-3"
         action={async (formData) => {
@@ -40,8 +37,6 @@ export function ModelCreatePanel({
             provider_id: toNumber(formData.get("provider_id")),
             provider_model: String(formData.get("provider_model") ?? ""),
             public_enabled: formData.get("public_enabled") === "on",
-            member_price_cents: toNumber(formData.get("member_price_cents")),
-            anonymous_price_cents: toNumber(formData.get("anonymous_price_cents")),
           });
           await onCreated(`模型 ${model.code} 已创建`);
         }}
@@ -55,10 +50,9 @@ export function ModelCreatePanel({
         </select>
         <ProviderSelect providers={providers} defaultValue={providers[0]?.id ?? ""} />
         <input className="admin-input" name="provider_model" placeholder="供应商内真实模型名" />
-        <PriceInputs />
         <PublicEnabled defaultChecked />
         <button className="admin-button" type="submit" disabled={providers.length === 0}>
-          创建可售模型
+          创建模型
         </button>
       </form>
     </Panel>
@@ -77,7 +71,7 @@ export function ModelListPanel({
   onError: (message: string) => void;
 }) {
   return (
-    <Panel title="可售模型列表" description="直接更新供应商绑定、模型名与价格。">
+    <Panel title="模型列表" description="更新供应商绑定、模型名和公开可见性。">
       <div className="grid gap-3">
         {models.map((model) => (
           <ModelCard
@@ -89,7 +83,7 @@ export function ModelListPanel({
           />
         ))}
         {models.length === 0 ? (
-          <div className="admin-card text-gray-400 text-sm">暂无可售模型</div>
+          <div className="admin-card text-gray-400 text-sm">暂无模型</div>
         ) : null}
       </div>
     </Panel>
@@ -110,16 +104,7 @@ function ModelCard({ model, providers, onUpdated, onError }: ModelCardProps) {
 
   return (
     <div className="admin-card grid gap-2">
-      <ModelEditForm
-        model={model}
-        pending={pending}
-        providerName={providerName}
-        providers={providers}
-        onDelete={handleDelete}
-        onUpdate={handleUpdate}
-      />
-      <VariantQuickActions model={model} onMessage={(msg) => onUpdated(msg)} onError={onError} />
-      <VariantPanel model={model} providers={providers} onMessage={(msg) => onUpdated(msg)} onError={onError} />
+      <ModelEditForm model={model} pending={pending} providerName={providerName} providers={providers} onDelete={handleDelete} onUpdate={handleUpdate} />
     </div>
   );
 }
@@ -167,8 +152,6 @@ function buildModelUpdate(formData: FormData) {
     provider_id: toNumber(formData.get("provider_id")),
     provider_model: String(formData.get("provider_model") ?? ""),
     public_enabled: formData.get("public_enabled") === "on",
-    member_price_cents: toNumber(formData.get("member_price_cents")),
-    anonymous_price_cents: toNumber(formData.get("anonymous_price_cents")),
   };
 }
 
@@ -186,7 +169,6 @@ function ModelEditForm(props: Readonly<{
       <ModelIdentityFields model={props.model} />
       <ProviderSelect providers={props.providers} defaultValue={props.model.provider_id} />
       <input className="admin-input" name="provider_model" defaultValue={props.model.provider_model} />
-      <PriceInputs model={props.model} />
       <PublicEnabled defaultChecked={props.model.public_enabled} />
       <ModelActionButtons pending={props.pending} onDelete={props.onDelete} />
     </form>
@@ -231,13 +213,9 @@ function ModelHeader({ model, providerName }: { model: SellableModel; providerNa
       <div className="min-w-0">
         <p className="truncate text-sm font-semibold text-gray-900">{model.code}</p>
         <p className="mt-1 truncate text-xs text-gray-500">{model.display_name} · {providerName} · {model.provider_model}</p>
-        <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-600">
-          <span>会员 {formatPriceCents(model.member_price_cents)}</span>
-          <span>匿名 {formatPriceCents(model.anonymous_price_cents)}</span>
-        </div>
       </div>
       <span className={`text-xs px-2 py-0.5 rounded-full ${tone}`}>
-        {model.public_enabled ? "公开售卖" : "不公开"}
+        {model.public_enabled ? "前台可见" : "不公开"}
       </span>
     </div>
   );
@@ -254,26 +232,11 @@ function ProviderSelect({ providers, defaultValue }: { providers: readonly Provi
   );
 }
 
-function PriceInputs({ model }: { model?: SellableModel }) {
-  return (
-    <div className="grid grid-cols-2 gap-2">
-      <label className="grid gap-1 text-xs font-semibold text-gray-500">
-        会员价（分）
-        <input className="admin-input" name="member_price_cents" type="number" min="0" placeholder="会员价（分）" defaultValue={model?.member_price_cents} />
-      </label>
-      <label className="grid gap-1 text-xs font-semibold text-gray-500">
-        匿名价（分）
-        <input className="admin-input" name="anonymous_price_cents" type="number" min="0" placeholder="匿名价（分）" defaultValue={model?.anonymous_price_cents} />
-      </label>
-    </div>
-  );
-}
-
 function PublicEnabled({ defaultChecked }: { defaultChecked: boolean }) {
   return (
     <label className="admin-checkbox-card">
       <input name="public_enabled" type="checkbox" defaultChecked={defaultChecked} />
-      <span className="font-medium">前台公开售卖</span>
+      <span className="font-medium">前台公开可见</span>
     </label>
   );
 }

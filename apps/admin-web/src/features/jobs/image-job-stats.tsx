@@ -2,6 +2,7 @@
 
 import { useAdminStats } from "@/lib/use-admin-data";
 import type { ChannelCostItem, DailyTrendItem, DistributionItem, ImageJobStats } from "@/lib/admin-image-job-types";
+import { formatJobQuality, formatJobSource } from "./image-job-format";
 
 export function ImageJobStatsPanel() {
   const { data: stats, error, isLoading } = useAdminStats();
@@ -15,15 +16,15 @@ export function ImageJobStatsPanel() {
       <MetricCards stats={stats} />
       <div className="grid gap-4 lg:grid-cols-2">
         <DailyTrendChart data={stats.daily_trend} />
-        <RevenueChart data={stats.daily_trend} />
+        <CostTrendChart data={stats.daily_trend} />
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <DistributionPanel title="模型使用分布" items={stats.distribution.model} />
-        <DistributionPanel title="来源分布" items={stats.distribution.source} />
+        <DistributionPanel title="来源分布" items={stats.distribution.source} formatKey={formatJobSource} />
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <DistributionPanel title="分辨率分布" items={stats.distribution.size} />
-        <DistributionPanel title="画质分布" items={stats.distribution.quality} />
+        <DistributionPanel title="画质分布" items={stats.distribution.quality} formatKey={formatJobQuality} />
       </div>
       <ChannelCostPanel items={stats.channel_costs} />
     </div>
@@ -36,8 +37,8 @@ function MetricCards({ stats }: { stats: ImageJobStats }) {
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       <MetricCard label="总任务数" value={String(stats.overview.total)} />
       <MetricCard label="成功率" value={`${(stats.overview.success_rate * 100).toFixed(1)}%`} tone="success" />
-      <MetricCard label="总收入" value={formatCents(stats.revenue.total_cents)} />
-      <MetricCard label="平均耗时" value={avgDuration != null ? `${avgDuration.toFixed(1)}s` : "—"} />
+      <MetricCard label="总成本" value={formatCents(stats.costs.total_cents)} />
+      <MetricCard label="平均耗时" value={avgDuration != null ? `${avgDuration.toFixed(1)} 秒` : "—"} />
     </div>
   );
 }
@@ -46,23 +47,23 @@ function ChannelCostPanel({ items }: { items: readonly ChannelCostItem[] }) {
   if (items.length === 0) {
     return (
       <section className="admin-panel p-4">
-        <h3 className="text-sm font-semibold">渠道成本与毛利</h3>
+        <h3 className="text-sm font-semibold">渠道成本</h3>
         <p className="mt-2 text-xs text-gray-400">暂无数据</p>
       </section>
     );
   }
   return (
     <section className="admin-panel p-4">
-      <h3 className="mb-3 text-sm font-semibold">渠道成本与毛利</h3>
+      <h3 className="mb-3 text-sm font-semibold">渠道成本</h3>
       <div className="overflow-x-auto">
         <div className="grid min-w-[38rem] gap-2">
           {items.slice(0, 10).map((item) => (
             <div key={item.key} className="grid grid-cols-[minmax(0,1fr)_repeat(4,auto)] items-center gap-3 text-xs">
               <span className="truncate font-medium text-gray-700" title={item.key}>{item.key}</span>
               <span className="text-gray-500">{item.count} 次</span>
-              <span className="text-gray-600">{formatCents(item.revenue_cents)}</span>
+              <span className="text-gray-500">原始 {formatCents(item.raw_provider_cost_cents)}</span>
+              <span className="text-gray-500">费用 {formatCents(item.provider_fee_cents)}</span>
               <span className="text-gray-500">{formatCents(item.internal_cost_cents)}</span>
-              <span className="font-semibold text-emerald-600">{formatCents(item.gross_margin_cents)}</span>
             </div>
           ))}
         </div>
@@ -104,22 +105,22 @@ function DailyTrendChart({ data }: { data: readonly DailyTrendItem[] }) {
   );
 }
 
-function RevenueChart({ data }: { data: readonly DailyTrendItem[] }) {
+function CostTrendChart({ data }: { data: readonly DailyTrendItem[] }) {
   if (data.length === 0) return null;
-  const maxRevenue = Math.max(...data.map((d) => d.revenue_cents), 1);
+  const maxCost = Math.max(...data.map((d) => d.internal_cost_cents), 1);
   return (
     <section className="admin-panel p-4">
-      <h3 className="mb-3 text-sm font-semibold">每日收入（近14天）</h3>
+      <h3 className="mb-3 text-sm font-semibold">每日成本（近14天）</h3>
       <div className="flex items-end gap-1" style={{ height: 120 }}>
         {data.map((d) => (
           <div key={d.date} className="group relative flex flex-1 flex-col items-center justify-end" style={{ height: "100%" }}>
             <div
               className="w-full rounded-t bg-emerald-400 transition-colors group-hover:bg-emerald-600"
-              style={{ height: `${(d.revenue_cents / maxRevenue) * 100}%`, minHeight: d.revenue_cents > 0 ? 4 : 0 }}
+              style={{ height: `${(d.internal_cost_cents / maxCost) * 100}%`, minHeight: d.internal_cost_cents > 0 ? 4 : 0 }}
             />
             <span className="mt-1 text-[9px] text-gray-400">{d.date.slice(5)}</span>
             <div className="pointer-events-none absolute -top-6 hidden rounded bg-gray-800 px-1.5 py-0.5 text-[10px] text-white group-hover:block">
-              ¥{(d.revenue_cents / 100).toFixed(2)}
+              ¥{(d.internal_cost_cents / 100).toFixed(2)}
             </div>
           </div>
         ))}
@@ -132,7 +133,15 @@ function formatCents(value: number) {
   return `¥${(value / 100).toFixed(2)}`;
 }
 
-function DistributionPanel({ title, items }: { title: string; items: readonly DistributionItem[] }) {
+function DistributionPanel({
+  title,
+  items,
+  formatKey,
+}: {
+  title: string;
+  items: readonly DistributionItem[];
+  formatKey?: (value: string) => string;
+}) {
   if (items.length === 0) return <section className="admin-panel p-4"><h3 className="text-sm font-semibold">{title}</h3><p className="mt-2 text-xs text-gray-400">暂无数据</p></section>;
   const maxCount = items[0].count;
   return (
@@ -141,7 +150,7 @@ function DistributionPanel({ title, items }: { title: string; items: readonly Di
       <div className="grid gap-2">
         {items.slice(0, 10).map((item) => (
           <div key={item.key} className="flex items-center gap-2 text-xs">
-            <span className="w-24 shrink-0 truncate text-gray-600" title={item.key}>{item.key}</span>
+            <span className="w-24 shrink-0 truncate text-gray-600" title={formatKey ? formatKey(item.key) : item.key}>{formatKey ? formatKey(item.key) : item.key}</span>
             <div className="relative h-4 flex-1 overflow-hidden rounded bg-gray-100">
               <div className="h-full rounded bg-blue-300" style={{ width: `${(item.count / maxCount) * 100}%` }} />
             </div>

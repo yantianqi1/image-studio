@@ -11,9 +11,9 @@ from apps.api.app.domains.llm.feature_settings import (
     list_llm_feature_model_settings,
     update_llm_feature_model_settings,
 )
+from apps.api.app.domains.llm.newapi_catalog import sync_newapi_models
 from apps.api.app.domains.llm.route_payloads import (
     llm_feature_payload,
-    list_public_model_variants,
     provider_payload,
     sellable_model_payload,
     upstream_model_payload,
@@ -35,8 +35,6 @@ from apps.api.app.domains.llm.service import (
     list_providers,
     list_public_models,
 )
-from apps.api.app.domains.llm.variant_routes import variant_router
-
 public_router = APIRouter(tags=["llm-public"])
 admin_router = APIRouter(tags=["llm-admin"])
 provider_admin_router = APIRouter(prefix="/providers", tags=["llm-admin-providers"])
@@ -47,11 +45,7 @@ facility_admin_router = APIRouter(prefix="/llm/features", tags=["llm-admin-featu
 @public_router.get("/models")
 def get_models(session: Session = Depends(get_db_session)):
     models = list_public_models(session)
-    variants_by_model_id = list_public_model_variants(session, model_ids=[model.id for model in models])
-    payloads = [
-        sellable_model_payload(model, variants=variants_by_model_id.get(model.id, []))
-        for model in models
-    ]
+    payloads = [sellable_model_payload(model) for model in models]
     session.commit()
     return api_ok(payloads)
 
@@ -118,8 +112,6 @@ def create_sellable_model_route(
         provider_id=payload.provider_id,
         provider_model=payload.provider_model,
         public_enabled=payload.public_enabled,
-        member_price_cents=payload.member_price_cents,
-        anonymous_price_cents=payload.anonymous_price_cents,
     )
     session.commit()
     return api_ok(sellable_model_payload(model))
@@ -151,9 +143,18 @@ def import_upstream_models_route(
         model_ids=payload.model_ids,
         capability=payload.capability,
         public_enabled=payload.public_enabled,
-        member_price_cents=payload.member_price_cents,
-        anonymous_price_cents=payload.anonymous_price_cents,
     )
+    session.commit()
+    return api_ok([sellable_model_payload(model) for model in models])
+
+
+@model_admin_router.post("/sync-newapi")
+def sync_newapi_models_route(
+    request: Request,
+    session: Session = Depends(get_db_session),
+):
+    require_admin(request, session)
+    models = sync_newapi_models(session)
     session.commit()
     return api_ok([sellable_model_payload(model) for model in models])
 
@@ -211,8 +212,6 @@ def update_sellable_model_route(
         provider_id=payload.provider_id,
         provider_model=payload.provider_model,
         public_enabled=payload.public_enabled,
-        member_price_cents=payload.member_price_cents,
-        anonymous_price_cents=payload.anonymous_price_cents,
     )
     session.commit()
     return api_ok(sellable_model_payload(model))
@@ -230,7 +229,6 @@ def delete_sellable_model_route(
     return api_ok({"deleted": True})
 
 
-model_admin_router.include_router(variant_router)
 admin_router.include_router(facility_admin_router)
 admin_router.include_router(provider_admin_router)
 admin_router.include_router(model_admin_router)

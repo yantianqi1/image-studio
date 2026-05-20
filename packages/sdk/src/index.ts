@@ -1,5 +1,4 @@
 import type {
-  ActivationCode,
   ApiResponse,
   AuthSession,
   ComicProject,
@@ -8,8 +7,6 @@ import type {
   ImageJob,
   ImageJobResult,
   SellableModel,
-  Wallet,
-  WalletLedgerEntry,
 } from "@commercial-studio/types";
 
 const DEFAULT_CREDENTIALS: RequestCredentials = "include";
@@ -73,21 +70,6 @@ export function getCurrentUser(options: ApiClientOptions): Promise<ApiResponse<A
   return apiRequest<AuthSession>(options, "/api/public/auth/me");
 }
 
-export function getWallet(options: ApiClientOptions): Promise<ApiResponse<Wallet>> {
-  return apiRequest<Wallet>(options, "/api/public/wallet");
-}
-
-export function getWalletLedger(options: ApiClientOptions): Promise<ApiResponse<WalletLedgerEntry[]>> {
-  return apiRequest<WalletLedgerEntry[]>(options, "/api/public/wallet/ledger");
-}
-
-export function redeemActivationCode(
-  options: ApiClientOptions,
-  body: { code: string },
-): Promise<ApiResponse<Wallet>> {
-  return postJson<Wallet>(options, "/api/public/redeem", body);
-}
-
 export function getPublicModels(options: ApiClientOptions): Promise<ApiResponse<SellableModel[]>> {
   return apiRequest<SellableModel[]>(options, "/api/public/models");
 }
@@ -105,8 +87,6 @@ export function upsertAdminModel(
     provider_id: number;
     provider_model: string;
     public_enabled: boolean;
-    member_price_cents: number;
-    anonymous_price_cents: number;
   },
 ): Promise<ApiResponse<SellableModel>> {
   return apiRequest<SellableModel>(options, `/api/admin/models/${modelCode}`, {
@@ -146,8 +126,4 @@ export function createComicProject(
 
 export function getComicTasks(options: ApiClientOptions): Promise<ApiResponse<ComicTask[]>> {
   return apiRequest<ComicTask[]>(options, "/api/public/tasks");
-}
-
-export function getActivationCodes(options: ApiClientOptions): Promise<ApiResponse<ActivationCode[]>> {
-  return apiRequest<ActivationCode[]>(options, "/api/admin/activation-codes");
 }

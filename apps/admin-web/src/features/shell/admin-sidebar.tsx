@@ -11,8 +11,8 @@ export function AdminSidebar() {
           <BrandMark />
         </span>
         <div>
-          <p className="admin-brand">CS Admin</p>
-          <p className="admin-caption">image Studio operations</p>
+          <p className="admin-brand">商业影像后台</p>
+          <p className="admin-caption">运营管理中心</p>
         </div>
       </div>
       <AdminNav />

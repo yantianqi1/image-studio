@@ -181,7 +181,7 @@
 
 .mobileNav {
   display: none;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.25rem;
   border-top: 1px solid rgba(15, 23, 42, 0.07);
   padding: 0.4rem 0.5rem 0.5rem;

@@ -37,12 +37,12 @@ export function ProviderCreatePanel({
         <input className="admin-input" name="name" placeholder="供应商名称，例如 wdapi" />
         <select className="admin-input" name="type" defaultValue={DEFAULT_PROVIDER_TYPE}>
           <option value={DEFAULT_PROVIDER_TYPE}>OpenAI 兼容接口</option>
-          <option value="openai-chat-compatible">OpenAI Chat 兼容接口</option>
+          <option value="openai-chat-compatible">OpenAI 对话兼容接口</option>
           <option value="openrouter-chat-image">OpenRouter 图片接口</option>
           <option value="local-dev">本地开发接口</option>
         </select>
         <input className="admin-input" name="base_url" placeholder="接口地址，例如 https://api.example.com/v1" />
-        <input className="admin-input" name="api_key_env" placeholder="密钥环境变量名，例如 OPENAI_PROVIDER_KEY" />
+        <input className="admin-input" name="api_key_env" placeholder="密钥环境变量名，可留空" />
         <input className="admin-input" name="default_model" placeholder="默认模型名，例如 gpt-4.1-mini" />
         <button className="admin-button" type="submit">
           创建供应商
@@ -143,7 +143,7 @@ function providerTypeText(type: string) {
     return "OpenAI 兼容接口";
   }
   if (type === "openai-chat-compatible") {
-    return "OpenAI Chat 兼容接口";
+    return "OpenAI 对话兼容接口";
   }
   if (type === "openrouter-chat-image") {
     return "OpenRouter 图片接口";

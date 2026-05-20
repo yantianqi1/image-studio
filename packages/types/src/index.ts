@@ -3,8 +3,7 @@ export type ApiErrorCode =
   | "UNAUTHORIZED"
   | "FORBIDDEN"
   | "VALIDATION_ERROR"
-  | "NOT_FOUND"
-  | "BALANCE_NOT_ENOUGH";
+  | "NOT_FOUND";
 
 export interface ApiError {
   code: ApiErrorCode | string;
@@ -47,46 +46,6 @@ export interface AuthSession {
   user: PublicUser;
 }
 
-export interface Wallet {
-  userId: number;
-  balanceCents: number;
-  balanceCredits: number;
-  lockedCents: number;
-  lockedCredits: number;
-  currency: "CNY" | "USD";
-}
-
-export interface WalletLedgerEntry {
-  id: number;
-  userId: number;
-  deltaCents: number;
-  deltaCredits: number;
-  balanceAfterCents: number;
-  balanceAfterCredits: number;
-  reason: string;
-  referenceType: string;
-  referenceId: string;
-  createdAt: string;
-}
-
-export interface ActivationCode {
-  id: number;
-  amountCents: number;
-  status: "unused" | "redeemed";
-  batchNote: string;
-  redeemedByUserId: number | null;
-  redeemedAt: string | null;
-  createdAt: string;
-}
-
-export interface ActivationCodeBatch {
-  id: number;
-  note: string;
-  amountCents: number;
-  count: number;
-  createdAt: string;
-}
-
 export interface SellableModel {
   id: number;
   code: string;
@@ -95,23 +54,6 @@ export interface SellableModel {
   providerId: number;
   providerModel: string;
   publicEnabled: boolean;
-  memberPriceCredits: number;
-  memberPriceCents: number;
-  anonymousPriceCents: number;
-  variants?: SellableModelVariant[];
-}
-
-export interface SellableModelVariant {
-  id: number;
-  size: string;
-  aspectRatio?: string;
-  quality: string;
-  upstreamCostCredits?: number | null;
-  upstreamCostCents?: number | null;
-  memberPriceCredits?: number | null;
-  memberPriceCents: number;
-  anonymousPriceCents: number;
-  profitMarginBasisPoints?: number | null;
 }
 
 export interface ImageJob {
@@ -128,8 +70,6 @@ export interface ImageJob {
   requestedCount: number;
   attemptCount: number;
   maxAttempts: number;
-  chargeCents: number;
-  chargeCredits: number;
   errorCode: string | null;
   errorMessage: string | null;
   createdAt: string;

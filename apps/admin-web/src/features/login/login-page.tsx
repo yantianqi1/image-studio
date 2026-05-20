@@ -21,7 +21,7 @@ export function LoginPage({ redirectTo = "/admin" }: { redirectTo?: string }) {
             <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[0.875rem] border border-black/10 bg-white/85 shadow-sm">
               <BrandMark />
             </span>
-            <p className="text-xs font-semibold uppercase text-amber-800/70">Admin Web</p>
+            <p className="text-xs font-semibold uppercase text-amber-800/70">管理后台</p>
           </div>
           <h1 className="text-4xl font-semibold lg:text-6xl">后台登录</h1>
           <p className="max-w-xl text-sm leading-6 text-gray-700/90">
@@ -29,7 +29,7 @@ export function LoginPage({ redirectTo = "/admin" }: { redirectTo?: string }) {
           </p>
         </div>
 
-        <Panel title="登录" description="提交后会请求 /api/admin/auth/login">
+        <Panel title="登录" description="提交后会请求后台登录接口">
           <form
             className="grid gap-3"
             action={async (formData) => {

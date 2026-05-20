@@ -87,18 +87,6 @@ const PROMPT_AREA_MIN_HEIGHT = 76;
 const PROMPT_AREA_DEFAULT_HEIGHT = 112;
 const PROMPT_AREA_MOBILE_DEFAULT_HEIGHT = 84;
 const PROMPT_AREA_MAX_HEIGHT = 320;
-const CENTS_PER_CREDIT = 10;
-
-type PricedModelVariant = Readonly<{
-  size: string;
-  quality: string;
-  member_price_cents: number;
-}>;
-
-type PricedModelSummary = PublicModelSummary & Readonly<{
-  member_price_cents?: number;
-  variants?: readonly PricedModelVariant[];
-}>;
 
 function getPromptAreaMaxHeight() {
   if (typeof window === "undefined") return PROMPT_AREA_MAX_HEIGHT;
@@ -111,31 +99,6 @@ function getPromptAreaMaxHeight() {
 
 function clampPromptAreaHeight(height: number) {
   return Math.min(Math.max(height, PROMPT_AREA_MIN_HEIGHT), getPromptAreaMaxHeight());
-}
-
-function formatCredits(value: number) {
-  return `${new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 2 }).format(value)} 额度`;
-}
-
-function findPricedModelVariant(
-  model: PublicModelSummary | null,
-  size: string,
-  quality: string,
-): PricedModelVariant | null {
-  const pricedModel = model as PricedModelSummary | null;
-  return pricedModel?.variants?.find((variant) => variant.size === size && variant.quality === quality) ?? null;
-}
-
-function getModelStartingPriceCents(model: PublicModelSummary | null): number | null {
-  if (!model) return null;
-  const pricedModel = model as PricedModelSummary;
-  const prices = pricedModel.variants?.map((variant) => variant.member_price_cents) ?? [];
-  if (prices.length > 0) return Math.min(...prices);
-  return pricedModel.member_price_cents ?? null;
-}
-
-function formatModelPriceLabel(cents: number | null) {
-  return cents === null ? "" : formatCredits(cents / CENTS_PER_CREDIT);
 }
 
 function getSubmitLabel(input: Readonly<{
@@ -248,10 +211,6 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
   const resolutions = activeRatio?.resolutions ?? [];
   const modelQualityOptions = getModelQualityOptions(selectedModel, resolution);
   const qualityOptions = modelQualityOptions.length > 0 ? modelQualityOptions : QUALITY_OPTIONS;
-  const activeVariant = findPricedModelVariant(selectedModel, resolution, quality);
-  const activeBasePriceLabel = formatModelPriceLabel(
-    activeVariant?.member_price_cents ?? getModelStartingPriceCents(selectedModel),
-  );
   const hasPendingReferenceUploads = referenceImages.some((image) => !image.assetId);
   const hasReferenceUploadErrors = referenceImages.some((image) => image.uploadState === "error");
   const isDisabled =
@@ -622,7 +581,6 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
                     <div className="absolute bottom-[calc(100%+8px)] left-0 z-[80] max-h-[45dvh] w-[218px] overflow-y-auto rounded-2xl border border-gray-200 bg-white p-1.5 shadow-lg">
                       {modelsState.data.map((m) => {
                         const active = m.code === model;
-                        const priceLabel = formatModelPriceLabel(getModelStartingPriceCents(m));
                         return (
                           <button
                             key={m.id}
@@ -638,9 +596,7 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
                           >
                             <span className="min-w-0">
                               <span className="block truncate">{m.display_name}</span>
-                              {priceLabel ? (
-                                <span className="block text-[11px] font-medium text-gray-400">基础 {priceLabel}/张起</span>
-                              ) : null}
+                              <span className="block text-[11px] font-medium text-gray-400">{m.capability}</span>
                             </span>
                             {active && <Check className="size-4 shrink-0" />}
                           </button>
@@ -700,7 +656,6 @@ export const StudioComposer = memo(function StudioComposer(props: StudioComposer
                         resolutions={resolutions}
                         aspectRatioOptions={aspectRatioOptions}
                         qualityOptions={qualityOptions}
-                        priceLabel={activeBasePriceLabel}
                         onAspectRatioChange={onAspectRatioChange}
                         onResolutionChange={onResolutionChange}
                         onQualityChange={onQualityChange}
@@ -859,7 +814,6 @@ type ImageSettingsPopoverProps = Readonly<{
   resolutions: readonly { value: string; label: string; pixels: string }[];
   aspectRatioOptions: readonly { value: string; label: string }[];
   qualityOptions: readonly { value: string; label: string }[];
-  priceLabel: string;
   onAspectRatioChange: (value: string) => void;
   onResolutionChange: (value: string) => void;
   onQualityChange: (value: string) => void;
@@ -874,7 +828,6 @@ function ImageSettingsPopover({
   resolutions,
   aspectRatioOptions,
   qualityOptions,
-  priceLabel,
   onAspectRatioChange,
   onResolutionChange,
   onQualityChange,
@@ -886,7 +839,7 @@ function ImageSettingsPopover({
     >
       <div className="mb-3 flex items-center justify-between border-b border-gray-100 pb-2">
         <h2 className="text-sm font-semibold text-gray-900">图片参数</h2>
-        <span className="text-[11px] font-medium text-gray-400">{priceLabel ? `基础 ${priceLabel}/张` : "当前设置"}</span>
+        <span className="text-[11px] font-medium text-gray-400">当前设置</span>
       </div>
 
       <div className="space-y-3">

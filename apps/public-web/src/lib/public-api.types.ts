@@ -49,8 +49,6 @@ export type ImageGenerationResponse = Readonly<{
   model_code: string;
   title?: string | null;
   visibility?: ImageAssetVisibility;
-  charge_cents: number;
-  charge_credits: number;
   provider_input_tokens?: number | null;
   provider_output_tokens?: number | null;
   provider_total_tokens?: number | null;
@@ -121,23 +119,9 @@ export type PublicModelSummary = Readonly<{
   code: string;
   display_name: string;
   capability: string;
-  member_price_credits?: number;
-  member_price_cents: number;
-  anonymous_price_cents: number;
-  variants?: readonly PublicModelVariant[];
-}>;
-
-export type PublicModelVariant = Readonly<{
-  id: number;
-  size: string;
-  aspect_ratio?: string;
-  quality: string;
-  upstream_cost_credits?: number | null;
-  upstream_cost_cents?: number | null;
-  member_price_credits?: number | null;
-  member_price_cents: number;
-  anonymous_price_cents: number;
-  profit_margin_basis_points?: number | null;
+  provider_id: number;
+  provider_model: string;
+  public_enabled: boolean;
 }>;
 
 export type PublicSiteSettings = Readonly<{
@@ -157,28 +141,6 @@ export type PublicQuotaStatus = Readonly<{
   used_count: number;
   remaining_count: number;
   exhausted: boolean;
-}>;
-
-export type WalletSummary = Readonly<{
-  balance_cents: number;
-  balance_credits: number;
-  locked_cents: number;
-  locked_credits: number;
-  currency: string;
-}>;
-
-export type WalletLedgerItem = Readonly<{
-  id: number;
-  amount_cents: number;
-  amount_credits: number;
-  balance_after_cents?: number;
-  balance_after_credits?: number;
-  reason: string;
-  created_at: string;
-}>;
-
-export type RedeemCodeRequest = Readonly<{
-  code: string;
 }>;
 
 export type ComicProject = Readonly<{

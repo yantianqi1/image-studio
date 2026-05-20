@@ -10,9 +10,10 @@ from apps.api.app.core.errors import AppError
 from apps.api.app.domains.auth.anonymous_sessions import create_anonymous_session
 from apps.api.app.domains.auth.ownership import OwnerContext
 from apps.api.app.domains.auth.service import create_admin_account
-from apps.api.app.domains.billing.service import get_wallet
+from apps.api.app.domains.image import direct_rendering
+from apps.api.app.domains.image import routes as image_routes
 from apps.api.app.domains.image import service as image_service
-from apps.api.app.domains.image.models import Asset, ImageJob, ImageJobReferenceAsset, ImageJobResult
+from apps.api.app.domains.image.models import Asset, ImageJob, ImageJobItem, ImageJobReferenceAsset, ImageJobResult
 from apps.api.app.domains.llm.service import RenderedImage
 from apps.api.app.infra.db.session import initialize_database, session_scope
 from apps.api.app.infra.storage.factory import build_asset_storage
@@ -87,12 +88,6 @@ def client_provider_key_only_headers(*, client_id: str = "browser-client-1") -> 
     }
 
 
-def load_wallet_balance(user_id: int) -> tuple[int, int]:
-    with session_scope() as session:
-        wallet = get_wallet(session, user_id=user_id)
-        return wallet.balance_cents, wallet.locked_cents
-
-
 def create_asset(
     session,
     *,
@@ -114,6 +109,30 @@ def create_asset(
 def create_anonymous_owner(session) -> OwnerContext:
     anonymous_session, _token = create_anonymous_session(session)
     return OwnerContext(user_id=None, anonymous_session_id=anonymous_session.id)
+
+
+def create_queued_job_for_user(*, user_id: int, prompt: str, model_code: str = "gpt-image-2") -> ImageJob:
+    with session_scope() as session:
+        job = image_service.create_job(
+            session,
+            owner=OwnerContext(user_id=user_id, anonymous_session_id=None),
+            source="member",
+            prompt=prompt,
+            model_code=model_code,
+            requested_count=1,
+            mode="generate",
+        )
+        session.commit()
+        return job
+
+
+def run_image_worker_for(job_id: int) -> None:
+    assert worker_image_jobs.run_next_image_job() == job_id
+
+
+def fake_client_provider_render(_session=None, *, config, options):
+    del config
+    return build_rendered_image(prompt=options["prompt"], model_code=options["model_code"])
 
 
 def list_reference_rows(session, *, job_id: int) -> list[ImageJobReferenceAsset]:
@@ -158,26 +177,38 @@ def admin_login(client: TestClient):
     assert response.status_code == 200
 
 
-def test_create_image_job_stays_queued_until_worker_runs():
-    client = build_client()
-    user = register_user(client)
-    job = create_image_job(client)
+def test_create_image_job_queues_without_direct_rendering(monkeypatch):
+    direct_render_calls: list[int] = []
 
+    def direct_render(_session=None, *, job):
+        direct_render_calls.append(job.id)
+        return job
+
+    monkeypatch.setattr(direct_rendering, "render_job_immediately", direct_render)
+    monkeypatch.setattr(image_routes, "render_job_immediately", direct_render, raising=False)
+    client = build_client()
+    register_user(client)
+    response = client.post(
+        "/api/public/image/jobs",
+        json={"prompt": "A paper city under sunrise", "model_code": "gpt-image-2", "requested_count": 1},
+    )
+
+    assert response.status_code == 201
+    assert direct_render_calls == []
+    job = response.json()["data"]
     assert job["status"] == "queued"
     assert job["attempt_count"] == 0
     assert job["max_attempts"] == 3
     assert job["available_at"] is not None
+    assert job["started_at"] is None
+    assert job["finished_at"] is None
 
     results_response = client.get(f"/api/public/image/jobs/{job['id']}/results")
     assert results_response.status_code == 200
-    results = results_response.json()["data"]
-    assert results == []
+    assert results_response.json()["data"] == []
 
-    balance_cents, locked_cents = load_wallet_balance(user["id"])
-    assert balance_cents == 100
-    assert locked_cents == 77
 
-def test_auto_title_is_generated_by_worker_without_blocking_creation(monkeypatch):
+def test_auto_title_does_not_block_image_job_creation(monkeypatch):
     captured_payloads: list[dict[str, object]] = []
 
     def fake_post(url: str, *, headers, json, timeout: float):
@@ -190,24 +221,13 @@ def test_auto_title_is_generated_by_worker_without_blocking_creation(monkeypatch
     monkeypatch.setenv("OPENAI_CHAT_MODEL_PROVIDER_MODEL", "title-provider-model")
     monkeypatch.setenv("IMAGE_JOB_TITLE_MODEL_CODE", "title-model")
     monkeypatch.setattr("apps.api.app.domains.llm.openai_chat.httpx.post", fake_post)
-    monkeypatch.setattr(image_service, "render_image", lambda _session=None, **kwargs: build_rendered_image(
-        prompt=kwargs["prompt"],
-        model_code=kwargs["model_code"],
-    ))
     client = build_client()
 
     job = create_auto_titled_image_job(client, prompt="画一个雨夜街头的少女，电影感光影")
 
+    assert job["status"] == "queued"
     assert job["title"] is None
     assert captured_payloads == []
-    assert worker_image_jobs.run_next_image_job() == job["id"]
-    assert len(captured_payloads) == 1
-    assert captured_payloads[0]["model"] == "title-provider-model"
-    assert "10个汉字以内" in captured_payloads[0]["messages"][0]["content"]
-    assert "画一个雨夜街头的少女" in captured_payloads[0]["messages"][1]["content"]
-    with session_scope() as session:
-        stored_job = session.get(ImageJob, job["id"])
-        assert stored_job.title == "雨夜少女"
 
 
 def test_anonymous_image_job_uses_server_provider_when_enabled():
@@ -221,12 +241,38 @@ def test_anonymous_image_job_uses_server_provider_when_enabled():
     assert response.status_code == 201
     job = response.json()["data"]
     assert job["source"] == "anonymous"
-    assert job["charge_cents"] == 0
+    assert "charge_cents" not in job
     with session_scope() as session:
         stored_job = session.get(ImageJob, job["id"])
         assert stored_job.user_id is None
         assert stored_job.client_access_id is None
         assert stored_job.client_provider_config is None
+
+
+def test_create_image_job_does_not_wait_for_renderer(monkeypatch):
+    def failing_renderer(_session=None, **_kwargs):
+        raise RuntimeError("upstream timeout")
+
+    monkeypatch.setattr(image_service, "render_image", failing_renderer)
+    client = build_client()
+    register_user(client, email="direct-failure@example.com")
+
+    response = client.post(
+        "/api/public/image/jobs",
+        json={"prompt": "Direct failure", "model_code": "gpt-image-2", "requested_count": 1},
+    )
+
+    assert response.status_code == 201
+    job = response.json()["data"]
+    assert job["status"] == "queued"
+    assert job["started_at"] is None
+    assert job["finished_at"] is None
+    with session_scope() as session:
+        stored_job = session.execute(select(ImageJob)).scalar_one()
+        assert stored_job.status == "queued"
+        assert stored_job.attempt_count == 0
+        assert stored_job.error_code is None
+        assert stored_job.error_message is None
 
 
 def test_local_dev_image_job_runs_without_openai_key(monkeypatch):
@@ -242,13 +288,15 @@ def test_local_dev_image_job_runs_without_openai_key(monkeypatch):
         },
     )
     assert create_response.status_code == 201
-    job_id = create_response.json()["data"]["id"]
+    created_job = create_response.json()["data"]
+    assert created_job["status"] == "queued"
+    job_id = created_job["id"]
 
-    processed_job_id = worker_image_jobs.run_next_image_job()
+    run_image_worker_for(job_id)
+
     job_response = client.get(f"/api/public/image/jobs/{job_id}")
     results_response = client.get(f"/api/public/image/jobs/{job_id}/results")
 
-    assert processed_job_id == job_id
     assert job_response.json()["data"]["status"] == "succeeded"
     assert results_response.json()["data"][0]["provider_request_id"].startswith("local-dev:")
     asset_response = client.get(results_response.json()["data"][0]["asset_url"])
@@ -268,7 +316,7 @@ def test_client_provider_image_job_records_browser_context():
     assert response.status_code == 201
     job = response.json()["data"]
     assert job["source"] == "client_provider"
-    assert job["charge_cents"] == 0
+    assert "charge_cents" not in job
     with session_scope() as session:
         stored_job = session.get(ImageJob, job["id"])
         assert stored_job.client_access_id == "browser-client-1"
@@ -301,11 +349,12 @@ def test_client_provider_worker_uses_submitted_provider(monkeypatch):
         json={"prompt": "Client key render", "model_code": "gpt-image-2", "requested_count": 1},
     )
 
-    job_id = response.json()["data"]["id"]
-    processed_job_id = worker_image_jobs.run_next_image_job()
+    created_job = response.json()["data"]
+    assert created_job["status"] == "queued"
+    job_id = created_job["id"]
+    run_image_worker_for(job_id)
     results_response = client.get(f"/api/public/image/jobs/{job_id}/results")
 
-    assert processed_job_id == job_id
     assert captured["url"] == "https://client.example/v1/chat/completions"
     assert captured["headers"] == {"Authorization": "Bearer sk-client-provider", "Content-Type": "application/json"}
     assert captured["json"]["model"] == "gpt-image-2"
@@ -357,12 +406,15 @@ def test_client_provider_worker_resolves_key_only_request_from_url_pool(monkeypa
         json={"prompt": "Client key render", "model_code": "gpt-image-2", "requested_count": 1},
     )
     assert response.status_code == 201
-    job_id = response.json()["data"]["id"]
+    created_job = response.json()["data"]
+    assert created_job["status"] == "queued"
+    assert attempts == []
+    job_id = created_job["id"]
 
-    processed_job_id = worker_image_jobs.run_next_image_job()
+    run_image_worker_for(job_id)
+
     job_response = client.get(f"/api/public/image/jobs/{job_id}")
 
-    assert processed_job_id == job_id
     assert [item[0] for item in attempts] == [
         "https://bad.example/v1/models",
         "https://good.example/v1/models",
@@ -373,7 +425,7 @@ def test_client_provider_worker_resolves_key_only_request_from_url_pool(monkeypa
     assert job_response.json()["data"]["client_provider_base_url"] == "https://good.example/v1"
 
 
-def test_gpt_image_two_job_reserves_configured_price(monkeypatch):
+def test_gpt_image_two_job_ignores_configured_local_price(monkeypatch):
     monkeypatch.setenv("OPENAI_PROVIDER_NAME", "wdapi")
     monkeypatch.setenv("OPENAI_PROVIDER_BASE_URL", "https://ws.wdapi.top/v1")
     monkeypatch.setenv("OPENAI_PROVIDER_API_KEY_ENV", "OPENAI_PROVIDER_KEY")
@@ -381,14 +433,12 @@ def test_gpt_image_two_job_reserves_configured_price(monkeypatch):
     monkeypatch.setenv("OPENAI_CHAT_MODEL_CODE", "gemini-3-flash-preview-low-search")
     monkeypatch.setenv("OPENAI_CHAT_MODEL_DISPLAY_NAME", "Gemini 3 Flash Preview Low Search")
     monkeypatch.setenv("OPENAI_CHAT_MODEL_PROVIDER_MODEL", "gemini-3-flash-preview-low-search")
-    monkeypatch.setenv("OPENAI_CHAT_MODEL_MEMBER_PRICE_CENTS", "12")
     monkeypatch.setenv("OPENAI_IMAGE_MODEL_CODE", "gpt-image-2")
     monkeypatch.setenv("OPENAI_IMAGE_MODEL_DISPLAY_NAME", "GPT Image 2")
     monkeypatch.setenv("OPENAI_IMAGE_MODEL_PROVIDER_MODEL", "gpt-image-2")
-    monkeypatch.setenv("OPENAI_IMAGE_MODEL_MEMBER_PRICE_CENTS", "77")
 
     client = build_client()
-    user = register_user(client, email="priced-gpt-image@example.com")
+    register_user(client, email="priced-gpt-image@example.com")
 
     create_response = client.post(
         "/api/public/image/jobs",
@@ -396,17 +446,14 @@ def test_gpt_image_two_job_reserves_configured_price(monkeypatch):
     )
 
     assert create_response.status_code == 201
-    assert create_response.json()["data"]["charge_cents"] == 77
-
-    balance_cents, locked_cents = load_wallet_balance(user["id"])
-    assert balance_cents == 100
-    assert locked_cents == 77
+    job = create_response.json()["data"]
+    assert job["status"] == "queued"
+    assert "charge_cents" not in job
 
 
-def test_official_channel_variant_reserves_official_price(monkeypatch):
-    monkeypatch.setenv("SIGNUP_BONUS_CENTS", "1000")
+def test_official_channel_size_quality_does_not_create_local_charge() -> None:
     client = build_client()
-    user = register_user(client, email="official-priced@example.com")
+    register_user(client, email="official-priced@example.com")
 
     create_response = client.post(
         "/api/public/image/jobs",
@@ -421,18 +468,14 @@ def test_official_channel_variant_reserves_official_price(monkeypatch):
 
     assert create_response.status_code == 201
     job = create_response.json()["data"]
-    assert job["charge_cents"] == 169
+    assert job["status"] == "queued"
+    assert "charge_cents" not in job
     assert job["provider_model"] == "gpt-image-2"
 
-    balance_cents, locked_cents = load_wallet_balance(user["id"])
-    assert balance_cents == 1000
-    assert locked_cents == 169
 
-
-def test_reference_and_edit_variant_pricing_adds_surcharges(monkeypatch):
-    monkeypatch.setenv("SIGNUP_BONUS_CENTS", "1000")
+def test_reference_and_edit_size_quality_does_not_add_local_charge() -> None:
     client = build_client()
-    user = register_user(client, email="priced-edit@example.com")
+    register_user(client, email="priced-edit@example.com")
     upload_response = client.post(
         "/api/public/image/uploads",
         files={"file": ("source.png", b"source-image", "image/png")},
@@ -452,10 +495,9 @@ def test_reference_and_edit_variant_pricing_adds_surcharges(monkeypatch):
     )
 
     assert create_response.status_code == 201
-    assert create_response.json()["data"]["charge_cents"] == 69
-    balance_cents, locked_cents = load_wallet_balance(user["id"])
-    assert balance_cents == 1000
-    assert locked_cents == 69
+    job = create_response.json()["data"]
+    assert job["status"] == "queued"
+    assert "charge_cents" not in job
 
 
 def test_edit_job_records_uploaded_source_asset_and_passes_it_to_renderer(monkeypatch):
@@ -489,9 +531,7 @@ def test_edit_job_records_uploaded_source_asset_and_passes_it_to_renderer(monkey
     assert job["mode"] == "edit"
     assert job["source_asset_id"] == source_asset_id
 
-    processed_job_id = worker_image_jobs.run_next_image_job()
-
-    assert processed_job_id == job["id"]
+    run_image_worker_for(job["id"])
     assert captured["source_asset_id"] == source_asset_id
 
 
@@ -618,22 +658,22 @@ def test_public_image_job_stores_conversation_messages():
 def test_worker_claims_and_processes_queued_job(monkeypatch):
     monkeypatch.setattr(image_service, "render_image", build_rendered_image_from_job, raising=False)
     client = build_client()
-    register_user(client)
-    job = create_image_job(client, prompt="Fog over bronze towers")
+    user = register_user(client)
+    job = create_queued_job_for_user(user_id=user["id"], prompt="Fog over bronze towers")
 
     assert hasattr(worker_image_jobs, "run_next_image_job")
 
     processed_job_id = worker_image_jobs.run_next_image_job()
 
-    assert processed_job_id == job["id"]
+    assert processed_job_id == job.id
 
-    job_response = client.get(f"/api/public/image/jobs/{job['id']}")
+    job_response = client.get(f"/api/public/image/jobs/{job.id}")
     assert job_response.status_code == 200
     processed_job = job_response.json()["data"]
     assert processed_job["status"] == "succeeded"
     assert processed_job["attempt_count"] == 1
 
-    results_response = client.get(f"/api/public/image/jobs/{job['id']}/results")
+    results_response = client.get(f"/api/public/image/jobs/{job.id}/results")
     assert results_response.status_code == 200
     results = results_response.json()["data"]
     assert len(results) == 1
@@ -656,8 +696,7 @@ def test_worker_persists_rendered_assets_with_mime_extension(monkeypatch):
     client = build_client()
     register_user(client, email="png-extension@example.com")
     job = create_image_job(client, prompt="PNG output")
-
-    worker_image_jobs.run_next_image_job()
+    run_image_worker_for(job["id"])
 
     with session_scope() as session:
         result = session.execute(select(ImageJobResult).where(ImageJobResult.job_id == job["id"])).scalar_one()
@@ -673,7 +712,7 @@ def test_user_can_delete_own_image_job_with_results(monkeypatch):
     client = build_client()
     register_user(client)
     job = create_image_job(client, prompt="Delete completed job")
-    worker_image_jobs.run_next_image_job()
+    run_image_worker_for(job["id"])
 
     response = client.delete(f"/api/public/image/jobs/{job['id']}")
 
@@ -685,23 +724,22 @@ def test_user_can_delete_own_image_job_with_results(monkeypatch):
         assert list(session.execute(select(ImageJobResult)).scalars()) == []
 
 
-def test_delete_queued_image_job_releases_wallet_reservation():
+def test_delete_image_job_removes_job_record():
     client = build_client()
-    user = register_user(client, email="delete-queued@example.com")
-    job = create_image_job(client, prompt="Delete queued job")
+    register_user(client, email="delete-queued@example.com")
+    job = create_image_job(client, prompt="Delete image job")
 
     response = client.delete(f"/api/public/image/jobs/{job['id']}")
 
     assert response.status_code == 200
-    balance_cents, locked_cents = load_wallet_balance(user["id"])
-    assert balance_cents == 100
-    assert locked_cents == 0
+    with session_scope() as session:
+        assert session.get(ImageJob, job["id"]) is None
 
 
 def test_worker_retries_failed_job_before_terminal_failure(monkeypatch):
     client = build_client()
-    register_user(client)
-    job = create_image_job(client, prompt="Retry once image")
+    user = register_user(client)
+    job = create_queued_job_for_user(user_id=user["id"], prompt="Retry once image")
     attempts = {"count": 0}
 
     def flaky_renderer(
@@ -724,9 +762,9 @@ def test_worker_retries_failed_job_before_terminal_failure(monkeypatch):
     assert hasattr(worker_image_jobs, "run_next_image_job")
 
     first_run_job_id = worker_image_jobs.run_next_image_job()
-    assert first_run_job_id == job["id"]
+    assert first_run_job_id == job.id
 
-    first_job_response = client.get(f"/api/public/image/jobs/{job['id']}")
+    first_job_response = client.get(f"/api/public/image/jobs/{job.id}")
     assert first_job_response.status_code == 200
     first_job = first_job_response.json()["data"]
     assert first_job["status"] == "queued"
@@ -734,16 +772,16 @@ def test_worker_retries_failed_job_before_terminal_failure(monkeypatch):
     assert first_job["error_code"] == "image_job_retry_scheduled"
 
     second_run_job_id = worker_image_jobs.run_next_image_job()
-    assert second_run_job_id == job["id"]
+    assert second_run_job_id == job.id
 
-    second_job_response = client.get(f"/api/public/image/jobs/{job['id']}")
+    second_job_response = client.get(f"/api/public/image/jobs/{job.id}")
     assert second_job_response.status_code == 200
     second_job = second_job_response.json()["data"]
     assert second_job["status"] == "succeeded"
     assert second_job["attempt_count"] == 2
 
 
-def test_worker_marks_job_failed_after_max_attempts_and_releases_reservation(monkeypatch):
+def test_worker_marks_job_failed_after_max_attempts_without_local_billing(monkeypatch):
     client = build_client()
     user = register_user(client)
     monkeypatch.setattr(image_service, "IMAGE_JOB_MAX_ATTEMPTS", 2, raising=False)
@@ -762,26 +800,22 @@ def test_worker_marks_job_failed_after_max_attempts_and_releases_reservation(mon
         raise RuntimeError(f"provider rejected: {prompt}:{model_code}")
 
     monkeypatch.setattr(image_service, "render_image", failing_renderer, raising=False)
-    job = create_image_job(client, prompt="Always fail image")
+    job = create_queued_job_for_user(user_id=user["id"], prompt="Always fail image")
     assert hasattr(worker_image_jobs, "run_next_image_job")
 
     first_run_job_id = worker_image_jobs.run_next_image_job()
-    assert first_run_job_id == job["id"]
+    assert first_run_job_id == job.id
 
-    first_job_response = client.get(f"/api/public/image/jobs/{job['id']}")
+    first_job_response = client.get(f"/api/public/image/jobs/{job.id}")
     assert first_job_response.status_code == 200
     first_job = first_job_response.json()["data"]
     assert first_job["status"] == "queued"
     assert first_job["attempt_count"] == 1
 
-    balance_cents, locked_cents = load_wallet_balance(user["id"])
-    assert balance_cents == 100
-    assert locked_cents == 77
-
     second_run_job_id = worker_image_jobs.run_next_image_job()
-    assert second_run_job_id == job["id"]
+    assert second_run_job_id == job.id
 
-    second_job_response = client.get(f"/api/public/image/jobs/{job['id']}")
+    second_job_response = client.get(f"/api/public/image/jobs/{job.id}")
     assert second_job_response.status_code == 200
     second_job = second_job_response.json()["data"]
     assert second_job["status"] == "failed"
@@ -789,29 +823,31 @@ def test_worker_marks_job_failed_after_max_attempts_and_releases_reservation(mon
     assert second_job["error_code"] == "image_job_failed"
     assert "provider rejected" in second_job["error_message"]
 
-    final_balance_cents, final_locked_cents = load_wallet_balance(user["id"])
-    assert final_balance_cents == 100
-    assert final_locked_cents == 0
 
 
 def test_worker_recovers_stale_running_job(monkeypatch):
     client = build_client()
-    register_user(client, email="stale@example.com")
-    job = create_image_job(client, prompt="Recover stale job")
+    user = register_user(client, email="stale@example.com")
+    job = create_queued_job_for_user(user_id=user["id"], prompt="Recover stale job")
     with session_scope() as session:
-        running_job = image_service.get_job(session, job["id"])
+        running_job = image_service.get_job(session, job.id)
+        running_item = session.execute(select(ImageJobItem).where(ImageJobItem.job_id == job.id)).scalar_one()
         running_job.status = "running"
         running_job.attempt_count = 1
         running_job.started_at = datetime.utcnow() - timedelta(seconds=30)
         running_job.finished_at = None
+        running_item.status = "running"
+        running_item.attempt_count = 1
+        running_item.started_at = running_job.started_at
+        running_item.finished_at = None
         session.flush()
 
     monkeypatch.setattr(image_service, "IMAGE_JOB_STALE_TIMEOUT_SECONDS", 1, raising=False)
     monkeypatch.setattr(image_service, "render_image", build_rendered_image_from_job, raising=False)
     processed_job_id = worker_image_jobs.run_next_image_job()
-    job_response = client.get(f"/api/public/image/jobs/{job['id']}")
+    job_response = client.get(f"/api/public/image/jobs/{job.id}")
 
-    assert processed_job_id == job["id"]
+    assert processed_job_id == job.id
     assert job_response.status_code == 200
     assert job_response.json()["data"]["status"] == "succeeded"
     assert job_response.json()["data"]["attempt_count"] == 2

@@ -54,8 +54,6 @@ def create_model(client: TestClient, *, provider_id: int, capability: str, code:
             "provider_id": provider_id,
             "provider_model": f"upstream-{code}",
             "public_enabled": False,
-            "member_price_cents": 0,
-            "anonymous_price_cents": 0,
         },
     )
     assert response.status_code == 201

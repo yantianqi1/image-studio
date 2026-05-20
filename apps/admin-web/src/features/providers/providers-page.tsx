@@ -15,7 +15,7 @@ type Tab = "providers" | "models" | "upstream";
 const TABS: { key: Tab; label: string }[] = [
   { key: "providers", label: "供应商" },
   { key: "models", label: "模型管理" },
-  { key: "upstream", label: "上游同步" },
+  { key: "upstream", label: "NewAPI 同步" },
 ];
 
 function TabBar({ active, onChange }: { active: Tab; onChange: (tab: Tab) => void }) {
@@ -58,8 +58,8 @@ export function ProvidersPage() {
 
   return (
     <AdminShell
-      title="模型与供应商管理"
-      description="维护模型供应商、同步上游模型并配置售卖价格。"
+      title="NewAPI 接入"
+      description="维护供应商接入、同步模型目录并配置站内可见模型。"
     >
       <div className="col-span-12 grid gap-4">
         <TabBar active={activeTab} onChange={setActiveTab} />
@@ -82,7 +82,7 @@ export function ProvidersPage() {
 
         {activeTab === "upstream" && (
           <div className="grid gap-4">
-            <UpstreamModelImportPanel providers={providers} onImported={sync} onError={showError} />
+            <UpstreamModelImportPanel onImported={sync} onError={showError} />
           </div>
         )}
       </div>

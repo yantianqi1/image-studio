@@ -6,7 +6,14 @@ from apps.api.app.domains.auth.ownership import OwnerContext
 from apps.api.app.domains.image import service as image_service
 from apps.api.app.domains.image.models import ImageJob
 from apps.api.app.infra.db.session import session_scope
-from apps.api.tests.test_image_jobs import build_client, client_provider_headers, create_anonymous_owner, register_user
+from apps.api.tests.test_image_jobs import (
+    build_client,
+    build_rendered_image_from_job,
+    client_provider_headers,
+    create_anonymous_owner,
+    fake_client_provider_render,
+    register_user,
+)
 from apps.worker.worker.tasks import image_jobs as worker_image_jobs
 
 
@@ -18,7 +25,8 @@ def post_image_job(client, *, prompt: str, headers: dict[str, str] | None = None
     )
 
 
-def test_anonymous_image_jobs_are_not_limited_by_active_jobs() -> None:
+def test_anonymous_image_jobs_are_not_limited_by_active_jobs(monkeypatch) -> None:
+    monkeypatch.setattr(image_service, "render_image", build_rendered_image_from_job)
     client = build_client()
 
     responses = [
@@ -29,7 +37,8 @@ def test_anonymous_image_jobs_are_not_limited_by_active_jobs() -> None:
     assert [response.status_code for response in responses] == [201, 201, 201, 201]
 
 
-def test_client_provider_image_jobs_are_not_limited_by_anonymous_active_jobs() -> None:
+def test_client_provider_image_jobs_are_not_limited_by_anonymous_active_jobs(monkeypatch) -> None:
+    monkeypatch.setattr(image_service, "render_with_client_provider", fake_client_provider_render)
     client = build_client()
 
     responses = [
@@ -41,7 +50,7 @@ def test_client_provider_image_jobs_are_not_limited_by_anonymous_active_jobs() -
 
 
 def test_member_image_jobs_are_not_limited_by_anonymous_active_jobs(monkeypatch) -> None:
-    monkeypatch.setenv("SIGNUP_BONUS_CENTS", "1000")
+    monkeypatch.setattr(image_service, "render_image", build_rendered_image_from_job)
     client = build_client()
     register_user(client, email="image-concurrency@example.com")
 

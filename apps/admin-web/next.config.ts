@@ -7,8 +7,6 @@ const adminRedirects = [
   { source: "/", destination: "/admin" },
   { source: "/login", destination: "/admin/login" },
   { source: "/users", destination: "/admin/users" },
-  { source: "/billing", destination: "/admin/billing" },
-  { source: "/redeem", destination: "/admin/redeem" },
   { source: "/providers", destination: "/admin/providers" },
   { source: "/image-jobs", destination: "/admin/image-jobs" },
   { source: "/image-tasks", destination: "/admin/image-tasks" },

@@ -5,17 +5,16 @@ import test from "node:test";
 const appShellSource = readSource("../src/features/shell/app-shell.tsx");
 const appNavigationSource = readSource("../src/features/shell/app-navigation.ts");
 const loginPageSource = readSource("../src/app/login/page.tsx");
-const walletDashboardSource = readSource("../src/features/wallet/wallet-dashboard.tsx");
-const accountShellSource = readSource("../src/features/wallet/account-shell.tsx");
-const accountTopNavigationSource = readSource("../src/features/wallet/account-top-navigation.tsx");
-const accountLoginSource = readSource("../src/features/wallet/account-login-page.tsx");
-const personalCenterSource = readSource("../src/features/wallet/account-personal-center.tsx");
+const accountDashboardSource = readSource("../src/features/account/account-dashboard.tsx");
+const accountShellSource = readSource("../src/features/account/account-shell.tsx");
+const accountTopNavigationSource = readSource("../src/features/account/account-top-navigation.tsx");
+const accountLoginSource = readSource("../src/features/account/account-login-page.tsx");
+const personalCenterSource = readSource("../src/features/account/account-personal-center.tsx");
 const publicApiSource = readSource("../src/lib/public-api.ts");
 
 const unauthorizedForbiddenTerms = [
   "钱包余额",
   "可用额度",
-  "共享额度",
   "任务记录",
   "最近任务",
   "消费明细",
@@ -31,13 +30,13 @@ const unauthorizedForbiddenTerms = [
 
 const authenticatedRequiredTerms = [
   "个人中心",
-  "钱包余额",
-  "可用额度",
+  "账户状态",
+  "今日次数",
   "最近任务",
-  "消费明细",
   "账户 ID",
   "个人信息",
   "安全中心",
+  "资产归属",
 ];
 
 const deprecatedSecurityTerms = [
@@ -46,8 +45,9 @@ const deprecatedSecurityTerms = [
   "登录设备管理",
 ];
 
-test("account entry does not change product navigation surfaces", () => {
-  assert.match(appShellSource, /href="\/wallet"/);
+test("account entry points to login route without wallet surface", () => {
+  assert.match(appShellSource, /href="\/login"/);
+  assert.doesNotMatch(appShellSource, /href="\/wallet"/);
   assert.match(appNavigationSource, /\{ href: "\/", label: "图库" \}/);
   assert.match(appNavigationSource, /\{ href: "\/generate", label: "创作台" \}/);
   assert.match(appNavigationSource, /\{ href: "\/comic", label: "漫画" \}/);
@@ -55,17 +55,17 @@ test("account entry does not change product navigation surfaces", () => {
 });
 
 test("login route reuses the isolated account page instead of the legacy shell", () => {
-  assert.match(loginPageSource, /WalletDashboard/);
+  assert.match(loginPageSource, /AccountDashboard/);
   assert.doesNotMatch(loginPageSource, /LoginPanel/);
 });
 
-test("wallet dashboard has explicit unauthenticated and authenticated render branches", () => {
-  assert.match(walletDashboardSource, /userState\.status === "ready"/);
-  assert.match(walletDashboardSource, /const session: AccountSession = \{ user: userState\.data \}/);
-  assert.match(walletDashboardSource, /session: null/);
-  assert.match(walletDashboardSource, /searchParams\.get\("mode"\) === "register"/);
-  assert.match(walletDashboardSource, /renderLoginPage/);
-  assert.match(walletDashboardSource, /renderPersonalCenterPage/);
+test("account dashboard has explicit unauthenticated and authenticated render branches", () => {
+  assert.match(accountDashboardSource, /userState\.status === "ready"/);
+  assert.match(accountDashboardSource, /const session: AccountSession = \{ user: userState\.data \}/);
+  assert.match(accountDashboardSource, /session: null/);
+  assert.match(accountDashboardSource, /searchParams\.get\("mode"\) === "register"/);
+  assert.match(accountDashboardSource, /renderLoginPage/);
+  assert.match(accountDashboardSource, /renderPersonalCenterPage/);
   assert.match(accountShellSource, /renderTopNavigation/);
 });
 
@@ -90,7 +90,7 @@ test("unauthenticated account branch renders only login and registration entry",
   }
 });
 
-test("account pages use mobile-first layout for login and wallet views", () => {
+test("account pages use mobile-first layout for login and account views", () => {
   assert.match(accountShellSource, /px-3 py-4 sm:px-8 sm:py-8/);
   assert.match(accountTopNavigationSource, /min-h-\[56px\].*sm:min-h-\[72px\]/);
   assert.match(accountTopNavigationSource, /hidden truncate sm:inline/);
@@ -99,8 +99,6 @@ test("account pages use mobile-first layout for login and wallet views", () => {
   assert.match(accountLoginSource, /mx-auto w-full max-w-md/);
   assert.match(accountLoginSource, /账户中心/);
   assert.match(personalCenterSource, /grid grid-cols-2 gap-2 rounded-2xl/);
-  assert.match(personalCenterSource, /mt-4 grid gap-3 sm:hidden/);
-  assert.match(personalCenterSource, /mt-4 hidden overflow-x-auto sm:block/);
 });
 
 test("authenticated account branch renders the personal center modules only after login", () => {
@@ -110,7 +108,7 @@ test("authenticated account branch renders the personal center modules only afte
     assert.match(personalCenterSource, new RegExp(term));
   }
 
-  assert.match(authenticatedActions, /共享额度/);
+  assert.match(authenticatedActions, /今日次数/);
   assert.match(authenticatedActions, /设置/);
   assert.match(authenticatedActions, /ChevronDown/);
   assert.match(authenticatedActions, /LogoutButton/);
@@ -122,23 +120,23 @@ test("authenticated account branch renders the personal center modules only afte
   }
 });
 
-test("wallet panel keeps existing API client wiring", () => {
-  assert.match(walletDashboardSource, /publicApi\.getCurrentUser/);
-  assert.match(walletDashboardSource, /publicApi\.getWalletSummary/);
-  assert.match(walletDashboardSource, /publicApi\.getWalletLedger/);
-  assert.match(walletDashboardSource, /publicApi\.getTasks/);
-  assert.match(walletDashboardSource, /publicApi\.getPublicQuotaStatus/);
-  assert.match(walletDashboardSource, /publicApi\.login/);
-  assert.match(walletDashboardSource, /publicApi\.register/);
-  assert.match(walletDashboardSource, /publicApi\.logout/);
+test("account panel keeps identity and task API client wiring", () => {
+  assert.match(accountDashboardSource, /publicApi\.getCurrentUser/);
+  assert.match(accountDashboardSource, /publicApi\.getTasks/);
+  assert.match(accountDashboardSource, /publicApi\.getPublicQuotaStatus/);
+  assert.match(accountDashboardSource, /publicApi\.login/);
+  assert.match(accountDashboardSource, /publicApi\.register/);
+  assert.match(accountDashboardSource, /publicApi\.logout/);
   assert.match(publicApiSource, /apiFetch<[^>]+>\("\/auth\/logout"/);
-  assert.match(walletDashboardSource, /notifyComicOwnerChanged\(\)/);
+  assert.match(accountDashboardSource, /notifyComicOwnerChanged\(\)/);
+  assert.doesNotMatch(accountDashboardSource, /getWalletSummary|getWalletLedger/);
+  assert.doesNotMatch(publicApiSource, /billing\/wallets|redeem/);
 });
 
-test("account ledger keeps charge amount fields visible only in authenticated modules", () => {
-  assert.match(personalCenterSource, /amount_credits/);
-  assert.match(personalCenterSource, /balance_after_credits/);
+test("account pages do not expose wallet ledger or charge amount fields", () => {
+  assert.doesNotMatch(personalCenterSource, /amount_credits|balance_after_credits|charge_credits/);
   assert.doesNotMatch(accountLoginSource, /amount_credits|balance_after_credits|charge_credits/);
+  assert.doesNotMatch(personalCenterSource, /钱包|余额|消费明细|兑换码/);
 });
 
 function readSource(relativePath) {

@@ -17,7 +17,7 @@ def get_image_job_stats(session: Session) -> dict:
     avg_duration_seconds = _avg_duration(session)
     return {
         "overview": overview["overview"],
-        "revenue": overview["revenue"],
+        "costs": overview["costs"],
         "performance": {
             "avg_duration_seconds": avg_duration_seconds,
         },
@@ -38,9 +38,9 @@ def _overview_stats(session: Session, *, today_start: datetime, week_ago: dateti
             func.count(ImageJob.id),
             func.count(ImageJob.id).filter(ImageJob.status == "succeeded"),
             func.count(ImageJob.id).filter(ImageJob.status == "failed"),
-            func.coalesce(func.sum(ImageJob.charge_cents), 0),
-            func.coalesce(func.sum(ImageJob.charge_cents).filter(ImageJob.created_at >= today_start), 0),
-            func.coalesce(func.sum(ImageJob.charge_cents).filter(ImageJob.created_at >= week_ago), 0),
+            func.coalesce(func.sum(ImageJob.internal_cost_cents), 0),
+            func.coalesce(func.sum(ImageJob.internal_cost_cents).filter(ImageJob.created_at >= today_start), 0),
+            func.coalesce(func.sum(ImageJob.internal_cost_cents).filter(ImageJob.created_at >= week_ago), 0),
         )
     ).one()
     total = int(row[0])
@@ -49,7 +49,7 @@ def _overview_stats(session: Session, *, today_start: datetime, week_ago: dateti
     success_rate = round(succeeded / total, 4) if total > 0 else 0
     return {
         "overview": {"total": total, "succeeded": succeeded, "failed": failed, "success_rate": success_rate},
-        "revenue": {"total_cents": int(row[3]), "today_cents": int(row[4]), "week_cents": int(row[5])},
+        "costs": {"total_cents": int(row[3]), "today_cents": int(row[4]), "week_cents": int(row[5])},
     }
 
 
@@ -86,25 +86,24 @@ def _channel_costs(session: Session) -> list[dict]:
         session.query(
             ImageJob.model_code,
             func.count(ImageJob.id),
-            func.coalesce(func.sum(ImageJob.charge_cents), 0),
+            func.coalesce(func.sum(ImageJob.raw_provider_cost_cents), 0),
+            func.coalesce(func.sum(ImageJob.provider_fee_cents), 0),
             func.coalesce(func.sum(ImageJob.internal_cost_cents), 0),
         )
         .group_by(ImageJob.model_code)
-        .order_by(func.sum(ImageJob.charge_cents).desc())
+        .order_by(func.sum(ImageJob.internal_cost_cents).desc())
         .all()
     )
     return [build_channel_cost_item(row) for row in rows]
 
 
 def build_channel_cost_item(row) -> dict[str, object]:
-    revenue_cents = int(row[2])
-    internal_cost_cents = int(row[3])
     return {
         "key": row[0] or "unknown",
         "count": int(row[1]),
-        "revenue_cents": revenue_cents,
-        "internal_cost_cents": internal_cost_cents,
-        "gross_margin_cents": revenue_cents - internal_cost_cents,
+        "raw_provider_cost_cents": int(row[2]),
+        "provider_fee_cents": int(row[3]),
+        "internal_cost_cents": int(row[4]),
     }
 
 
@@ -114,7 +113,7 @@ def _daily_trend(session: Session, *, since: datetime) -> list[dict]:
         session.query(
             date_col.label("date"),
             func.count(ImageJob.id).label("count"),
-            func.coalesce(func.sum(ImageJob.charge_cents), 0).label("revenue_cents"),
+            func.coalesce(func.sum(ImageJob.internal_cost_cents), 0).label("internal_cost_cents"),
             func.sum(case((ImageJob.status == "succeeded", 1), else_=0)).label("succeeded"),
         )
         .filter(ImageJob.created_at >= since)
@@ -126,7 +125,7 @@ def _daily_trend(session: Session, *, since: datetime) -> list[dict]:
         {
             "date": str(row.date),
             "count": row.count,
-            "revenue_cents": int(row.revenue_cents),
+            "internal_cost_cents": int(row.internal_cost_cents),
             "succeeded": int(row.succeeded),
         }
         for row in rows

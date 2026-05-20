@@ -1,4 +1,3 @@
-from apps.api.app.domains.billing.credits import cents_to_price_credits
 from apps.api.app.domains.image.assets import resolve_asset_public_urls
 from apps.api.app.domains.image.title_generation import PENDING_IMAGE_JOB_TITLE
 
@@ -29,8 +28,6 @@ def job_payload(job) -> dict[str, object]:
         "max_attempts": job.max_attempts,
         "size": job.size,
         "quality": job.quality,
-        "charge_cents": job.charge_cents,
-        "charge_credits": cents_to_price_credits(job.charge_cents),
         "provider_input_tokens": job.provider_input_tokens,
         "provider_output_tokens": job.provider_output_tokens,
         "provider_total_tokens": job.provider_total_tokens,

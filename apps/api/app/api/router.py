@@ -5,8 +5,6 @@ from apps.api.app.core.module_loader import load_optional_attribute
 
 PUBLIC_DOMAIN_ROUTERS = (
     "apps.api.app.domains.auth.routes",
-    "apps.api.app.domains.billing.routes",
-    "apps.api.app.domains.redeem.routes",
     "apps.api.app.domains.llm.routes",
     "apps.api.app.domains.prompt_crafter.routes",
     "apps.api.app.domains.image.routes",
@@ -19,8 +17,6 @@ PUBLIC_DOMAIN_ROUTERS = (
 
 ADMIN_DOMAIN_ROUTERS = (
     "apps.api.app.domains.auth.routes",
-    "apps.api.app.domains.billing.routes",
-    "apps.api.app.domains.redeem.routes",
     "apps.api.app.domains.llm.routes",
     "apps.api.app.domains.prompt_crafter.routes",
     "apps.api.app.domains.image.routes",

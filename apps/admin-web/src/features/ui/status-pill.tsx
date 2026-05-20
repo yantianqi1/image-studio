@@ -1,3 +1,5 @@
+import { formatStatusLabel } from "@/features/ui/admin-labels";
+
 type StatusTone = "neutral" | "success" | "warning" | "danger" | "info";
 
 const toneClassNames: Record<StatusTone, string> = {
@@ -26,7 +28,7 @@ const statusToneMap: Record<string, StatusTone> = {
 
 export function StatusPill({
   status,
-  label = status,
+  label = formatStatusLabel(status),
   tone,
 }: Readonly<{
   status: string;

@@ -46,7 +46,7 @@ export function LoginPanel() {
   }
 
   return (
-    <AppShell activeHref="/wallet" title={isRegisterMode ? "注册账户" : "登录"}>
+    <AppShell activeHref="/login" title={isRegisterMode ? "注册账户" : "登录"}>
       <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
         <div className="grid gap-4 content-start">
           <SectionPanel title={isRegisterMode ? "注册账户" : "登录账户"}>

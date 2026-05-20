@@ -27,7 +27,7 @@ export function UsersTable({
             <th>用户</th>
             <th>状态</th>
             <th>创建时间</th>
-            <th>ID</th>
+            <th>编号</th>
           </tr>
         </thead>
         <tbody>

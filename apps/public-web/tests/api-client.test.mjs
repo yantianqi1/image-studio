@@ -86,7 +86,7 @@ test("isUnauthorizedApiError detects API 401 responses", async () => {
   );
 
   await assert.rejects(
-    () => apiFetch("/billing/wallets/me"),
+    () => apiFetch("/auth/me"),
     (error) => isUnauthorizedApiError(error),
   );
 });

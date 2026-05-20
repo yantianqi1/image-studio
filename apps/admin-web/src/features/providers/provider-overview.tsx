@@ -1,4 +1,3 @@
-import { formatPriceRange } from "@/features/providers/price-format";
 import { adminApi } from "@/lib/admin-api";
 
 type Provider = Awaited<ReturnType<typeof adminApi.providers>>[number];
@@ -12,13 +11,12 @@ export function ProviderOverview({
   providers: readonly Provider[];
 }>) {
   const publicModels = models.filter((model) => model.public_enabled);
-  const prices = models.flatMap((model) => [model.member_price_cents, model.anonymous_price_cents]);
   return (
     <section className="admin-panel">
       <div className="grid gap-4 md:grid-cols-4">
         <OverviewMetric label="供应商" value={`${activeProviderCount(providers)} / ${providers.length}`} />
         <OverviewMetric label="公开模型" value={`${publicModels.length} / ${models.length}`} />
-        <OverviewMetric label="基础价范围" value={formatPriceRange(prices)} />
+        <OverviewMetric label="可见模型" value={String(publicModels.length)} />
         <OverviewMetric label="图片模型" value={String(models.filter((model) => model.capability === "image").length)} />
       </div>
     </section>

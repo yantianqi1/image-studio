@@ -27,12 +27,12 @@ export function PublicQuotaStatusBadge() {
 function QuotaStatusView({ status }: Readonly<{ status: PublicQuotaStatus }>) {
   const modeCopy = getModeCopy(status.mode);
   const tone = getQuotaTone(status);
-  const title = `共享额度：剩余 ${status.remaining_count} / ${status.limit_count}，已用 ${status.used_count}`;
+  const title = `今日次数：剩余 ${status.remaining_count} / ${status.limit_count}，已用 ${status.used_count}`;
 
   return (
-    <div className={styles.status} data-tone={tone} title={title} aria-label={`共享额度：剩余 ${status.remaining_count} / ${status.limit_count}`}>
+    <div className={styles.status} data-tone={tone} title={title} aria-label={`今日次数：剩余 ${status.remaining_count} / ${status.limit_count}`}>
       <span className={styles.dot} aria-hidden="true" />
-      <span className={styles.label}>共享额度</span>
+      <span className={styles.label}>今日次数</span>
       <span className={styles.value}>
         {status.remaining_count}
         <span className={styles.valueMuted}>/ {status.limit_count}</span>
@@ -48,9 +48,9 @@ function QuotaStatusView({ status }: Readonly<{ status: PublicQuotaStatus }>) {
 
 function QuotaLoadingView() {
   return (
-    <div className={styles.status} data-tone="loading" aria-label="共享额度读取中">
+    <div className={styles.status} data-tone="loading" aria-label="今日次数读取中">
       <span className={styles.dot} aria-hidden="true" />
-      <span className={styles.label}>共享额度</span>
+      <span className={styles.label}>今日次数</span>
       <span className={styles.value}>
         {EMPTY_VALUE}
         <span className={styles.valueMuted}>/ {EMPTY_VALUE}</span>
@@ -65,9 +65,9 @@ function QuotaLoadingView() {
 
 function QuotaErrorView({ message }: Readonly<{ message: string }>) {
   return (
-    <div className={styles.status} data-tone="error" title={message} aria-label={`共享额度读取失败：${message}`}>
+    <div className={styles.status} data-tone="error" title={message} aria-label={`今日次数读取失败：${message}`}>
       <span className={styles.dot} aria-hidden="true" />
-      <span className={styles.label}>共享额度</span>
+      <span className={styles.label}>今日次数</span>
       <span className={styles.value}>
         {EMPTY_VALUE}
         <span className={styles.valueMuted}>/ {EMPTY_VALUE}</span>

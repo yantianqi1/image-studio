@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime
-
-from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from apps.api.app.core.errors import AppError
@@ -19,8 +16,20 @@ from apps.api.app.domains.image.conversation_messages import (
 )
 from apps.api.app.domains.image.gallery import set_asset_visibility
 from apps.api.app.domains.image.job_builder import CreateImageJobRecordInput, create_image_job_record
+from apps.api.app.domains.image.job_claiming import (
+    DEFAULT_IMAGE_JOB_LEASE_SECONDS,
+    DEFAULT_IMAGE_JOB_WORKER_NAME,
+    POSTGRES_CLAIM_JOB_IDS_SQL,
+    claim_next_job_ids as claim_next_job_ids_for_worker,
+    heartbeat_job,
+)
 from apps.api.app.domains.image.job_failure import handle_job_failure
-from apps.api.app.domains.image.job_recovery import recover_stale_running_jobs
+from apps.api.app.domains.image.job_item_claiming import (
+    POSTGRES_CLAIM_ITEM_IDS_SQL,
+    claim_next_item_ids as claim_next_item_ids_for_worker,
+    heartbeat_item,
+)
+from apps.api.app.domains.image.job_items import create_job_items
 from apps.api.app.domains.image.models import ImageJob
 from apps.api.app.domains.image.repository import (
     clear_job_outputs,
@@ -44,14 +53,12 @@ from apps.api.app.domains.llm.rendering import ProviderUsage
 from apps.api.app.domains.llm.service import (
     render_image,
     resolve_model_execution_target,
-    resolve_variant,
 )
 from apps.api.app.infra.storage.factory import build_asset_storage
 
 IMAGE_JOB_RETRY_DELAY_SECONDS = 5
 IMAGE_JOB_STALE_TIMEOUT_SECONDS = 300
 IMAGE_JOB_MAX_ATTEMPTS = 3
-CLAIM_BATCH_SIZE = 10
 
 
 def create_job(
@@ -75,7 +82,6 @@ def create_job(
     quality: str | None = None,
 ) -> ImageJob:
     target = resolve_model_execution_target(session, model_code=model_code)
-    variant = resolve_variant(session, model_id=target.model.id, size=size, quality=quality)
     source_asset = resolve_source_asset(session, mode=mode, source_asset_id=source_asset_id, owner=owner)
     reference_assets = resolve_reference_assets(session, reference_asset_ids=reference_asset_ids, owner=owner)
     normalized_messages = normalize_conversation_messages(conversation_messages)
@@ -92,7 +98,6 @@ def create_job(
             mode=mode,
             source_asset_id=source_asset.id if source_asset else None,
             target=target,
-            variant=variant,
             client_access_id=client_access_id,
             client_provider_config=client_provider_config,
             conversation_messages=normalized_messages,
@@ -111,40 +116,57 @@ def create_job(
 def persist_new_image_job(session: Session, *, job: ImageJob, reference_assets) -> None:
     session.add(job)
     session.flush()
+    create_job_items(session, job=job)
     create_reference_asset_rows(session, job_id=job.id, assets=reference_assets)
 
 
-def claim_next_job(session: Session) -> ImageJob | None:
-    recover_stale_running_jobs(session, stale_timeout_seconds=IMAGE_JOB_STALE_TIMEOUT_SECONDS)
-    current_time = datetime.utcnow()
-    job_ids = list(
-        session.execute(
-            select(ImageJob.id)
-            .where(ImageJob.status == "queued", ImageJob.available_at <= current_time)
-            .order_by(ImageJob.available_at.asc(), ImageJob.id.asc())
-            .limit(CLAIM_BATCH_SIZE)
-        ).scalars()
-    )
-    for job_id in job_ids:
-        if claim_job(session, job_id=job_id, current_time=current_time):
-            return get_job(session, job_id)
-    return None
+def claim_next_job(
+    session: Session,
+    worker_name: str = DEFAULT_IMAGE_JOB_WORKER_NAME,
+    lease_seconds: int = DEFAULT_IMAGE_JOB_LEASE_SECONDS,
+) -> ImageJob | None:
+    job_ids = claim_next_job_ids(session, limit=1, worker_name=worker_name, lease_seconds=lease_seconds)
+    if not job_ids:
+        return None
+    return get_job(session, job_ids[0])
 
 
-def claim_job(session: Session, *, job_id: int, current_time: datetime) -> bool:
-    statement = (
-        update(ImageJob)
-        .where(ImageJob.id == job_id, ImageJob.status == "queued", ImageJob.available_at <= current_time)
-        .values(
-            status="running",
-            attempt_count=ImageJob.attempt_count + 1,
-            started_at=current_time,
-            finished_at=None,
-            error_code=None,
-            error_message=None,
-        )
+def claim_next_job_ids(
+    session: Session,
+    *,
+    limit: int,
+    worker_name: str = DEFAULT_IMAGE_JOB_WORKER_NAME,
+    lease_seconds: int = DEFAULT_IMAGE_JOB_LEASE_SECONDS,
+) -> list[int]:
+    return claim_next_job_ids_for_worker(
+        session,
+        limit=limit,
+        worker_name=worker_name,
+        lease_seconds=lease_seconds,
+        stale_timeout_seconds=IMAGE_JOB_STALE_TIMEOUT_SECONDS,
     )
-    return session.execute(statement).rowcount > 0
+
+
+def claim_next_item_ids(
+    session: Session,
+    *,
+    limit: int,
+    worker_name: str = DEFAULT_IMAGE_JOB_WORKER_NAME,
+    lease_seconds: int = DEFAULT_IMAGE_JOB_LEASE_SECONDS,
+) -> list[int]:
+    return claim_next_item_ids_for_worker(
+        session,
+        limit=limit,
+        worker_name=worker_name,
+        lease_seconds=lease_seconds,
+        stale_timeout_seconds=IMAGE_JOB_STALE_TIMEOUT_SECONDS,
+    )
+
+
+def process_claimed_item(session: Session, *, item_id: int) -> ImageJob:
+    from apps.api.app.domains.image.job_item_processing import process_claimed_item as process_item
+
+    return process_item(session, item_id=item_id, retry_delay_seconds=IMAGE_JOB_RETRY_DELAY_SECONDS)
 
 
 def process_claimed_job(session: Session, *, job_id: int) -> ImageJob:

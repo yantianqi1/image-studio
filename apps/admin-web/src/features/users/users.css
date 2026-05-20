@@ -213,11 +213,11 @@
   margin-top: 0.2rem;
 }
 
-.users-ledger-list {
+.users-audit-list {
   display: grid;
 }
 
-.users-ledger-amount {
+.users-audit-meta {
   display: grid;
   flex-shrink: 0;
   gap: 0.12rem;
@@ -227,33 +227,10 @@
   font-weight: 800;
 }
 
-.users-ledger-amount small {
+.users-audit-meta small {
   color: var(--admin-muted);
   font-size: 0.7rem;
   font-weight: 600;
-}
-
-.users-adjustment-form {
-  border-top: 1px solid var(--admin-border);
-  display: grid;
-  gap: 0.55rem;
-  margin-top: 0.75rem;
-  padding-top: 0.75rem;
-}
-
-.users-adjustment-preview {
-  align-items: center;
-  color: var(--admin-muted);
-  display: flex;
-  flex-wrap: wrap;
-  font-size: 0.78rem;
-  gap: 0.45rem 0.7rem;
-  justify-content: space-between;
-}
-
-.users-adjustment-preview strong {
-  color: var(--foreground);
-  font-size: 0.82rem;
 }
 
 .users-reason-input {

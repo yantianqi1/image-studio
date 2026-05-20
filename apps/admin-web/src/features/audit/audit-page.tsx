@@ -11,6 +11,7 @@ import { LoadingState } from "@/features/ui/loading-state";
 import type { AdminAuditLog } from "@/lib/admin-api";
 import { useAdminAuditLogs } from "@/lib/use-admin-data";
 import { adminErrorMessage } from "@/features/ui/admin-errors";
+import { formatAuditActionLabel, formatAuditMetadata, formatAuditTargetLabel } from "@/features/ui/admin-labels";
 
 const FIRST_PAGE = 1;
 const AUDIT_PAGE_SIZE = 25;
@@ -82,14 +83,14 @@ function AuditFilterBar({
   return (
     <DataToolbar
       title="筛选"
-      description="字段为空时不参与筛选。日期值按 datetime-local 原样提交给 API。"
+      description="字段为空时不参与筛选。日期值按浏览器时间原样提交给接口。"
       actions={<AuditFilterActions onApply={onApply} onReset={onReset} />}
     >
       <div className="grid gap-2 md:grid-cols-3 xl:grid-cols-6">
-        <input className="admin-input" placeholder="action" value={draft.action} onChange={(event) => updateDraft(setDraft, { action: event.target.value })} />
-        <input className="admin-input" placeholder="target_type" value={draft.targetType} onChange={(event) => updateDraft(setDraft, { targetType: event.target.value })} />
-        <input className="admin-input" placeholder="target_id" value={draft.targetId} onChange={(event) => updateDraft(setDraft, { targetId: event.target.value })} />
-        <input className="admin-input" placeholder="admin_user_id" value={draft.adminUserId} onChange={(event) => updateDraft(setDraft, { adminUserId: event.target.value })} />
+        <input className="admin-input" placeholder="操作类型" value={draft.action} onChange={(event) => updateDraft(setDraft, { action: event.target.value })} />
+        <input className="admin-input" placeholder="对象类型" value={draft.targetType} onChange={(event) => updateDraft(setDraft, { targetType: event.target.value })} />
+        <input className="admin-input" placeholder="对象编号" value={draft.targetId} onChange={(event) => updateDraft(setDraft, { targetId: event.target.value })} />
+        <input className="admin-input" placeholder="管理员编号" value={draft.adminUserId} onChange={(event) => updateDraft(setDraft, { adminUserId: event.target.value })} />
         <input className="admin-input" type="datetime-local" value={draft.createdFrom} onChange={(event) => updateDraft(setDraft, { createdFrom: event.target.value })} />
         <input className="admin-input" type="datetime-local" value={draft.createdTo} onChange={(event) => updateDraft(setDraft, { createdTo: event.target.value })} />
       </div>
@@ -148,12 +149,12 @@ function AuditRows({ logs }: Readonly<{ logs: readonly AdminAuditLog[] }>) {
       <table className="admin-table">
         <thead>
           <tr>
-            <th>Action</th>
-            <th>Target</th>
-            <th>Reason</th>
-            <th>Admin</th>
-            <th>Metadata</th>
-            <th>Created</th>
+            <th>操作</th>
+            <th>对象</th>
+            <th>原因</th>
+            <th>管理员</th>
+            <th>详情</th>
+            <th>时间</th>
           </tr>
         </thead>
         <tbody>
@@ -169,10 +170,10 @@ function AuditRows({ logs }: Readonly<{ logs: readonly AdminAuditLog[] }>) {
 function AuditRow({ log }: Readonly<{ log: AdminAuditLog }>) {
   return (
     <tr>
-      <td>{log.action}</td>
-      <td>{log.target_type} #{log.target_id}</td>
+      <td>{formatAuditActionLabel(log.action)}</td>
+      <td>{formatAuditTargetLabel(log.target_type, log.target_id)}</td>
       <td>{log.reason}</td>
-      <td>#{log.admin_user_id}</td>
+      <td>管理员 #{log.admin_user_id}</td>
       <td><code className="text-xs">{metadataText(log.metadata)}</code></td>
       <td>{formatDateTime(log.created_at)}</td>
     </tr>
@@ -197,23 +198,7 @@ function toAuditQuery(draft: AuditDraft, page: number) {
 }
 
 function metadataText(metadata: Record<string, unknown>) {
-  const text = JSON.stringify(sanitizeMetadata(metadata));
-  return text === "{}" ? "-" : text;
-}
-
-function sanitizeMetadata(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map(sanitizeMetadata);
-  }
-  if (!value || typeof value !== "object") {
-    return value;
-  }
-  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, isSensitiveKey(key) ? "[redacted]" : sanitizeMetadata(item)]));
-}
-
-function isSensitiveKey(key: string) {
-  const normalized = key.toLowerCase();
-  return normalized.includes("password") || normalized.includes("secret") || normalized.includes("token") || normalized.includes("api_key");
+  return formatAuditMetadata(metadata);
 }
 
 function formatDateTime(value: string) {

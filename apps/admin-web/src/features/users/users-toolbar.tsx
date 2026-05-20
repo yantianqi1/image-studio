@@ -1,9 +1,13 @@
+import type { FormEvent } from "react";
+
+import { formatStatusLabel } from "@/features/ui/admin-labels";
+
 const statusOptions = [
   { value: "", label: "全部状态" },
-  { value: "active", label: "active" },
-  { value: "disabled", label: "disabled" },
-  { value: "deleted", label: "deleted" },
-  { value: "suspended", label: "suspended" },
+  { value: "active", label: formatStatusLabel("active") },
+  { value: "disabled", label: formatStatusLabel("disabled") },
+  { value: "deleted", label: formatStatusLabel("deleted") },
+  { value: "suspended", label: formatStatusLabel("suspended") },
 ] as const;
 
 export type UsersToolbarDraft = Readonly<{
@@ -62,4 +66,3 @@ function handleSubmit(event: FormEvent<HTMLFormElement>, onSubmit: () => void) {
   event.preventDefault();
   onSubmit();
 }
-import type { FormEvent } from "react";

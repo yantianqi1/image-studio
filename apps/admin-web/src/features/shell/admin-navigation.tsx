@@ -17,51 +17,49 @@ export type AdminNavGroup = Readonly<{
 
 export const ADMIN_NAV_GROUPS = [
   {
-    label: "Dashboard",
+    label: "概览",
     description: "后台总览和常用入口。",
     items: [
-      { href: "/admin", label: "概览", icon: "overview", detail: "当前页面与导航分组", token: "dashboard" },
+      { href: "/admin", label: "概览", icon: "overview", detail: "当前页面与导航分组", token: "总览" },
     ],
   },
   {
-    label: "Users",
-    description: "用户、钱包与兑换码归在同一操作域。",
+    label: "用户",
+    description: "用户身份、状态和审计归在同一操作域。",
     items: [
-      { href: "/admin/users", label: "用户管理", icon: "users", detail: "搜索真实用户、状态和详情", token: "users" },
-      { href: "/admin/billing", label: "钱包与账本", icon: "billing", detail: "按用户查看余额、ledger 和调账", token: "wallet" },
-      { href: "/admin/redeem", label: "激活码", icon: "redeem", detail: "批次创建、兑换状态和到账金额", token: "redeem" },
+      { href: "/admin/users", label: "用户管理", icon: "users", detail: "搜索真实用户、状态和详情", token: "用户" },
     ],
   },
   {
-    label: "Models",
-    description: "供应商、模型和设施配置。",
+    label: "模型",
+    description: "NewAPI 接入、模型目录和设施配置。",
     items: [
-      { href: "/admin/providers", label: "Provider", icon: "providers", detail: "供应商、上游模型和价格", token: "providers" },
-      { href: "/admin/facilities", label: "Facilities", icon: "facilities", detail: "功能到模型的绑定配置", token: "facilities" },
+      { href: "/admin/providers", label: "NewAPI 接入", icon: "providers", detail: "NewAPI 中转站、模型目录和可见性", token: "NewAPI" },
+      { href: "/admin/facilities", label: "设施", icon: "facilities", detail: "功能到模型的绑定配置", token: "设施" },
     ],
   },
   {
-    label: "Jobs",
+    label: "任务",
     description: "长任务和队列健康状态。",
     items: [
-      { href: "/admin/image-jobs", label: "图片任务", icon: "image", detail: "图片生成队列、结果和 worker 告警", token: "image", aliases: ["/admin/image-tasks"] },
-      { href: "/admin/comic-jobs", label: "漫画任务", icon: "comic", detail: "漫画任务状态和执行线索", token: "comic", aliases: ["/admin/comic-tasks"] },
+      { href: "/admin/image-jobs", label: "图片任务", icon: "image", detail: "图片生成队列、结果和运行告警", token: "图片", aliases: ["/admin/image-tasks"] },
+      { href: "/admin/comic-jobs", label: "漫画任务", icon: "comic", detail: "漫画任务状态和执行线索", token: "漫画", aliases: ["/admin/comic-tasks"] },
     ],
   },
   {
-    label: "Content",
+    label: "内容",
     description: "公开图库和形象库管理。",
     items: [
-      { href: "/admin/gallery", label: "公开图库", icon: "gallery", detail: "浏览、下架或删除公开分享的图片", token: "gallery" },
-      { href: "/admin/character-library", label: "形象库", icon: "character", detail: "管理公共形象和引用资产", token: "character" },
+      { href: "/admin/gallery", label: "公开图库", icon: "gallery", detail: "浏览、下架或删除公开分享的图片", token: "图库" },
+      { href: "/admin/character-library", label: "形象库", icon: "character", detail: "管理公共形象和引用资产", token: "形象库" },
     ],
   },
   {
-    label: "System",
+    label: "系统",
     description: "全局开关、审计和运行策略。",
     items: [
-      { href: "/admin/settings", label: "设置", icon: "settings", detail: "注册、匿名生图和上传等开关", token: "settings" },
-      { href: "/admin/audit", label: "审计日志", icon: "audit", detail: "查看敏感后台操作记录", token: "audit" },
+      { href: "/admin/settings", label: "设置", icon: "settings", detail: "注册、匿名生图和上传等开关", token: "设置" },
+      { href: "/admin/audit", label: "审计日志", icon: "audit", detail: "查看敏感后台操作记录", token: "审计" },
     ],
   },
 ] as const satisfies readonly AdminNavGroup[];
@@ -81,20 +79,6 @@ export const ADMIN_NAV_ICONS = {
       <path d="M3.75 19.5a5.25 5.25 0 0 1 10.5 0" />
       <path d="M16.5 11.5a3 3 0 0 0 0-6" />
       <path d="M16.75 15.25a4.5 4.5 0 0 1 3.5 4.25" />
-    </svg>
-  ),
-  billing: (
-    <svg className="admin-nav-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <rect x="3" y="6" width="18" height="12" rx="2" />
-      <path d="M3 10h18" />
-      <path d="M7 15h4" />
-    </svg>
-  ),
-  redeem: (
-    <svg className="admin-nav-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M7.5 12.5 5.75 14.25a3.5 3.5 0 0 0 4.95 4.95l2.05-2.05" />
-      <path d="m16.5 11.5 1.75-1.75a3.5 3.5 0 0 0-4.95-4.95l-2.05 2.05" />
-      <path d="m9.5 14.5 5-5" />
     </svg>
   ),
   providers: (

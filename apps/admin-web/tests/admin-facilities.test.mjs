@@ -10,7 +10,7 @@ const navSource = readFileSync(new URL("../src/features/shell/admin-navigation.t
 const apiSource = readFileSync(new URL("../src/lib/admin-api.ts", import.meta.url), "utf8");
 
 test("admin facilities page wires the llm feature model mapping panel", () => {
-  assert.match(facilitiesSource, /LLM 设施面板/);
+  assert.match(facilitiesSource, /大模型设施面板/);
   assert.match(facilitiesSource, /updateLlmFacilities/);
   assert.match(facilitiesSource, /required_capabilities/);
   assert.match(navSource, /\/admin\/facilities/);

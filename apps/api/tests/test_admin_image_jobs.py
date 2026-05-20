@@ -128,7 +128,6 @@ def test_admin_image_jobs_paginated_include_parameters_and_costs():
                 provider_model="upstream-image-model",
                 status="failed",
                 requested_count=2,
-                charge_cents=500,
                 size="1024x1024",
                 quality="high",
                 provider_input_tokens=11,
@@ -153,7 +152,7 @@ def test_admin_image_jobs_paginated_include_parameters_and_costs():
     assert payload["total"] == 1
     assert job["size"] == "1024x1024"
     assert job["quality"] == "high"
-    assert job["charge_cents"] == 500
+    assert "charge_cents" not in job
     assert job["provider_total_tokens"] == 33
     assert job["raw_provider_cost_cents"] == 120
     assert job["provider_fee_cents"] == 30
@@ -193,7 +192,7 @@ def test_admin_image_stats_returns_duration_without_sqlite_julianday():
                 model_code="gpt-image-2",
                 status="succeeded",
                 requested_count=1,
-                charge_cents=250,
+                internal_cost_cents=250,
                 started_at=now,
                 finished_at=now + timedelta(seconds=12),
             )
@@ -205,5 +204,6 @@ def test_admin_image_stats_returns_duration_without_sqlite_julianday():
     assert response.status_code == 200
     data = response.json()["data"]
     assert data["performance"]["avg_duration_seconds"] == 12.0
-    assert data["revenue"]["total_cents"] == 250
+    assert data["costs"]["total_cents"] == 250
+    assert "revenue" not in data
     assert "julianday" not in inspect.getsource(stats_service._avg_duration)

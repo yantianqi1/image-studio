@@ -154,7 +154,7 @@ function CharacterCard({
           <input type="file" accept="image/*" className="hidden" name="file" />
         </label>
         <div className="flex items-center gap-2">
-          <p className="text-xs text-gray-500">#{item.id} · Asset #{item.asset_id}</p>
+          <p className="text-xs text-gray-500">#{item.id} · 资产 #{item.asset_id}</p>
           <button className="admin-button ml-auto px-2 py-1 text-xs" type="submit" disabled={updating || deleting}>
             {updating ? "保存中..." : "保存"}
           </button>

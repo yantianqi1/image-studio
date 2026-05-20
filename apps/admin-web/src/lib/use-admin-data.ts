@@ -6,9 +6,6 @@ import type {
   AdminAuditLogList,
   AdminGalleryItem,
   AdminLlmFacilityResponse,
-  AdminRedeemBatchCode,
-  AdminRedeemBatchDetail,
-  AdminRedeemBatchSummary,
   WorkerSummary,
 } from "@/lib/admin-api";
 import type { ImageJobStats } from "@/lib/admin-image-job-types";
@@ -122,8 +119,6 @@ type SellableModel = {
   provider_id: number;
   provider_model: string;
   public_enabled: boolean;
-  member_price_cents: number;
-  anonymous_price_cents: number;
 };
 
 export function useProviders() {
@@ -132,33 +127,6 @@ export function useProviders() {
 
 export function useModels() {
   return useSWR<readonly SellableModel[]>("/api/admin/models");
-}
-
-type RedeemCode = {
-  id: number;
-  code: string;
-  credit_amount_cents: number;
-  credit_amount_credits: number;
-  status: string;
-  redeemed_by_user_id: number | null;
-  redeemed_at: string | null;
-  created_at: string;
-};
-
-export function useRedeemCodes() {
-  return useSWR<readonly RedeemCode[]>("/api/admin/redeem/codes");
-}
-
-export function useRedeemBatches() {
-  return useSWR<readonly AdminRedeemBatchSummary[]>("/api/admin/redeem/batches");
-}
-
-export function useRedeemBatch(batchId: number | null) {
-  return useSWR<AdminRedeemBatchDetail>(batchId ? `/api/admin/redeem/batches/${batchId}` : null);
-}
-
-export function useRedeemBatchCodes(batchId: number | null) {
-  return useSWR<readonly AdminRedeemBatchCode[]>(batchId ? `/api/admin/redeem/batches/${batchId}/codes` : null);
 }
 
 export function useAdminAuditLogs(query: {

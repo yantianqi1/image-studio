@@ -63,8 +63,6 @@ def create_sellable_model(client: TestClient, *, provider_id: int) -> dict[str, 
             "display_name": "Remote Image",
             "capability": "image",
             "public_enabled": True,
-            "member_price_cents": 55,
-            "anonymous_price_cents": 99,
             "provider_id": provider_id,
             "provider_model": "gpt-image-1",
         },
@@ -347,7 +345,7 @@ def test_openai_job_fails_when_api_key_env_missing(monkeypatch) -> None:
     assert "OPENAI_PROVIDER_KEY" in job_response.json()["data"]["error_message"]
 
 
-def test_updating_model_pricing_changes_new_job_charge() -> None:
+def test_updating_model_visibility_keeps_image_jobs_without_local_billing() -> None:
     client = build_client()
     seed_admin()
     admin_login(client)
@@ -362,22 +360,18 @@ def test_updating_model_pricing_changes_new_job_charge() -> None:
             "provider_id": image_model["provider_id"],
             "provider_model": "gpt-image-2",
             "public_enabled": True,
-            "member_price_cents": 88,
-            "anonymous_price_cents": 33,
         },
     )
     assert response.status_code == 200
 
-    register_user(client, email="pricing@example.com")
+    register_user(client, email="visibility@example.com")
     create_response = client.post(
         "/api/public/image/jobs",
         json={"prompt": "Priced job", "model_code": "gpt-image-2", "requested_count": 1},
     )
-    wallet_response = client.get("/api/public/billing/wallets/me")
 
     assert create_response.status_code == 201
-    assert create_response.json()["data"]["charge_cents"] == 88
-    assert wallet_response.json()["data"]["locked_cents"] == 88
+    assert "charge_cents" not in create_response.json()["data"]
 
 
 

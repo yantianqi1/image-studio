@@ -28,15 +28,15 @@ export function LlmFacilitiesPage() {
         features: buildFeatureUpdates(data.features, formData),
       });
       mutate(next, false);
-      toast.success("LLM 设施配置已保存");
+      toast.success("大模型设施配置已保存");
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "保存 LLM 设施配置失败");
+      setError(nextError instanceof Error ? nextError.message : "保存大模型设施配置失败");
     }
   }
 
   return (
-    <AdminShell title="LLM 设施面板" description="为站内各类 LLM 功能绑定已导入的模型。">
-      {loadError ? <div className="col-span-12"><ErrorBox message={loadError instanceof Error ? loadError.message : "读取 LLM 设施失败"} /></div> : null}
+    <AdminShell title="大模型设施面板" description="为站内各类大模型功能绑定已导入的模型。">
+      {loadError ? <div className="col-span-12"><ErrorBox message={loadError instanceof Error ? loadError.message : "读取大模型设施失败"} /></div> : null}
       {data ? <FacilitiesPanel error={error} features={data.features} models={data.models} onSave={handleSave} /> : null}
     </AdminShell>
   );
@@ -51,7 +51,7 @@ function FacilitiesPanel(props: Readonly<{
   const hasMissingOptions = props.features.some((feature) => allowedModels(props.models, feature).length === 0);
   return (
     <div className="col-span-12">
-      <Panel title="功能模型映射" description="模型来源于 Provider 页已导入或手工创建的模型。">
+      <Panel title="功能模型映射" description="模型来源于供应商页已导入或手工创建的模型。">
         <form className="grid gap-3" action={props.onSave}>
           <div className="grid gap-2">
             {props.features.map((feature) => (
@@ -131,12 +131,10 @@ function includeMissingCurrentModel(
   }
   return [
     {
-      anonymous_price_cents: 0,
       capability: "text",
       code: currentCode,
       display_name: `${currentCode}（当前不可用）`,
       id: -1,
-      member_price_cents: 0,
       provider_id: -1,
       provider_model: currentCode,
       public_enabled: false,

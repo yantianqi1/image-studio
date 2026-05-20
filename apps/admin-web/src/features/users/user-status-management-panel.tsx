@@ -9,7 +9,7 @@ import { useToast } from "@/lib/toast-context";
 import { errorMessage } from "./user-format";
 
 const STATUS_ACTIONS = [
-  { status: "active", label: "恢复为 active", confirm: "确认将该用户恢复为 active？" },
+  { status: "active", label: "恢复启用", confirm: "确认将该用户恢复为启用状态？" },
   { status: "disabled", label: "禁用用户", confirm: "确认将该用户禁用？" },
   { status: "deleted", label: "软删除用户", confirm: "确认将该用户标记为删除？" },
 ] as const;
@@ -32,7 +32,7 @@ export function UserStatusManagementPanel({
       <div className="users-panel-heading">
         <div>
           <h3>用户状态管理</h3>
-          <p>所有敏感操作都需要 reason 和确认。</p>
+          <p>所有敏感操作都需要填写原因并二次确认。</p>
         </div>
         <StatusPill status={user.status} />
       </div>

@@ -16,10 +16,6 @@ const overviewSource = readFileSync(
   new URL("../src/features/providers/provider-overview.tsx", import.meta.url),
   "utf8",
 );
-const quickActionsSource = readFileSync(
-  new URL("../src/features/providers/variant-quick-actions.tsx", import.meta.url),
-  "utf8",
-);
 
 function loadProviderApi(apiClient) {
   const source = readFileSync(new URL("../src/lib/admin-provider-api.ts", import.meta.url), "utf8");
@@ -42,33 +38,30 @@ function loadProviderApi(apiClient) {
   return sandbox.module.exports;
 }
 
-test("admin API applies default variant pricing", async () => {
+test("admin API syncs models from NewAPI catalog", async () => {
   const calls = [];
   const { adminProviderApi } = loadProviderApi({
     apiFetch: async (path, options) => {
       calls.push({ path, options });
-      return { updated: 84, skipped: 0, total: 84, variants: [] };
+      return [{ id: 7, code: "gpt-image-2", display_name: "GPT Image 2" }];
     },
     apiUpload: unexpectedApiUpload,
   });
 
-  const result = await adminProviderApi.applyDefaultPricing(7, { force: true, profit_margin_basis_points: 3000 });
+  const result = await adminProviderApi.syncNewApiModels();
 
-  assert.equal(calls[0].path, "/api/admin/models/7/variants/apply-default-pricing");
+  assert.equal(calls[0].path, "/api/admin/models/sync-newapi");
   assert.equal(calls[0].options.method, "POST");
-  assert.equal(JSON.parse(calls[0].options.body).force, true);
-  assert.equal(JSON.parse(calls[0].options.body).profit_margin_basis_points, 3000);
-  assert.equal(result.updated, 84);
+  assert.equal(result[0].code, "gpt-image-2");
 });
 
-test("providers page exposes model pricing overview and quick actions", () => {
+test("providers page manages NewAPI catalog without local pricing controls", () => {
   assert.match(providersPageSource, /ProviderOverview/);
-  assert.match(overviewSource, /基础价范围/);
-  assert.match(modelPanelsSource, /formatPriceCents/);
-  assert.match(modelPanelsSource, /VariantQuickActions/);
-  assert.match(quickActionsSource, /应用推荐价/);
-  assert.match(quickActionsSource, /强制重算/);
-  assert.match(quickActionsSource, /默认利润率 30%/);
+  assert.match(providersPageSource, /NewAPI 接入/);
+  assert.match(modelPanelsSource, /前台公开可见/);
+  assert.match(overviewSource, /可见模型/);
+  assert.doesNotMatch(modelPanelsSource, /formatPriceCents|VariantQuickActions|PriceInputs/);
+  assert.doesNotMatch(providersPageSource, /价格矩阵|推荐价|利润率/);
 });
 
 function unexpectedApiUpload() {

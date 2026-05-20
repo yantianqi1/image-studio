@@ -23,11 +23,8 @@ import type {
   PublicModelSummary,
   PublicQuotaStatus,
   PublicSiteSettings,
-  RedeemCodeRequest,
   TaskItem,
   UploadedImageAsset,
-  WalletLedgerItem,
-  WalletSummary,
 } from "@/lib/public-api.types";
 
 export type * from "@/lib/public-api.types";
@@ -164,12 +161,6 @@ export const publicApi = {
   getTasks() {
     return apiFetch<readonly ImageGenerationResponse[]>("/image/jobs").then(rememberImageJobsClientProvider);
   },
-  getWalletLedger() {
-    return apiFetch<readonly WalletLedgerItem[]>("/billing/wallets/me/ledger");
-  },
-  getWalletSummary() {
-    return apiFetch<WalletSummary>("/billing/wallets/me");
-  },
   ensureAnonymousSession() {
     return apiFetch<AnonymousSessionResponse>("/auth/anonymous-session", {
       method: "POST",
@@ -193,12 +184,6 @@ export const publicApi = {
   logout() {
     return apiFetch<{ logged_out: boolean }>("/auth/logout", {
       method: "POST",
-    });
-  },
-  redeemCode(input: RedeemCodeRequest) {
-    return apiFetch<WalletSummary>("/redeem/redeem", {
-      method: "POST",
-      body: input,
     });
   },
 } as const;

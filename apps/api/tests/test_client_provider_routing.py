@@ -2,14 +2,16 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from apps.api.app.domains.billing.service import get_wallet
 from apps.api.app.domains.comic.models import ComicTask
+from apps.api.app.domains.image import service as image_service
 from apps.api.app.domains.image.models import ImageJob
+from apps.api.app.domains.llm.service import RenderedImage
 from apps.api.app.infra.db.session import initialize_database, session_scope
 from apps.api.app.main import create_app
 
 
-def test_registered_user_image_job_keeps_client_provider_config() -> None:
+def test_registered_user_image_job_keeps_client_provider_config(monkeypatch) -> None:
+    monkeypatch.setattr(image_service, "render_with_client_provider", fake_client_provider_render)
     client = build_client()
     user = register_user(client, email="member-provider@example.com")
 
@@ -22,16 +24,14 @@ def test_registered_user_image_job_keeps_client_provider_config() -> None:
     assert response.status_code == 201
     job = response.json()["data"]
     assert job["source"] == "client_provider"
-    assert job["charge_cents"] == 0
+    assert "charge_cents" not in job
     with session_scope() as session:
         stored_job = session.get(ImageJob, job["id"])
-        wallet = get_wallet(session, user_id=user["id"])
         assert stored_job is not None
         assert stored_job.user_id == user["id"]
         assert stored_job.client_access_id == "member-image-client"
         assert stored_job.client_provider_config["base_url"] == "https://client.example/v1"
         assert stored_job.client_provider_config["api_key"] == "sk-client-provider"
-        assert wallet.locked_cents == 0
 
 
 def test_registered_user_comic_task_keeps_client_provider_config() -> None:
@@ -100,3 +100,18 @@ def client_provider_headers(*, client_id: str) -> dict[str, str]:
         "x-client-provider-base-url": "https://client.example/v1",
         "x-client-provider-api-key": "sk-client-provider",
     }
+
+
+def fake_client_provider_render(_session=None, *, config, options) -> RenderedImage:
+    del config
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32">'
+        f"<text>{options['prompt']}:{options['model_code']}</text>"
+        "</svg>"
+    )
+    return RenderedImage(
+        content=svg.encode("utf-8"),
+        mime_type="image/svg+xml",
+        revised_prompt=str(options["prompt"]),
+        provider_request_id="test:client-provider",
+    )

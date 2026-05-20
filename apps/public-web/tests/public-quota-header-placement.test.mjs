@@ -19,5 +19,5 @@ test("public quota display is mounted in the right action cluster", () => {
 
 test("public quota display uses a compact header badge", () => {
   assert.match(quotaSource, /export function PublicQuotaStatusBadge/);
-  assert.match(quotaSource, /aria-label=\{`共享额度/);
+  assert.match(quotaSource, /aria-label=\{`今日次数/);
 });

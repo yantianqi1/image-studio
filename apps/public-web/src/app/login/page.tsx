@@ -1,11 +1,11 @@
 import { Suspense } from "react";
 
-import { WalletDashboard } from "@/features/wallet/wallet-dashboard";
+import { AccountDashboard } from "@/features/account/account-dashboard";
 
 export default function LoginPage() {
   return (
     <Suspense fallback={<div aria-hidden="true" className="min-h-screen bg-[var(--background)]" />}>
-      <WalletDashboard />
+      <AccountDashboard />
     </Suspense>
   );
 }

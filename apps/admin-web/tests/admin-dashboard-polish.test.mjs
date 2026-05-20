@@ -1,56 +1,46 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 const overviewSource = readFileSync(
   new URL("../src/features/overview/admin-overview-page.tsx", import.meta.url),
   "utf8",
 );
-const billingSource = readFileSync(
-  new URL("../src/features/billing/billing-page.tsx", import.meta.url),
+const navigationSource = readFileSync(
+  new URL("../src/features/shell/admin-navigation.tsx", import.meta.url),
   "utf8",
 );
-const ledgerSource = readFileSync(
-  new URL("../src/features/users/user-ledger-list.tsx", import.meta.url),
+const nextConfigSource = readFileSync(
+  new URL("../next.config.ts", import.meta.url),
   "utf8",
 );
-const adjustmentSource = readFileSync(
-  new URL("../src/features/users/user-credit-adjustment-form.tsx", import.meta.url),
-  "utf8",
-);
-const redeemCreateSource = readFileSync(
-  new URL("../src/features/redeem/redeem-create-batch-panel.tsx", import.meta.url),
-  "utf8",
-);
+const removedAdminFiles = [
+  "../src/features/billing/billing-page.tsx",
+  "../src/features/redeem/redeem-page.tsx",
+  "../src/features/users/user-ledger-list.tsx",
+  "../src/features/users/user-credit-adjustment-form.tsx",
+  "../src/features/users/user-wallet-panel.tsx",
+];
 
 test("admin overview is an operational dashboard instead of a static entry list", () => {
   assert.match(overviewSource, /useAdminUsers/);
   assert.match(overviewSource, /useWorkerSummary/);
   assert.match(overviewSource, /useAdminStats/);
-  assert.match(overviewSource, /useRedeemBatches/);
-  assert.match(overviewSource, /useAdminAuditLogs/);
   assert.match(overviewSource, /useAdminJobs/);
   assert.match(overviewSource, /useAdminComicTasks/);
   assert.match(overviewSource, /ADMIN_NAV_GROUPS/);
+  assert.doesNotMatch(overviewSource, /useRedeemBatches|user\.wallet\.adjust/);
+  assert.doesNotMatch(overviewSource, /\/admin\/billing|\/admin\/redeem/);
   assert.doesNotMatch(overviewSource, /OverviewGroup/);
+  assert.doesNotMatch(overviewSource, /任务队列/);
+  assert.doesNotMatch(overviewSource, /排队 \/ 运行中/);
+  assert.doesNotMatch(overviewSource, /用户、队列/);
 });
 
-test("billing page uses credit units and explicit search failures", () => {
-  assert.match(billingSource, /UserCreditAdjustmentForm/);
-  assert.match(billingSource, /searchError/);
-  assert.doesNotMatch(billingSource, /name="amount_cents"/);
-  assert.doesNotMatch(billingSource, /\.catch\(\(\) => \{\}\)/);
-});
-
-test("user wallet surfaces credits and successful adjustments", () => {
-  assert.match(ledgerSource, /formatCredits\(entry\.amount_credits\)/);
-  assert.doesNotMatch(ledgerSource, /formatCents\(entry\.amount_cents\)/);
-  assert.match(adjustmentSource, /toast\.success/);
-});
-
-test("redeem batch creation accepts credits and converts to cents", () => {
-  assert.match(redeemCreateSource, /name="credit_amount_credits"/);
-  assert.match(redeemCreateSource, /credit_amount_cents: creditsToCents/);
-  assert.doesNotMatch(redeemCreateSource, /name="credit_amount_cents"/);
-  assert.doesNotMatch(redeemCreateSource, /单码额度（分）/);
+test("admin billing and redeem surfaces are removed", () => {
+  assert.doesNotMatch(navigationSource, /\/admin\/billing|\/admin\/redeem|钱包与账本|激活码/);
+  assert.doesNotMatch(nextConfigSource, /\/billing|\/redeem/);
+  for (const file of removedAdminFiles) {
+    assert.equal(existsSync(new URL(file, import.meta.url)), false, `${file} should be removed`);
+  }
 });

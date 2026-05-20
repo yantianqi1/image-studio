@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from apps.api.app.domains.image.job_recovery import IMAGE_JOB_RETRY_ERROR_CODE
 from apps.api.app.domains.image.models import ImageJob
-from apps.api.app.domains.image.repository import mark_job_failed
+from apps.api.app.domains.image.repository import clear_job_lock, mark_job_failed
 from apps.api.app.domains.llm.client_provider_pool import (
     CLIENT_PROVIDER_URL_POOL_EMPTY_CODE,
     CLIENT_PROVIDER_URL_UNRESOLVED_CODE,
@@ -38,4 +38,5 @@ def handle_job_failure(
     job.error_message = str(exc)
     job.available_at = retry_at
     job.finished_at = None
+    clear_job_lock(job)
     session.flush()

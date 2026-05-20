@@ -29,5 +29,9 @@ class TTLCache:
         with self._lock:
             self._store.pop(key, None)
 
+    def clear(self) -> None:
+        with self._lock:
+            self._store.clear()
+
 
 app_cache = TTLCache()

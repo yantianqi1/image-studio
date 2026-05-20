@@ -111,15 +111,10 @@ def test_admin_can_import_upstream_model_into_catalog(monkeypatch) -> None:
             "model_ids": ["gpt-image-2"],
             "capability": "image",
             "public_enabled": True,
-            "member_price_cents": 77,
-            "anonymous_price_cents": 0,
         },
     )
     models_response = client.get("/api/admin/models")
 
     assert response.status_code == 201
     assert response.json()["data"][0]["code"] == "gpt-image-2"
-    assert any(
-        item["code"] == "gpt-image-2" and item["member_price_cents"] == 77
-        for item in models_response.json()["data"]
-    )
+    assert any(item["code"] == "gpt-image-2" for item in models_response.json()["data"])

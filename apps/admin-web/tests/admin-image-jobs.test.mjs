@@ -33,16 +33,17 @@ test("image jobs page uses dense row log layout", () => {
 });
 
 test("image jobs page supports manual and automatic refresh", () => {
-  assert.match(pageSource, /自动刷新 5s/);
+  assert.match(pageSource, /自动刷新 5 秒/);
   assert.match(pageSource, /onRefresh=\{\(\) => mutateJobs\(\)\}/);
   assert.match(dataHookSource, /const IMAGE_JOBS_REFRESH_INTERVAL_MS = 5000/);
   assert.match(dataHookSource, /refreshInterval: IMAGE_JOBS_REFRESH_INTERVAL_MS/);
 });
 
-test("image job rows expose cost and preview fields", () => {
-  assert.match(logListSource, /label: "扣费"/);
-  assert.match(logListSource, /label: "成本"/);
-  assert.match(logListSource, /label: "毛利"/);
+test("image job rows expose upstream cost and preview fields", () => {
+  assert.match(logListSource, /label: "上游成本"/);
+  assert.match(logListSource, /label: "中转费用"/);
+  assert.match(logListSource, /label: "内部成本"/);
+  assert.doesNotMatch(logListSource, /label: "扣费"|label: "毛利"/);
   assert.match(imageJobTypesSource, /thumbnail_url: string/);
   assert.match(logListSource, /href=\{result\.asset_url\}/);
   assert.match(logListSource, /src=\{result\.thumbnail_url\}/);

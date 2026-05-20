@@ -10,7 +10,7 @@ export function formatDateTime(value: string) {
 }
 
 export function formatCents(value: number) {
-  return `${value} cents`;
+  return `${value} 分`;
 }
 
 export function formatCredits(value: number) {

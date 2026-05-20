@@ -92,7 +92,7 @@ function WelcomeDialogBody(props: Readonly<{
         <p className="text-xs font-semibold uppercase text-gray-400">WELCOME</p>
         <h2 className="mt-2 text-xl font-semibold text-gray-900">欢迎使用 Image Studio</h2>
         <p className="mt-2 text-sm leading-6 text-gray-500">
-          你可以注册账户同步额度和任务记录，也可以登录已有账户，或先匿名使用网站。
+          你可以注册账户同步任务记录，也可以登录已有账户，或先匿名使用网站。
         </p>
         <div className="mt-4 grid gap-2 sm:grid-cols-3">
           <Link className="primary-button text-center" href="/login?mode=register" onClick={props.onNavigate}>注册</Link>

@@ -1,14 +1,35 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 import logging
 
+from sqlalchemy import select
+
 from apps.api.app.domains.image.models import ImageJob
-from apps.api.app.domains.image.service import claim_next_job, process_claimed_job
+from apps.api.app.domains.image.models import ImageJobItem
+from apps.api.app.domains.image.service import (
+    claim_next_item_ids,
+    claim_next_job,
+    claim_next_job_ids,
+    process_claimed_item,
+    process_claimed_job,
+)
 from apps.api.app.domains.image.title_generation import PENDING_IMAGE_JOB_TITLE, generate_image_job_title
 from apps.api.app.infra.db.session import session_scope
+from apps.worker.worker.config import get_settings
 
 logger = logging.getLogger(__name__)
+
+WORK_KIND_ITEM = "item"
+WORK_KIND_LEGACY_JOB = "legacy_job"
+
+
+@dataclass(frozen=True)
+class ClaimedImageWork:
+    kind: str
+    id: int
+    job_id: int
 
 
 def run_next_image_job() -> int | None:
@@ -17,56 +38,78 @@ def run_next_image_job() -> int | None:
 
 
 def run_next_image_jobs(*, max_workers: int | None = None) -> list[int]:
-    job_ids = claim_image_job_ids(max_jobs=max_workers)
-    if not job_ids:
+    work_items = claim_image_work(max_jobs=max_workers)
+    if not work_items:
         return []
-    with ThreadPoolExecutor(max_workers=len(job_ids)) as executor:
-        list(executor.map(process_claimed_image_job, job_ids))
-    return job_ids
+    with ThreadPoolExecutor(max_workers=len(work_items)) as executor:
+        return list(executor.map(process_claimed_image_work, work_items))
 
 
-def claim_image_job_ids(*, max_jobs: int | None) -> list[int]:
+def claim_image_work(*, max_jobs: int | None) -> list[ClaimedImageWork]:
     if max_jobs is not None:
-        return claim_next_image_job_ids(max_jobs=max_jobs)
-    return claim_all_available_image_job_ids()
+        return claim_next_image_work(max_items=max_jobs)
+    return claim_all_available_image_work()
 
 
-def claim_all_available_image_job_ids() -> list[int]:
-    job_ids: list[int] = []
-    with session_scope() as session:
-        while True:
-            job = claim_next_job(session)
-            if job is None:
-                return job_ids
-            job_ids.append(job.id)
+def claim_all_available_image_work() -> list[ClaimedImageWork]:
+    """Manual/test helper for intentionally draining every currently available image work item."""
+    work_items: list[ClaimedImageWork] = []
+    while True:
+        claimed = claim_next_image_work(max_items=1)
+        if not claimed:
+            return work_items
+        work_items.extend(claimed)
 
 
 def claim_next_image_job_ids(*, max_jobs: int) -> list[int]:
+    """Deprecated: only claims legacy image_jobs rows that have no image_job_items."""
     if max_jobs < 1:
-        raise ValueError("image job concurrency must be at least 1")
-    job_ids: list[int] = []
+        raise ValueError("max_jobs must be at least 1 for image job claiming")
+    worker_name = get_settings().worker_name
     with session_scope() as session:
-        for _ in range(max_jobs):
-            job = claim_next_job(session)
-            if job is None:
-                break
-            job_ids.append(job.id)
-    return job_ids
+        return claim_next_job_ids(session, limit=max_jobs, worker_name=worker_name)
 
 
-def process_claimed_image_job(job_id: int) -> int:
+def claim_next_image_work(*, max_items: int) -> list[ClaimedImageWork]:
+    if max_items < 1:
+        raise ValueError("max_items must be at least 1 for image work claiming")
+    worker_name = get_settings().worker_name
+    with session_scope() as session:
+        item_ids = claim_next_item_ids(session, limit=max_items, worker_name=worker_name)
+        item_work = build_item_work(session, item_ids=item_ids)
+        remaining = max_items - len(item_work)
+        legacy_ids = claim_next_job_ids(session, limit=remaining, worker_name=worker_name) if remaining else []
+        return [*item_work, *build_legacy_work(legacy_ids)]
+
+
+def build_item_work(session, *, item_ids: list[int]) -> list[ClaimedImageWork]:
+    if not item_ids:
+        return []
+    statement = select(ImageJobItem.id, ImageJobItem.job_id).where(ImageJobItem.id.in_(item_ids))
+    rows = {item_id: job_id for item_id, job_id in session.execute(statement)}
+    return [ClaimedImageWork(kind=WORK_KIND_ITEM, id=item_id, job_id=rows[item_id]) for item_id in item_ids]
+
+
+def build_legacy_work(job_ids: list[int]) -> list[ClaimedImageWork]:
+    return [ClaimedImageWork(kind=WORK_KIND_LEGACY_JOB, id=job_id, job_id=job_id) for job_id in job_ids]
+
+
+def process_claimed_image_work(work: ClaimedImageWork) -> int:
     with ThreadPoolExecutor(max_workers=2) as executor:
-        title_future = executor.submit(generate_requested_image_job_title, job_id)
-        render_future = executor.submit(process_claimed_image_job_render, job_id)
+        title_future = executor.submit(generate_requested_image_job_title, work.job_id)
+        render_future = executor.submit(process_claimed_image_work_render, work)
         render_future.result()
-        log_title_generation_failure(job_id=job_id, future=title_future)
-    return job_id
+        log_title_generation_failure(job_id=work.job_id, future=title_future)
+    return work.job_id
 
 
-def process_claimed_image_job_render(job_id: int) -> int:
+def process_claimed_image_work_render(work: ClaimedImageWork) -> int:
     with session_scope() as session:
-        process_claimed_job(session, job_id=job_id)
-    return job_id
+        if work.kind == WORK_KIND_ITEM:
+            process_claimed_item(session, item_id=work.id)
+            return work.job_id
+        process_claimed_job(session, job_id=work.job_id)
+    return work.job_id
 
 
 def generate_requested_image_job_title(job_id: int) -> int | None:

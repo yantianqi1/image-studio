@@ -19,8 +19,6 @@ class AppSettings(BaseSettings):
     admin_session_cookie_secure: bool = False
     admin_session_max_age_seconds: int = 2592000
     session_secret: str = "replace-me"
-    signup_bonus_cents: int = 100
-    activation_code_length: int = 32
     generated_assets_dir: str = "./generated-assets"
     asset_storage_backend: str = "local"
     asset_storage_gcs_bucket: str = ""
@@ -37,14 +35,10 @@ class AppSettings(BaseSettings):
     openai_chat_model_code: str = "gemini-3-flash-preview-low"
     openai_chat_model_display_name: str = "Gemini 3 Flash Preview Low"
     openai_chat_model_provider_model: str = "gemini-3-flash-preview-low"
-    openai_chat_model_member_price_cents: int = 12
-    openai_chat_model_anonymous_price_cents: int = 0
     image_job_title_model_code: str = ""
     openai_image_model_code: str = "gpt-image-2"
     openai_image_model_display_name: str = "GPT Image 2"
     openai_image_model_provider_model: str = "gpt-image-2"
-    openai_image_model_member_price_cents: int = 77
-    openai_image_model_anonymous_price_cents: int = 0
     openai_official_provider_name: str = "openai-official"
     openai_official_provider_type: str = "openai-compatible"
     openai_official_provider_base_url: str = "https://api.openai.com/v1"
@@ -53,8 +47,6 @@ class AppSettings(BaseSettings):
     openai_official_image_model_code: str = "gpt-image-2-official"
     openai_official_image_model_display_name: str = "GPT Image 2 官方通道"
     openai_official_image_model_provider_model: str = "gpt-image-2"
-    openai_official_image_model_member_price_cents: int = 130
-    openai_official_image_model_anonymous_price_cents: int = 0
     openrouter_provider_name: str = "openrouter"
     openrouter_provider_type: str = "openrouter-chat-image"
     openrouter_provider_base_url: str = "https://openrouter.ai/api/v1"
@@ -63,8 +55,8 @@ class AppSettings(BaseSettings):
     openrouter_image_model_code: str = "gpt-image-2-openrouter"
     openrouter_image_model_display_name: str = "GPT Image 2 OpenRouter"
     openrouter_image_model_provider_model: str = "openai/gpt-5.4-image-2"
-    openrouter_image_model_member_price_cents: int = 150
-    openrouter_image_model_anonymous_price_cents: int = 0
+    newapi_base_url: str = "https://newapi.example/v1"
+    newapi_api_key_env: str = "NEWAPI_API_KEY"
 
     model_config = SettingsConfigDict(
         env_file=".env",

@@ -14,7 +14,7 @@ from apps.api.app.domains.llm.catalog import (
 )
 from apps.api.app.domains.llm.client_provider import ClientProviderConfig, build_runtime_provider
 from apps.api.app.domains.llm.image_reference import extract_image_reference
-from apps.api.app.domains.llm.models import Provider, SellableModel, ModelVariant
+from apps.api.app.domains.llm.models import Provider, SellableModel
 from apps.api.app.domains.llm.openai_chat_image import render_openai_chat_compatible_image
 from apps.api.app.domains.llm.openai_image import render_openai_compatible_image
 from apps.api.app.domains.llm.openrouter_chat_image import render_openrouter_chat_image
@@ -125,8 +125,6 @@ def create_or_update_sellable_model(
     provider_id: int,
     provider_model: str,
     public_enabled: bool,
-    member_price_cents: int,
-    anonymous_price_cents: int,
 ) -> tuple[SellableModel, bool]:
     ensure_provider_catalog(session)
     provider = get_provider(session, provider_id=provider_id)
@@ -143,8 +141,6 @@ def create_or_update_sellable_model(
             provider_id=provider.id,
             provider_model=provider_model.strip(),
             public_enabled=public_enabled,
-            member_price_cents=member_price_cents,
-            anonymous_price_cents=anonymous_price_cents,
             status=ACTIVE_MODEL_STATUS,
         )
         session.add(model)
@@ -155,8 +151,6 @@ def create_or_update_sellable_model(
         model.provider_id = provider.id
         model.provider_model = provider_model.strip()
         model.public_enabled = public_enabled
-        model.member_price_cents = member_price_cents
-        model.anonymous_price_cents = anonymous_price_cents
         model.status = ACTIVE_MODEL_STATUS
     session.flush()
     return model, created
@@ -171,8 +165,6 @@ def import_upstream_models(
     model_ids: list[str],
     capability: str,
     public_enabled: bool,
-    member_price_cents: int,
-    anonymous_price_cents: int,
 ) -> list[SellableModel]:
     upstream_models = {model.id: model for model in fetch_upstream_models(url=url, api_key_env=api_key_env)}
     selected_models = resolve_selected_upstream_models(upstream_models=upstream_models, model_ids=model_ids)
@@ -185,8 +177,6 @@ def import_upstream_models(
             provider_id=provider_id,
             provider_model=model.id,
             public_enabled=public_enabled,
-            member_price_cents=member_price_cents,
-            anonymous_price_cents=anonymous_price_cents,
         )[0]
         for model in selected_models
     ]
@@ -334,25 +324,3 @@ def resolve_model_execution_target(session: Session, *, model_code: str) -> Mode
     if not provider_model:
         raise AppError(code="provider_model_missing", message="provider model missing", status_code=422)
     return ModelExecutionTarget(provider=provider, model=model, provider_model=provider_model)
-
-
-def resolve_variant(session: Session, *, model_id: int, size: str | None, quality: str | None) -> ModelVariant | None:
-    if size is None or quality is None:
-        return None
-    statement = (
-        select(ModelVariant)
-        .where(
-            ModelVariant.model_id == model_id,
-            ModelVariant.size == size,
-            ModelVariant.quality == quality,
-            ModelVariant.status == "active",
-        )
-    )
-    variant = session.execute(statement).scalar_one_or_none()
-    if variant is None:
-        raise AppError(
-            code="variant_not_found",
-            message=f"no active pricing variant for size={size} quality={quality}",
-            status_code=422,
-        )
-    return variant

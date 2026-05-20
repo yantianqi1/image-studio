@@ -96,45 +96,6 @@ def test_disabling_uploads_blocks_edit_mode_job_creation() -> None:
     assert response.json()["error"]["code"] == "uploads_disabled"
 
 
-def test_admin_can_read_wallet_and_ledger() -> None:
-    client = build_client()
-    user = register_user(client, email="ledger@example.com")
-    reserve_response = client.post(
-        "/api/public/billing/wallets/me/reservations",
-        json={"amount_cents": 30, "reason": "image-job"},
-    )
-    reservation_id = reserve_response.json()["data"]["reservation_id"]
-    client.post(f"/api/public/billing/wallets/me/reservations/{reservation_id}/commit")
-    seed_admin()
-    admin_login(client)
-
-    wallet_response = client.get(f"/api/admin/billing/wallets/{user['id']}")
-    ledger_response = client.get(f"/api/admin/billing/wallets/{user['id']}/ledger")
-
-    assert wallet_response.status_code == 200
-    assert wallet_response.json()["data"]["balance_cents"] == 70
-    assert ledger_response.status_code == 200
-    assert [item["reason"] for item in ledger_response.json()["data"]] == ["signup_bonus", "image-job"]
-
-
-def test_admin_can_adjust_wallet_and_see_ledger() -> None:
-    client = build_client()
-    user = register_user(client, email="adjust@example.com")
-    seed_admin()
-    admin_login(client)
-
-    adjust_response = client.post(
-        f"/api/admin/billing/wallets/{user['id']}/adjustments",
-        json={"amount_cents": 25, "reason": "manual_credit"},
-    )
-    wallet_response = client.get(f"/api/admin/billing/wallets/{user['id']}")
-    ledger_response = client.get(f"/api/admin/billing/wallets/{user['id']}/ledger")
-
-    assert adjust_response.status_code == 200
-    assert wallet_response.json()["data"]["balance_cents"] == 125
-    assert [item["reason"] for item in ledger_response.json()["data"]] == ["signup_bonus", "manual_credit"]
-
-
 def test_public_settings_exposes_site_title() -> None:
     client = build_client()
     seed_admin()

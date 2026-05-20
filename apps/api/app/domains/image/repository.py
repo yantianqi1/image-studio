@@ -1,68 +1,18 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from apps.api.app.core.errors import AppError
 from apps.api.app.domains.auth.ownership import OwnerContext
-from apps.api.app.domains.billing.models import WalletReservation
-from apps.api.app.domains.billing.service import commit_reservation, create_reservation, release_reservation
 from apps.api.app.domains.image.asset_deletion import delete_asset_objects
-from apps.api.app.domains.image.models import Asset, ImageJob, ImageJobReferenceAsset, ImageJobResult
+from apps.api.app.domains.image.models import Asset, ImageJob, ImageJobItem, ImageJobReferenceAsset, ImageJobResult
 from apps.api.app.infra.storage.asset_storage import AssetStorage
 from apps.api.app.infra.storage.factory import build_asset_storage
 
 IMAGE_JOB_FAILED_ERROR_CODE = "image_job_failed"
-REFERENCE_IMAGE_SURCHARGE_CENTS = 60
-EDIT_SURCHARGE_BASIS_POINTS = 5000
-BASIS_POINTS_DENOMINATOR = 10000
-
-
-def resolve_charge_cents(
-    *,
-    owner: OwnerContext,
-    client_provider_config: Any | None,
-    requested_count: int,
-    member_price_cents: int,
-    anonymous_price_cents: int,
-    has_variant_pricing: bool = False,
-    image_input_count: int = 0,
-    mode: str = "generate",
-) -> int:
-    if client_provider_config is not None:
-        return 0
-    unit_price = member_price_cents if owner.user_id is not None else anonymous_price_cents
-    base_charge = unit_price * requested_count
-    if not has_variant_pricing or base_charge <= 0:
-        return base_charge
-    return base_charge + resolve_image_input_surcharge(
-        base_charge=base_charge,
-        image_input_count=image_input_count,
-        requested_count=requested_count,
-        mode=mode,
-    )
-
-
-def resolve_image_input_surcharge(
-    *,
-    base_charge: int,
-    image_input_count: int,
-    requested_count: int,
-    mode: str,
-) -> int:
-    reference_charge = image_input_count * REFERENCE_IMAGE_SURCHARGE_CENTS * requested_count
-    if mode != "edit":
-        return reference_charge
-    edit_charge = ceil_basis_points(base_charge, EDIT_SURCHARGE_BASIS_POINTS)
-    return reference_charge + edit_charge
-
-
-def ceil_basis_points(amount_cents: int, basis_points: int) -> int:
-    numerator = amount_cents * basis_points
-    return (numerator + BASIS_POINTS_DENOMINATOR - 1) // BASIS_POINTS_DENOMINATOR
 
 
 def resolve_source_asset(
@@ -114,14 +64,6 @@ def create_reference_asset_rows(session: Session, *, job_id: int, assets: list[A
     for index, asset in enumerate(assets, start=1):
         session.add(ImageJobReferenceAsset(job_id=job_id, asset_id=asset.id, sequence=index))
     session.flush()
-
-
-def build_reservation(session: Session, *, owner: OwnerContext, charge_cents: int) -> int | None:
-    if owner.user_id is None or charge_cents <= 0:
-        return None
-    reservation = create_reservation(session, user_id=owner.user_id, amount_cents=charge_cents, reason="image_job")
-    reservation.reference_type = "image_job"
-    return reservation.id
 
 
 def get_job(session: Session, job_id: int) -> ImageJob:
@@ -205,6 +147,8 @@ def clear_job_reference_rows(session: Session, *, job_id: int) -> None:
 def clear_job_outputs(session: Session, *, job_id: int, storage: AssetStorage | None = None) -> None:
     results = list(session.execute(select(ImageJobResult).where(ImageJobResult.job_id == job_id)).scalars())
     asset_ids = [item.asset_id for item in results]
+    if asset_ids:
+        session.execute(update(ImageJobItem).where(ImageJobItem.asset_id.in_(asset_ids)).values(asset_id=None))
     for result in results:
         session.delete(result)
     session.flush()
@@ -231,45 +175,47 @@ def list_jobs_for_owner(session: Session, owner: OwnerContext) -> list[ImageJob]
     return list(session.execute(statement.order_by(ImageJob.id.desc())).scalars())
 
 
-def release_active_reservation(session: Session, *, job: ImageJob) -> None:
-    if job.user_id is None or job.reservation_id is None:
-        return
-    reservation = session.get(WalletReservation, job.reservation_id)
-    if reservation is None:
-        raise AppError(code="reservation_not_found", message="reservation not found", status_code=404)
-    if reservation.status == "reserved":
-        release_reservation(session, user_id=job.user_id, reservation_id=job.reservation_id)
-
-
 def delete_job(session: Session, *, job_id: int, owner: OwnerContext) -> dict[str, str | bool]:
     job = get_job_for_owner(session, job_id, owner)
-    release_active_reservation(session, job=job)
     clear_job_reference_rows(session, job_id=job.id)
     clear_job_outputs(session, job_id=job.id)
+    clear_job_items(session, job_id=job.id)
     session.delete(job)
     session.flush()
     return {"deleted": True, "id": str(job_id)}
 
 
+def clear_job_items(session: Session, *, job_id: int) -> None:
+    rows = list(session.execute(select(ImageJobItem).where(ImageJobItem.job_id == job_id)).scalars())
+    for row in rows:
+        session.delete(row)
+    session.flush()
+
+
 def complete_job(session: Session, *, job: ImageJob) -> None:
     finished_at = datetime.utcnow()
-    if job.user_id and job.reservation_id:
-        commit_reservation(session, user_id=job.user_id, reservation_id=job.reservation_id)
     job.status = "succeeded"
     job.error_code = None
     job.error_message = None
     job.available_at = finished_at
     job.finished_at = finished_at
+    clear_job_lock(job)
     session.flush()
 
 
 def mark_job_failed(session: Session, *, job: ImageJob, error_message: str) -> None:
     finished_at = datetime.utcnow()
-    if job.user_id and job.reservation_id:
-        release_reservation(session, user_id=job.user_id, reservation_id=job.reservation_id)
     job.status = "failed"
     job.error_code = IMAGE_JOB_FAILED_ERROR_CODE
     job.error_message = error_message
     job.available_at = finished_at
     job.finished_at = finished_at
+    clear_job_lock(job)
     session.flush()
+
+
+def clear_job_lock(job: ImageJob) -> None:
+    job.locked_by = None
+    job.locked_at = None
+    job.heartbeat_at = None
+    job.lease_expires_at = None

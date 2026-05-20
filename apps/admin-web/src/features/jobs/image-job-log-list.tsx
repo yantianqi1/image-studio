@@ -4,7 +4,16 @@ import { StatusPill } from "@/features/ui/status-pill";
 import type { WorkerSummary } from "@/lib/admin-api";
 import type { AdminImageJob, AdminImageJobResult } from "@/lib/admin-image-job-types";
 
-import { formatJobCents, formatJobDateTime, formatJobDuration, formatJobOwner, formatJobQuality, formatJobSize } from "./image-job-format";
+import {
+  formatJobDateTime,
+  formatJobDuration,
+  formatJobErrorText,
+  formatJobOwner,
+  formatJobQuality,
+  formatJobSize,
+  formatJobSource,
+  formatJobStatus,
+} from "./image-job-format";
 
 type LogListProps = Readonly<{
   jobs: readonly AdminImageJob[];
@@ -84,7 +93,7 @@ function PromptCell({ job }: Readonly<{ job: AdminImageJob }>) {
       </div>
       <p className="image-job-prompt-preview">{job.prompt}</p>
       {job.error_code || job.error_message ? (
-        <p className="image-job-inline-error">{job.error_code ?? "unknown"} · {job.error_message ?? "无错误详情"}</p>
+        <p className="image-job-inline-error">错误：{formatJobErrorText(job.error_code, job.error_message)}</p>
       ) : null}
     </div>
   );
@@ -123,7 +132,7 @@ function ResultPreview({ result, total }: Readonly<{ result: AdminImageJobResult
         unoptimized
         width={154}
       />
-      <span>{total} 张 · Asset #{result.asset_id}</span>
+      <span>{total} 张 · 资产 #{result.asset_id}</span>
     </a>
   );
 }
@@ -131,40 +140,32 @@ function ResultPreview({ result, total }: Readonly<{ result: AdminImageJobResult
 function PreviewPlaceholder({ job }: Readonly<{ job: AdminImageJob }>) {
   return (
     <div className="image-job-preview-empty">
-      <strong>{job.status}</strong>
+      <strong>{formatJobStatus(job.status)}</strong>
       <span>{job.finished_at ? "无结果图" : "等待结果"}</span>
     </div>
   );
 }
 
 function buildDetailItems(job: AdminImageJob): readonly DetailItem[] {
-  const margin = buildMarginItem(job);
   return [
     { label: "用户", value: formatJobOwner(job.user_id) },
     { label: "模型", value: job.model_code },
+    { label: "来源", value: formatJobSource(job.source) },
     { label: "上游", value: job.provider_model ?? "未绑定" },
     { label: "尺寸", value: formatJobSize(job.size) },
     { label: "画质", value: formatJobQuality(job.quality) },
     { label: "数量", value: String(job.requested_count) },
-    { label: "扣费", value: formatJobCents(job.charge_cents), tone: "success" },
-    { label: "成本", value: formatNullableCents(job.internal_cost_cents) },
-    margin,
-    { label: "Token", value: formatJobTokens(job) },
+    { label: "上游成本", value: formatNullableCents(job.raw_provider_cost_cents) },
+    { label: "中转费用", value: formatNullableCents(job.provider_fee_cents) },
+    { label: "内部成本", value: formatNullableCents(job.internal_cost_cents) },
+    { label: "令牌", value: formatJobTokens(job) },
     { label: "耗时", value: formatJobDuration(job.started_at, job.finished_at) },
     { label: "尝试", value: `${job.attempt_count}/${job.max_attempts}` },
   ];
 }
 
-function buildMarginItem(job: AdminImageJob): DetailItem {
-  if (job.internal_cost_cents === null) {
-    return { label: "毛利", value: "未记录" };
-  }
-  const marginCents = job.charge_cents - job.internal_cost_cents;
-  return { label: "毛利", value: formatJobCents(marginCents), tone: marginCents >= 0 ? "success" : "danger" };
-}
-
 function formatNullableCents(value: number | null): string {
-  return value === null ? "未记录" : formatJobCents(value);
+  return value === null ? "未记录" : `¥${(value / 100).toFixed(2)}`;
 }
 
 function formatJobTokens(job: AdminImageJob): string {

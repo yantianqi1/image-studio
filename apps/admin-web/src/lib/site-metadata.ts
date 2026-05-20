@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-const ADMIN_TITLE_SUFFIX = "Admin";
+const ADMIN_TITLE_SUFFIX = "管理端";
 const DEFAULT_API_BASE_URL = "http://127.0.0.1:7800";
 const SITE_SETTINGS_PATH = "/api/public/settings";
 
@@ -22,7 +22,7 @@ async function fetchSiteTitle() {
   const response = await fetch(buildSiteSettingsUrl(), { cache: "no-store" });
   const payload = (await response.json()) as SiteSettingsEnvelope;
   if (!response.ok || payload.error || !payload.data?.site_title) {
-    throw new Error(payload.error?.message ?? "failed to load site title");
+    throw new Error(payload.error?.message ?? "读取站点标题失败");
   }
   return payload.data.site_title;
 }

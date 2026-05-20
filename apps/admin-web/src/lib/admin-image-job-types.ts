@@ -24,7 +24,6 @@ export type AdminImageJob = Readonly<{
   requested_count: number;
   attempt_count: number;
   max_attempts: number;
-  charge_cents: number;
   provider_input_tokens: number | null;
   provider_output_tokens: number | null;
   provider_total_tokens: number | null;
@@ -46,7 +45,7 @@ export type ImageJobStats = Readonly<{
     failed: number;
     success_rate: number;
   };
-  revenue: {
+  costs: {
     total_cents: number;
     today_cents: number;
     week_cents: number;
@@ -68,8 +67,8 @@ export type DistributionItem = Readonly<{ key: string; count: number }>;
 export type ChannelCostItem = Readonly<{
   key: string;
   count: number;
-  revenue_cents: number;
+  raw_provider_cost_cents: number;
+  provider_fee_cents: number;
   internal_cost_cents: number;
-  gross_margin_cents: number;
 }>;
-export type DailyTrendItem = Readonly<{ date: string; count: number; revenue_cents: number; succeeded: number }>;
+export type DailyTrendItem = Readonly<{ date: string; count: number; internal_cost_cents: number; succeeded: number }>;

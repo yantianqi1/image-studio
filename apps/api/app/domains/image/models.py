@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from apps.api.app.infra.db.base import Base
@@ -63,13 +63,15 @@ class ImageJob(Base):
     requested_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     attempt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     max_attempts: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
-    charge_cents: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    reservation_id: Mapped[Optional[int]] = mapped_column(ForeignKey("wallet_reservations.id"), nullable=True)
     error_code: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     available_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    locked_by: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    locked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    lease_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    heartbeat_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
@@ -83,6 +85,33 @@ class ImageJobResult(Base):
     asset_url: Mapped[str] = mapped_column(String(255), nullable=False)
     revised_prompt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     provider_request_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+
+
+class ImageJobItem(Base):
+    __tablename__ = "image_job_items"
+    __table_args__ = (
+        Index("ix_image_job_items_queue_pick", "status", "available_at", "id"),
+        Index("ix_image_job_items_job_result", "job_id", "result_index"),
+        Index("ix_image_job_items_running_lease", "status", "lease_expires_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    job_id: Mapped[int] = mapped_column(ForeignKey("image_jobs.id", ondelete="CASCADE"), index=True, nullable=False)
+    result_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="queued", nullable=False)
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    max_attempts: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    available_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    locked_by: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    locked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    heartbeat_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    lease_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    asset_id: Mapped[Optional[int]] = mapped_column(ForeignKey("assets.id", ondelete="SET NULL"), nullable=True)
+    error_code: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
 
 class ImageJobReferenceAsset(Base):

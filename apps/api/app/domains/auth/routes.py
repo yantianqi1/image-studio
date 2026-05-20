@@ -32,7 +32,6 @@ from apps.api.app.domains.auth.service import (
     update_user_status,
     user_payload,
 )
-from apps.api.app.domains.billing.service import create_wallet
 from apps.api.app.domains.settings.service import require_public_signup_enabled
 
 public_router = APIRouter(prefix="/auth", tags=["public-auth"])
@@ -58,7 +57,6 @@ def register(
 ):
     require_public_signup_enabled(session)
     user = create_user(session, email=payload.email, password=payload.password)
-    create_wallet(session, user_id=user.id)
     migrate_request_anonymous_owner_to_user(request, session, user.id)
     token = create_user_session(session, user)
     session.commit()

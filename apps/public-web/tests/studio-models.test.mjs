@@ -17,12 +17,6 @@ const aspectRatioOptions = [
     description: "横版",
     resolutions: [{ value: "1536x1024", label: "标准", pixels: "1536×1024" }],
   },
-  {
-    value: "2:3",
-    label: "2:3",
-    description: "竖图",
-    resolutions: [{ value: "1024x1536", label: "标准", pixels: "1024×1536" }],
-  },
 ];
 
 function loadStudioModels() {
@@ -51,112 +45,59 @@ function loadStudioModels() {
   return sandbox.module.exports;
 }
 
-function buildOfficialModel() {
+function buildImageModel(code = "gpt-image-2") {
   return {
-    code: "gpt-image-2-official",
-    display_name: "GPT Image 2 官方通道",
+    id: 1,
+    code,
+    display_name: code,
     capability: "image",
-    member_price_cents: 130,
-    variants: [
-      { size: "1024x1024", quality: "low", member_price_cents: 20 },
-      { size: "1024x1024", quality: "medium", member_price_cents: 130 },
-      { size: "1024x1024", quality: "high", member_price_cents: 480 },
-      { size: "1024x1536", quality: "low", member_price_cents: 20 },
-      { size: "1024x1536", quality: "medium", member_price_cents: 100 },
-      { size: "1024x1536", quality: "high", member_price_cents: 370 },
-      { size: "1536x1024", quality: "low", member_price_cents: 20 },
-      { size: "1536x1024", quality: "medium", member_price_cents: 100 },
-      { size: "1536x1024", quality: "high", member_price_cents: 370 },
-    ],
+    provider_id: 1,
+    provider_model: code,
+    public_enabled: true,
   };
 }
 
-test("studio model options are driven by official channel variants", () => {
+test("studio model catalog no longer depends on public price variants", () => {
   const { buildModelAspectRatioOptions, getModelQualityOptions } = loadStudioModels();
-  const model = buildOfficialModel();
+  const model = buildImageModel();
 
-  const ratios = buildModelAspectRatioOptions(model);
-  assert.deepEqual(toPlain(ratios.map((ratio) => ratio.value)), ["1:1", "2:3", "3:2"]);
-  assert.deepEqual(toPlain(ratios.map((ratio) => ratio.resolutions[0].value)), [
-    "1024x1024",
-    "1024x1536",
-    "1536x1024",
-  ]);
-  assert.deepEqual(toPlain(getModelQualityOptions(model, "1024x1536")), [
-    { value: "low", label: "低" },
-    { value: "medium", label: "中" },
-    { value: "high", label: "高" },
-  ]);
+  assert.deepEqual(toPlain(buildModelAspectRatioOptions(model)), []);
+  assert.deepEqual(toPlain(getModelQualityOptions(model, "1024x1024")), []);
 });
 
-test("studio model selection corrects unsupported official channel parameters", () => {
-  const { findModelVariant, getModelStartingPriceCents, resolveModelParameterSelection } = loadStudioModels();
-  const model = buildOfficialModel();
-
-  const selection = resolveModelParameterSelection(model, {
-    aspectRatio: "9:16",
-    resolution: "1080x1920",
+test("studio model selection preserves parameters without public variants", () => {
+  const { resolveModelParameterSelection } = loadStudioModels();
+  const model = buildImageModel();
+  const current = {
+    aspectRatio: "3:2",
+    resolution: "1536x1024",
     quality: "medium",
-  });
+  };
 
-  assert.deepEqual(toPlain(selection), {
-    aspectRatio: "1:1",
-    resolution: "1024x1024",
-    quality: "low",
-  });
-  assert.equal(findModelVariant(model, "1024x1024", "medium").member_price_cents, 130);
-  assert.equal(getModelStartingPriceCents(model), 20);
+  assert.deepEqual(toPlain(resolveModelParameterSelection(model, current)), current);
 });
 
-test("studio image model resolver keeps openrouter as a selectable channel", () => {
+test("studio image model resolver keeps image models selectable", () => {
   const { filterImageModels, resolveImageModel } = loadStudioModels();
   const models = [
-    { code: "gpt-image-2", display_name: "GPT Image 2", capability: "image", member_price_cents: 77 },
-    buildOfficialModel(),
-    {
-      code: "gpt-image-2-openrouter",
-      display_name: "GPT Image 2 OpenRouter",
-      capability: "image",
-      member_price_cents: 150,
-      variants: [{ size: "1024x1024", quality: "medium", member_price_cents: 150 }],
-    },
-    { code: "chat-only", display_name: "Chat", capability: "chat", member_price_cents: 12 },
+    buildImageModel("gpt-image-2"),
+    buildImageModel("gpt-image-2-openrouter"),
+    { ...buildImageModel("chat-only"), capability: "chat" },
   ];
 
   const resolved = resolveImageModel(models, "gpt-image-2-openrouter");
 
   assert.deepEqual(toPlain(filterImageModels(models).map((model) => model.code)), [
     "gpt-image-2",
-    "gpt-image-2-official",
     "gpt-image-2-openrouter",
   ]);
   assert.equal(resolved.selectedModel.code, "gpt-image-2-openrouter");
 });
 
-test("studio openrouter parameters use documented aspect ratios", () => {
-  const { buildModelAspectRatioOptions, resolveModelParameterSelection } = loadStudioModels();
-  const model = {
-    code: "gpt-image-2-openrouter",
-    display_name: "GPT Image 2 OpenRouter",
-    capability: "image",
-    member_price_cents: 150,
-    variants: [
-      { size: "1184x864", aspect_ratio: "4:3", quality: "medium", member_price_cents: 150 },
-      { size: "864x1184", aspect_ratio: "3:4", quality: "medium", member_price_cents: 150 },
-      { size: "1344x768", aspect_ratio: "16:9", quality: "medium", member_price_cents: 150 },
-      { size: "1536x672", aspect_ratio: "21:9", quality: "medium", member_price_cents: 150 },
-    ],
-  };
+test("studio model helper still resolves built-in aspect ratio options", () => {
+  const { findModelAspectRatioOption } = loadStudioModels();
 
-  const ratios = buildModelAspectRatioOptions(model).map((ratio) => ratio.value);
-  const selection = resolveModelParameterSelection(model, {
-    aspectRatio: "37:27",
-    resolution: "1184x864",
-    quality: "medium",
-  });
-
-  assert.deepEqual(toPlain(ratios.toSorted()), ["16:9", "21:9", "3:4", "4:3"]);
-  assert.equal(selection.aspectRatio, "4:3");
+  assert.equal(findModelAspectRatioOption(null, "3:2").resolutions[0].value, "1536x1024");
 });
 
 function toPlain(value) {

@@ -5,6 +5,7 @@ import os
 import pytest
 from fastapi.testclient import TestClient
 
+from apps.api.app.core.cache import app_cache
 from apps.api.app.core.config import get_settings
 from apps.api.app.infra.db.session import get_engine, get_session_factory, initialize_database
 from apps.api.app.main import create_app
@@ -17,10 +18,12 @@ def reset_cached_settings(tmp_path):
     os.environ["APP_ENV"] = "test"
     os.environ["APP_VERSION"] = "0.1.0"
     os.environ["OPENAI_PROVIDER_TYPE"] = "openai-chat-compatible"
+    app_cache.clear()
     get_settings.cache_clear()
     get_engine.cache_clear()
     get_session_factory.cache_clear()
     yield
+    app_cache.clear()
     get_settings.cache_clear()
     get_engine.cache_clear()
     get_session_factory.cache_clear()

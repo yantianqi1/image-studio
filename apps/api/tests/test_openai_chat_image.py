@@ -9,7 +9,6 @@ from apps.api.app.domains.auth.anonymous_sessions import create_anonymous_sessio
 from apps.api.app.domains.auth.ownership import OwnerContext
 from apps.api.app.domains.image.models import Asset
 from apps.api.app.domains.image.service import create_job
-from apps.api.app.domains.llm.models import ModelVariant
 from apps.api.app.infra.db.session import initialize_database, session_scope
 from apps.api.app.infra.storage.factory import build_asset_storage
 from apps.api.app.main import create_app
@@ -93,18 +92,7 @@ def test_chat_compatible_image_job_uses_chat_completions(monkeypatch) -> None:
 def test_chat_compatible_image_job_injects_size_and_quality_into_user_prompt(monkeypatch) -> None:
     client = build_client()
     provider = create_chat_image_provider(client)
-    model = create_chat_image_model(client, provider_id=provider["id"])
-    with session_scope() as session:
-        session.add(
-            ModelVariant(
-                model_id=model["id"],
-                size="1080x1920",
-                quality="high",
-                member_price_cents=55,
-                anonymous_price_cents=99,
-                status="active",
-            )
-        )
+    create_chat_image_model(client, provider_id=provider["id"])
     captured: dict[str, object] = {}
 
     def fake_post(url: str, *, headers, json, timeout: float):
@@ -320,8 +308,6 @@ def create_chat_image_model(client: TestClient, *, provider_id: int) -> dict[str
             "display_name": "Chat Image",
             "capability": "image",
             "public_enabled": True,
-            "member_price_cents": 55,
-            "anonymous_price_cents": 99,
             "provider_id": provider_id,
             "provider_model": "gpt-image-2",
         },

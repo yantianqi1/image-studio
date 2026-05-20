@@ -26,6 +26,7 @@ def test_storyboard_images_array_uses_task_defaults(monkeypatch) -> None:
         return outputs[kwargs["schema_name"]]
 
     monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("OPENAI_PROVIDER_KEY", "sk-test")
     get_settings.cache_clear()
     monkeypatch.setattr("apps.api.app.domains.llm.openai_chat.generate_structured_chat", fake_generate)
 

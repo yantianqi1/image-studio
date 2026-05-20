@@ -41,9 +41,9 @@ export function UsersPage() {
   }, [filters, refreshToken]);
 
   return (
-    <AdminShell title="用户管理" description="搜索真实用户记录，检查状态、钱包余额和 ledger。">
+    <AdminShell title="用户管理" description="搜索真实用户记录，检查状态、钱包余额和账本。">
       <div className="col-span-12">
-        <Panel title="用户列表" description="读取 /api/admin/users">
+        <Panel title="用户列表" description="读取后台用户接口。">
           <UsersToolbar
             draft={draft}
             loading={loading}

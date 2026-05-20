@@ -14,7 +14,7 @@ from apps.api.app.domains.image.storage_migration import (
 )
 from apps.api.app.infra.db.session import get_engine, get_session_factory, initialize_database
 
-HEAD_REVISION = "20260517_000023"
+HEAD_REVISION = "20260520_000029"
 REPO_ROOT = Path(__file__).resolve().parents[3]
 IMAGE_JOB_PROVIDER_USAGE_COLUMNS = {
     "provider_input_tokens",
@@ -23,7 +23,7 @@ IMAGE_JOB_PROVIDER_USAGE_COLUMNS = {
     "raw_provider_cost_cents",
     "provider_fee_cents",
     "internal_cost_cents",
-    "provider_usage",
+    "provider_usage", "locked_by", "locked_at", "lease_expires_at", "heartbeat_at",
 }
 
 
@@ -57,6 +57,7 @@ def assert_core_schema(inspector) -> None:
     assert inspector.has_table("providers")
     assert inspector.has_table("sellable_models")
     assert inspector.has_table("image_jobs")
+    assert inspector.has_table("image_job_items")
     assert inspector.has_table("image_job_reference_assets")
     assert inspector.has_table("character_library_entries")
     assert inspector.has_table("anonymous_sessions")
@@ -65,6 +66,7 @@ def assert_core_schema(inspector) -> None:
     assert_sellable_model_schema(inspector)
     assert_llm_feature_settings_schema(inspector)
     assert_image_job_schema(inspector)
+    assert_image_job_item_schema(inspector)
     assert_asset_schema(inspector)
     assert_owner_schema(inspector)
     assert_reference_asset_schema(inspector)
@@ -80,8 +82,9 @@ def assert_site_settings_schema(inspector) -> None:
 def assert_sellable_model_schema(inspector) -> None:
     sellable_model_columns = {column["name"] for column in inspector.get_columns("sellable_models")}
     assert "status" in sellable_model_columns
-    variant_columns = {column["name"] for column in inspector.get_columns("model_variants")}
-    assert {"upstream_cost_credits", "upstream_cost_cents", "profit_margin_basis_points"} <= variant_columns
+    assert "member_price_cents" not in sellable_model_columns
+    assert "anonymous_price_cents" not in sellable_model_columns
+    assert not inspector.has_table("model_variants")
     sellable_model_indexes = {index["name"] for index in inspector.get_indexes("sellable_models")}
     assert "ix_sellable_models_status" in sellable_model_indexes
 
@@ -106,6 +109,37 @@ def assert_image_job_schema(inspector) -> None:
         "visibility",
         *IMAGE_JOB_PROVIDER_USAGE_COLUMNS,
     } <= image_job_columns
+    assert "charge_cents" not in image_job_columns
+    assert "reservation_id" not in image_job_columns
+    image_job_indexes = {index["name"] for index in inspector.get_indexes("image_jobs")}
+    required_indexes = {"ix_image_jobs_queue_pick", "ix_image_jobs_running_started_at", "ix_image_jobs_running_lease", "ix_image_jobs_locked_by"}
+    assert required_indexes <= image_job_indexes
+    assert not inspector.has_table("wallets")
+    assert not inspector.has_table("wallet_ledger")
+    assert not inspector.has_table("wallet_reservations")
+    assert not inspector.has_table("activation_code_batches")
+    assert not inspector.has_table("activation_codes")
+
+
+def assert_image_job_item_schema(inspector) -> None:
+    item_columns = {column["name"] for column in inspector.get_columns("image_job_items")}
+    assert {
+        "id",
+        "job_id",
+        "result_index",
+        "status",
+        "attempt_count",
+        "max_attempts",
+        "available_at",
+        "asset_id",
+        "lease_expires_at",
+    } <= item_columns
+    item_indexes = {index["name"] for index in inspector.get_indexes("image_job_items")}
+    assert {
+        "ix_image_job_items_queue_pick",
+        "ix_image_job_items_job_result",
+        "ix_image_job_items_running_lease",
+    } <= item_indexes
 
 
 def assert_asset_schema(inspector) -> None:
@@ -175,6 +209,7 @@ def test_initialize_database_runs_alembic_to_head(tmp_path):
 
     assert inspector.has_table("users")
     assert inspector.has_table("image_jobs")
+    assert inspector.has_table("image_job_items")
     assert inspector.has_table("image_job_reference_assets")
     assert inspector.has_table("character_library_entries")
     assert inspector.has_table("anonymous_sessions")

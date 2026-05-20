@@ -1,20 +1,11 @@
 import { apiFetch, apiUpload } from "@/lib/api-client";
 import { adminAuditApi } from "@/lib/admin-audit-api";
 import type { AdminImageJob, ImageJobStats } from "@/lib/admin-image-job-types";
-import { adminRedeemApi } from "@/lib/admin-redeem-api";
 import { adminProviderApi } from "@/lib/admin-provider-api";
-import { buildUsersSearch, type AdminUserList, type AdminUsersQuery, type AdminWallet, type AdminWalletLedgerEntry } from "@/lib/admin-users";
+import { buildUsersSearch, type AdminUserList, type AdminUsersQuery } from "@/lib/admin-users";
 
-export type {
-  ApplyDefaultPricingResult,
-  BatchVariantInput,
-  ModelVariant,
-  VariantMatrix,
-  VariantMatrixGroup,
-} from "@/lib/admin-provider-api";
-export type { AdminRedeemBatch, AdminRedeemBatchCode, AdminRedeemBatchDetail, AdminRedeemBatchSummary, AdminRedeemCode } from "@/lib/admin-redeem";
 export type { AdminAuditLog, AdminAuditLogList, AdminAuditLogsQuery } from "@/lib/admin-audit-api";
-export type { AdminUser, AdminUserList, AdminUsersQuery, AdminWallet, AdminWalletLedgerEntry } from "@/lib/admin-users";
+export type { AdminUser, AdminUserList, AdminUsersQuery } from "@/lib/admin-users";
 
 export type AdminGalleryItem = Readonly<{
   asset_id: number;
@@ -78,8 +69,6 @@ export type AdminLlmFeatureModel = Readonly<{
   provider_id: number;
   provider_model: string;
   public_enabled: boolean;
-  member_price_cents: number;
-  anonymous_price_cents: number;
 }>;
 
 export type AdminLlmFeatureSetting = Readonly<{
@@ -131,25 +120,6 @@ export const adminApi = {
       },
     );
   },
-  wallet(userId: number) {
-    return apiFetch<AdminWallet>(`/api/admin/billing/wallets/${userId}`);
-  },
-  walletLedger(userId: number) {
-    return apiFetch<readonly AdminWalletLedgerEntry[]>(`/api/admin/billing/wallets/${userId}/ledger`);
-  },
-  adjustWallet(userId: number, input: { amount_cents: number; reason: string }) {
-    return adminApi.adjustUserWallet(userId, input);
-  },
-  adjustUserWallet(userId: number, input: { amount_cents: number; reason: string }) {
-    return apiFetch<{ balance_cents: number; locked_cents: number; currency: string }>(
-      `/api/admin/billing/wallets/${userId}/adjustments`,
-      {
-        method: "POST",
-        body: JSON.stringify(input),
-      },
-    );
-  },
-  ...adminRedeemApi,
   ...adminAuditApi,
   ...adminProviderApi,
   imageJobs() {

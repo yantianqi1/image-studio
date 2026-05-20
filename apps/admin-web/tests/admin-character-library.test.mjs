@@ -36,7 +36,6 @@ function loadAdminApi(apiClient) {
       if (path === "@/lib/admin-audit-api") return { adminAuditApi: {} };
       if (path === "@/lib/admin-image-job-types") return {};
       if (path === "@/lib/admin-provider-api") return { adminProviderApi: {} };
-      if (path === "@/lib/admin-redeem-api") return { adminRedeemApi: {} };
       if (path === "@/lib/admin-users") return { buildUsersSearch: () => "" };
       throw new Error(`Unexpected require: ${path}`);
     },

@@ -41,7 +41,7 @@ export function SettingsPage() {
   return (
     <AdminShell
       title="站点设置"
-      description="公开注册、匿名生图和公开共享额度已经在 API 入口真实生效。"
+      description="公开注册、匿名生图和公开共享额度已经在接口入口真实生效。"
     >
       {loadError ? <div className="col-span-12"><ErrorBox message={loadError instanceof Error ? loadError.message : "读取设置失败"} /></div> : null}
       {settings ? <SettingsPanel error={error} onSave={handleSave} settings={settings} /> : null}
@@ -58,7 +58,7 @@ type SettingsPanelProps = Readonly<{
 function SettingsPanel({ error, onSave, settings }: SettingsPanelProps) {
   return (
     <div className="col-span-12 lg:col-span-7">
-      <Panel title="公开体验设置" description="提交 /api/admin/settings">
+      <Panel title="公开体验设置" description="保存后写入后台设置接口。">
         <form key={settingsFormKey(settings)} className="grid gap-3" action={onSave}>
           <SiteTitleField siteTitle={settings.site_title} />
           <RuntimeSwitches settings={settings} />
@@ -85,8 +85,8 @@ function SiteTitleField({ siteTitle }: Readonly<{ siteTitle: string }>) {
 function RuntimeSwitches({ settings }: Readonly<{ settings: SettingsState }>) {
   return (
     <>
-      <SwitchCard checked={settings.allow_public_signup} name="allow_public_signup" title="允许公开注册" hint="关闭后 /api/public/auth/register 返回 public_signup_disabled" />
-      <SwitchCard checked={settings.allow_anonymous_image} name="allow_anonymous_image" title="允许匿名生图" hint="关闭后匿名 /api/public/image/jobs 返回 anonymous_image_disabled" />
+      <SwitchCard checked={settings.allow_public_signup} name="allow_public_signup" title="允许公开注册" hint="关闭后公开注册接口将返回“公开注册已关闭”" />
+      <SwitchCard checked={settings.allow_anonymous_image} name="allow_anonymous_image" title="允许匿名生图" hint="关闭后匿名生图接口将返回“匿名生图已关闭”" />
       <SwitchCard checked={settings.uploads_enabled} name="uploads_enabled" title="允许上传" hint="当前上传入口尚未接入，该字段会保存并等待上传域消费" />
     </>
   );
@@ -107,14 +107,14 @@ function SwitchCard(props: Readonly<{ checked: boolean; hint: string; name: stri
 function ClientProviderUrlPoolField({ value }: Readonly<{ value: string }>) {
   return (
     <label className="grid gap-1.5 text-sm font-semibold text-gray-700">
-      自有通道 URL 池
+      自有通道地址池
       <textarea
         className="admin-input min-h-32"
         name="client_provider_url_pool"
         defaultValue={value}
         placeholder={"https://api.example.com/v1\nhttps://api.openai.com/v1"}
       />
-      <span className="admin-hint">一行一个 URL；用户只填 Key 时按顺序自动识别。</span>
+      <span className="admin-hint">一行一个地址；用户只填密钥标识时按顺序自动识别。</span>
     </label>
   );
 }

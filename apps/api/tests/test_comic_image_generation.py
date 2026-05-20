@@ -6,7 +6,6 @@ from fastapi.testclient import TestClient
 from sqlalchemy import delete, select
 
 from apps.api.app.domains.auth.service import create_user
-from apps.api.app.domains.billing.service import create_wallet
 from apps.api.app.domains.comic.models import ComicCharacterCard, ComicPanelPrompt, ComicStoryboard, ComicTask
 from apps.api.app.domains.comic.storage import ASSET_FOLDER_NAME_OUTPUT_KEY, build_asset_folder_name
 from apps.api.app.domains.image.models import Asset, ImageJob, ImageJobReferenceAsset, ImageJobResult
@@ -200,18 +199,18 @@ def test_orchestration_marks_ownerless_completed_task_failed() -> None:
     assert detail.error_message == "comic task owner is missing"
 
 
-def test_orchestration_marks_app_error_failed_without_crashing() -> None:
+def test_orchestration_queues_character_references_without_wallet() -> None:
     client = build_client()
     task = seed_completed_task(client, prompt_count=1, reference_ready=False)
-    assign_task_owner_without_balance(task["id"])
+    assign_task_owner_without_wallet(task["id"])
 
     action = worker_comic_orchestration.run_next_comic_orchestration()
 
-    assert action == f"failed-app-error:{task['id']}"
+    assert action == f"queued-character-references:{task['id']}"
     detail = read_comic_task(task["id"])
-    assert detail.status == "failed"
-    assert detail.error_code == "balance_not_enough"
-    assert detail.error_message == "insufficient balance"
+    assert detail.status == "completed"
+    assert detail.error_code is None
+    assert detail.error_message is None
 
 
 def build_client() -> TestClient:
@@ -264,11 +263,9 @@ def clear_task_owner(task_id: str) -> None:
         session.commit()
 
 
-def assign_task_owner_without_balance(task_id: str) -> None:
+def assign_task_owner_without_wallet(task_id: str) -> None:
     with session_scope() as session:
         user = create_user(session, email="no-balance-worker@example.com", password="secret")
-        wallet = create_wallet(session, user_id=user.id)
-        wallet.balance_cents = 0
         task_model = session.get(ComicTask, task_id)
         task_model.user_id = user.id
         task_model.anonymous_session_id = None
