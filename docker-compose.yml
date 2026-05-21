@@ -71,8 +71,6 @@ services:
   worker-go:
     image: ${GHCR_REGISTRY:-ghcr.io}/${GHCR_OWNER:-yantianqi1}/image-studio-worker-go:${IMAGE_TAG:-latest}
     container_name: commercial-studio-worker-go
-    profiles:
-      - worker-go
     restart: unless-stopped
     env_file:
       - .env
@@ -81,7 +79,7 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}
       GENERATED_ASSETS_DIR: /app/generated-assets
       GO_WORKER_NAME: ${GO_WORKER_NAME:-image-studio-go-worker}
-      GO_WORKER_MODE: ${GO_WORKER_MODE:-simulate}
+      GO_WORKER_MODE: ${GO_WORKER_MODE:-render}
       GO_WORKER_CONCURRENCY: ${GO_WORKER_CONCURRENCY:-2}
       GO_WORKER_POLL_INTERVAL_SECONDS: ${GO_WORKER_POLL_INTERVAL_SECONDS:-1}
       GO_WORKER_LEASE_SECONDS: ${GO_WORKER_LEASE_SECONDS:-600}
@@ -193,6 +191,8 @@ services:
       admin-web:
         condition: service_healthy
       api:
+        condition: service_healthy
+      worker-go:
         condition: service_healthy
 
 volumes:
