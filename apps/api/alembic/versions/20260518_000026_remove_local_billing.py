@@ -15,15 +15,14 @@ down_revision = "20260518_000025"
 branch_labels = None
 depends_on = None
 
+POSTGRESQL_DIALECT = "postgresql"
+SELLABLE_MODEL_BILLING_COLUMNS = ("anonymous_price_cents", "member_price_cents")
+IMAGE_JOB_BILLING_COLUMNS = ("reservation_id", "charge_cents")
+
 
 def upgrade() -> None:
     op.drop_table("model_variants")
-    with op.batch_alter_table("sellable_models", recreate="always") as batch_op:
-        batch_op.drop_column("anonymous_price_cents")
-        batch_op.drop_column("member_price_cents")
-    with op.batch_alter_table("image_jobs", recreate="always") as batch_op:
-        batch_op.drop_column("reservation_id")
-        batch_op.drop_column("charge_cents")
+    drop_removed_billing_columns()
     op.drop_table("activation_codes")
     op.drop_table("activation_code_batches")
     op.drop_table("wallet_ledger")
@@ -32,6 +31,61 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    create_wallet_tables()
+    create_activation_code_tables()
+    restore_removed_billing_columns()
+    create_model_variants_table()
+
+
+def is_postgresql() -> bool:
+    return op.get_bind().dialect.name == POSTGRESQL_DIALECT
+
+
+def drop_removed_billing_columns() -> None:
+    drop_columns("sellable_models", SELLABLE_MODEL_BILLING_COLUMNS)
+    drop_columns("image_jobs", IMAGE_JOB_BILLING_COLUMNS)
+
+
+def drop_columns(table_name: str, column_names: tuple[str, ...]) -> None:
+    if is_postgresql():
+        for column_name in column_names:
+            op.drop_column(table_name, column_name)
+        return
+    with op.batch_alter_table(table_name, recreate="always") as batch_op:
+        for column_name in column_names:
+            batch_op.drop_column(column_name)
+
+
+def restore_removed_billing_columns() -> None:
+    add_columns("image_jobs", build_image_job_billing_columns())
+    add_columns("sellable_models", build_sellable_model_billing_columns())
+
+
+def add_columns(table_name: str, columns: list[sa.Column]) -> None:
+    if is_postgresql():
+        for column in columns:
+            op.add_column(table_name, column)
+        return
+    with op.batch_alter_table(table_name, recreate="always") as batch_op:
+        for column in columns:
+            batch_op.add_column(column)
+
+
+def build_image_job_billing_columns() -> list[sa.Column]:
+    return [
+        sa.Column("charge_cents", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column("reservation_id", sa.Integer(), sa.ForeignKey("wallet_reservations.id"), nullable=True),
+    ]
+
+
+def build_sellable_model_billing_columns() -> list[sa.Column]:
+    return [
+        sa.Column("member_price_cents", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column("anonymous_price_cents", sa.Integer(), nullable=False, server_default="0"),
+    ]
+
+
+def create_wallet_tables() -> None:
     op.create_table(
         "wallets",
         sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id"), primary_key=True),
@@ -67,6 +121,9 @@ def downgrade() -> None:
         sa.Column("created_at", sa.DateTime(), nullable=False),
     )
     op.create_index("ix_wallet_ledger_user_id", "wallet_ledger", ["user_id"])
+
+
+def create_activation_code_tables() -> None:
     op.create_table(
         "activation_code_batches",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
@@ -88,12 +145,9 @@ def downgrade() -> None:
         sa.Column("redeemed_at", sa.DateTime(), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=False),
     )
-    with op.batch_alter_table("image_jobs", recreate="always") as batch_op:
-        batch_op.add_column(sa.Column("charge_cents", sa.Integer(), nullable=False, server_default="0"))
-        batch_op.add_column(sa.Column("reservation_id", sa.Integer(), sa.ForeignKey("wallet_reservations.id"), nullable=True))
-    with op.batch_alter_table("sellable_models", recreate="always") as batch_op:
-        batch_op.add_column(sa.Column("member_price_cents", sa.Integer(), nullable=False, server_default="0"))
-        batch_op.add_column(sa.Column("anonymous_price_cents", sa.Integer(), nullable=False, server_default="0"))
+
+
+def create_model_variants_table() -> None:
     op.create_table(
         "model_variants",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
