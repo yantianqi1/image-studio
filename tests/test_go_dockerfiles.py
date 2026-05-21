@@ -11,6 +11,7 @@ def test_worker_go_dockerfile_copies_runtime_module_for_replace_path() -> None:
 
     assert "apps/image-runtime-go" in source
     assert "WORKDIR /src/apps/worker-go" in source
+    assert "apk add --no-cache ca-certificates" in source
 
 
 def test_worker_go_runs_by_default_in_render_mode() -> None:
@@ -19,6 +20,10 @@ def test_worker_go_runs_by_default_in_render_mode() -> None:
 
     assert "profiles:" not in service
     assert "GO_WORKER_MODE: ${GO_WORKER_MODE:-render}" in service
+    assert "ASSET_STORAGE_GCS_BUCKET: ${ASSET_STORAGE_GCS_BUCKET:-}" in service
+    assert "ASSET_STORAGE_GCS_PREFIX: ${ASSET_STORAGE_GCS_PREFIX:-generated-assets}" in service
+    assert "GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}" in service
+    assert "${GCS_CREDENTIALS_FILE:-/dev/null}:/app/gcs-credentials.json:ro" in service
 
 
 def test_deploy_script_restarts_worker_go() -> None:

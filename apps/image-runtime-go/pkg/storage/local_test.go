@@ -52,11 +52,41 @@ func TestLocalAssetStorageWritesRelativeKeysOnly(t *testing.T) {
 	}
 }
 
-func TestBuildAssetStorageRejectsGCS(t *testing.T) {
-	_, err := BuildAssetStorage(Config{Backend: "gcs", GeneratedAssetsDir: t.TempDir()})
+func TestBuildAssetStorageRequiresGCSBucket(t *testing.T) {
+	_, err := BuildAssetStorage(Config{Backend: "gcs"})
 
 	if err == nil {
-		t.Fatal("expected gcs backend to be unsupported")
+		t.Fatal("expected gcs bucket to be required")
+	}
+}
+
+func TestGCSAssetStorageObjectKeyUsesPrefix(t *testing.T) {
+	store := NewGCSAssetStorage("image-studio-assets", "generated-assets")
+
+	key, err := store.ObjectKey("nested/asset-1.png")
+	if err != nil {
+		t.Fatalf("object key failed: %v", err)
+	}
+	if key != "generated-assets/nested/asset-1.png" {
+		t.Fatalf("object key = %q, want prefixed key", key)
+	}
+}
+
+func TestGCSAssetStorageRejectsUnsafePrefix(t *testing.T) {
+	store := NewGCSAssetStorage("image-studio-assets", "../bad")
+
+	if _, err := store.ObjectKey("asset-1.png"); err == nil {
+		t.Fatal("expected unsafe gcs prefix to fail")
+	}
+}
+
+func TestGCSAssetStorageRequiresClientForWrites(t *testing.T) {
+	store := NewGCSAssetStorage("image-studio-assets", "generated-assets")
+
+	err := store.WriteBytes("asset-1.png", []byte("png"), "image/png")
+
+	if err == nil || !strings.Contains(err.Error(), "gcs client") {
+		t.Fatalf("expected missing gcs client error, got %v", err)
 	}
 }
 

@@ -12,6 +12,7 @@ import (
 )
 
 const highWorkerConcurrencyWarning = 32
+const gcsStorageBackend = "gcs"
 
 func validateStartupConfig(cfg config.Config, lookup config.LookupFunc, logger *slog.Logger) error {
 	if cfg.Mode != jobs.ModeRender {
@@ -20,9 +21,20 @@ func validateStartupConfig(cfg config.Config, lookup config.LookupFunc, logger *
 	if !isPostgresURL(cfg.DatabaseURL) {
 		return fmt.Errorf("GO_WORKER_MODE=render requires postgres DATABASE_URL")
 	}
-	if strings.ToLower(strings.TrimSpace(cfg.AssetStorageBackend)) != storage.BackendLocal {
-		return fmt.Errorf("GO_WORKER_MODE=render only supports ASSET_STORAGE_BACKEND=local")
+	backend := strings.ToLower(strings.TrimSpace(cfg.AssetStorageBackend))
+	if backend == storage.BackendLocal {
+		return validateRenderConcurrency(cfg, lookup, logger)
 	}
+	if backend == gcsStorageBackend {
+		if strings.TrimSpace(cfg.AssetStorageGCSBucket) == "" {
+			return fmt.Errorf("ASSET_STORAGE_GCS_BUCKET is required for GO_WORKER_MODE=render")
+		}
+		return validateRenderConcurrency(cfg, lookup, logger)
+	}
+	return fmt.Errorf("GO_WORKER_MODE=render does not support ASSET_STORAGE_BACKEND=%s", cfg.AssetStorageBackend)
+}
+
+func validateRenderConcurrency(cfg config.Config, lookup config.LookupFunc, logger *slog.Logger) error {
 	if len(provider.SupportedRenderProviderTypes()) == 0 {
 		return fmt.Errorf("GO_WORKER_MODE=render requires at least one supported provider type")
 	}

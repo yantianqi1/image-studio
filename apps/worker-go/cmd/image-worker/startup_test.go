@@ -23,7 +23,24 @@ func TestValidateStartupRejectsSQLiteRenderMode(t *testing.T) {
 	}
 }
 
-func TestValidateStartupRejectsUnsupportedRenderStorage(t *testing.T) {
+func TestValidateStartupAllowsGCSRenderStorage(t *testing.T) {
+	cfg := config.Config{
+		DatabaseURL:           "postgres://user:pass@localhost/db",
+		Mode:                  jobs.ModeRender,
+		AssetStorageBackend:   "gcs",
+		AssetStorageGCSBucket: "image-studio-assets",
+		AssetStorageGCSPrefix: "generated-assets",
+		Concurrency:           2,
+	}
+
+	err := validateStartupConfig(cfg, mapLookup(nil), slog.Default())
+
+	if err != nil {
+		t.Fatalf("gcs render startup should be allowed: %v", err)
+	}
+}
+
+func TestValidateStartupRequiresGCSBucket(t *testing.T) {
 	cfg := config.Config{
 		DatabaseURL:         "postgres://user:pass@localhost/db",
 		Mode:                jobs.ModeRender,
@@ -34,7 +51,7 @@ func TestValidateStartupRejectsUnsupportedRenderStorage(t *testing.T) {
 	err := validateStartupConfig(cfg, mapLookup(nil), slog.Default())
 
 	if err == nil {
-		t.Fatal("expected unsupported storage to fail")
+		t.Fatal("expected missing gcs bucket to fail")
 	}
 }
 

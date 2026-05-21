@@ -3,8 +3,6 @@ package config
 import (
 	"fmt"
 	"os"
-	"strconv"
-	"strings"
 	"time"
 )
 
@@ -24,6 +22,7 @@ const (
 	defaultRetryMaxSeconds     = 300
 	defaultFailSimulation      = false
 	defaultStorageBackend      = "local"
+	defaultStorageGCSPrefix    = "generated-assets"
 	defaultGeneratedAssets     = "./generated-assets"
 	defaultHTTPAddr            = ":7900"
 	defaultEnableHTTP          = true
@@ -48,6 +47,8 @@ type Config struct {
 	RetryMaxSeconds              int
 	FailSimulation               bool
 	AssetStorageBackend          string
+	AssetStorageGCSBucket        string
+	AssetStorageGCSPrefix        string
 	GeneratedAssetsDir           string
 	HTTPAddr                     string
 	EnableHTTP                   bool
@@ -183,6 +184,8 @@ func buildConfig(lookup LookupFunc, head configHead, tail configTail) Config {
 		RetryMaxSeconds:              tail.retryMaxSeconds,
 		FailSimulation:               tail.failSimulation,
 		AssetStorageBackend:          stringDefault(lookup, "ASSET_STORAGE_BACKEND", defaultStorageBackend),
+		AssetStorageGCSBucket:        stringDefault(lookup, "ASSET_STORAGE_GCS_BUCKET", ""),
+		AssetStorageGCSPrefix:        stringDefault(lookup, "ASSET_STORAGE_GCS_PREFIX", defaultStorageGCSPrefix),
 		GeneratedAssetsDir:           stringDefault(lookup, "GENERATED_ASSETS_DIR", defaultGeneratedAssets),
 		HTTPAddr:                     stringDefault(lookup, "GO_WORKER_HTTP_ADDR", defaultHTTPAddr),
 		EnableHTTP:                   tail.enableHTTP,
@@ -222,64 +225,6 @@ func parseMode(lookup LookupFunc) (string, error) {
 		return "", fmt.Errorf("GO_WORKER_MODE must be simulate or render")
 	}
 	return mode, nil
-}
-
-func parsePositiveInt(lookup LookupFunc, key string, defaultValue int) (int, error) {
-	raw, ok := lookup(key)
-	if !ok {
-		return defaultValue, nil
-	}
-	value, err := strconv.Atoi(raw)
-	if err != nil {
-		return 0, fmt.Errorf("%s must be an integer: %w", key, err)
-	}
-	if value < 1 {
-		return 0, fmt.Errorf("%s must be at least 1", key)
-	}
-	return value, nil
-}
-
-func parseBool(lookup LookupFunc, key string, defaultValue bool) (bool, error) {
-	raw, ok := lookup(key)
-	if !ok {
-		return defaultValue, nil
-	}
-	value, err := strconv.ParseBool(raw)
-	if err != nil {
-		return false, fmt.Errorf("%s must be a boolean: %w", key, err)
-	}
-	return value, nil
-}
-
-func parseConcurrencyOverrides(lookup LookupFunc, key string) (map[string]int, error) {
-	raw, ok := lookup(key)
-	if !ok || strings.TrimSpace(raw) == "" {
-		return map[string]int{}, nil
-	}
-	result := map[string]int{}
-	for _, item := range strings.Split(raw, ",") {
-		name, limit, err := parseConcurrencyOverrideItem(key, item)
-		if err != nil {
-			return nil, err
-		}
-		result[name] = limit
-	}
-	return result, nil
-}
-
-func parseConcurrencyOverrideItem(key string, item string) (string, int, error) {
-	parts := strings.Split(strings.TrimSpace(item), "=")
-	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" {
-		return "", 0, fmt.Errorf("%s must be name=limit pairs", key)
-	}
-	limit, err := strconv.Atoi(strings.TrimSpace(parts[1]))
-	if err != nil {
-		return "", 0, fmt.Errorf("%s limit must be an integer: %w", key, err)
-	}
-	if limit < 1 {
-		return "", 0, fmt.Errorf("%s limit must be at least 1", key)
-	}
-	return strings.TrimSpace(parts[0]), limit, nil
 }
 
 func cloneIntMap(values map[string]int) map[string]int {

@@ -22,6 +22,8 @@ const (
 type Config struct {
 	Backend            string
 	GeneratedAssetsDir string
+	GCSBucket          string
+	GCSPrefix          string
 }
 
 type AssetStorage interface {
@@ -52,7 +54,7 @@ func BuildAssetStorage(cfg Config) (AssetStorage, error) {
 	case BackendLocal:
 		return NewLocalAssetStorage(normalizeDefault(cfg.GeneratedAssetsDir, defaultGeneratedAssetsDir)), nil
 	case BackendGCS:
-		return nil, fmt.Errorf("asset storage backend gcs is unsupported by go worker render mode")
+		return NewGCSAssetStorageWithDefaultClient(cfg.GCSBucket, cfg.GCSPrefix)
 	default:
 		return nil, fmt.Errorf("unsupported asset storage backend %q", cfg.Backend)
 	}

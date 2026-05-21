@@ -89,7 +89,9 @@ func TestLoadParsesOverrides(t *testing.T) {
 		"GO_WORKER_RETRY_MAX_SECONDS":              "90",
 		"GO_WORKER_ENABLE_HTTP":                    "false",
 		"GO_WORKER_HTTP_ADDR":                      ":7999",
-		"ASSET_STORAGE_BACKEND":                    "local",
+		"ASSET_STORAGE_BACKEND":                    "gcs",
+		"ASSET_STORAGE_GCS_BUCKET":                 "image-studio-assets",
+		"ASSET_STORAGE_GCS_PREFIX":                 "generated-assets",
 		"GENERATED_ASSETS_DIR":                     "/tmp/generated-assets",
 	}))
 
@@ -119,6 +121,12 @@ func TestLoadParsesOverrides(t *testing.T) {
 	}
 	if cfg.GeneratedAssetsDir != "/tmp/generated-assets" {
 		t.Fatalf("unexpected generated assets dir %q", cfg.GeneratedAssetsDir)
+	}
+	if cfg.AssetStorageBackend != "gcs" || cfg.AssetStorageGCSBucket != "image-studio-assets" {
+		t.Fatalf("unexpected gcs storage config: %+v", cfg)
+	}
+	if cfg.AssetStorageGCSPrefix != "generated-assets" {
+		t.Fatalf("unexpected gcs prefix %q", cfg.AssetStorageGCSPrefix)
 	}
 	if cfg.EnableHTTP || cfg.HTTPAddr != ":7999" {
 		t.Fatalf("unexpected http diagnostics overrides: %+v", cfg)

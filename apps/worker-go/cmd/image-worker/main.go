@@ -94,6 +94,7 @@ func runCleanupOrphanAssets(ctx context.Context, cfg config.Config, args []strin
 	}
 	assetStorage, err := storage.BuildAssetStorage(storage.Config{
 		Backend: cfg.AssetStorageBackend, GeneratedAssetsDir: cfg.GeneratedAssetsDir,
+		GCSBucket: cfg.AssetStorageGCSBucket, GCSPrefix: cfg.AssetStorageGCSPrefix,
 	})
 	if err != nil {
 		return err
@@ -164,6 +165,7 @@ func buildRenderDependencies(cfg config.Config) (storage.AssetStorage, provider.
 	}
 	assetStorage, err := storage.BuildAssetStorage(storage.Config{
 		Backend: cfg.AssetStorageBackend, GeneratedAssetsDir: cfg.GeneratedAssetsDir,
+		GCSBucket: cfg.AssetStorageGCSBucket, GCSPrefix: cfg.AssetStorageGCSPrefix,
 	})
 	if err != nil {
 		return nil, nil, err

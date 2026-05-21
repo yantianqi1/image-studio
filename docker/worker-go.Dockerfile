@@ -21,6 +21,8 @@ FROM alpine:3.20
 
 WORKDIR /app
 
+RUN apk add --no-cache ca-certificates
+
 COPY --from=builder /app/image-worker /app/image-worker
 
 EXPOSE 7900
