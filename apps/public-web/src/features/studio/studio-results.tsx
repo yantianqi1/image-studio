@@ -294,17 +294,15 @@ const TurnCard = memo(function TurnCard({
 }>) {
   const modeInfo = MODE_LABELS[turn.mode] ?? MODE_LABELS.generate;
   const isBusy = turn.status === "queued" || turn.status === "generating";
+  const isComplianceRetrying = turn.status === "error" && progress !== undefined;
   const [editingPrompt, setEditingPrompt] = useState(false);
-  const [promptDraft, setPromptDraft] = useState(turn.prompt);
-
-  useEffect(() => {
-    if (!editingPrompt) setPromptDraft(turn.prompt);
-  }, [editingPrompt, turn.prompt]);
+  const [promptDraft, setPromptDraft] = useState("");
 
   const submitPromptEdit = useCallback(() => {
     const nextPrompt = promptDraft.trim();
     if (!nextPrompt || isBusy) return;
     setEditingPrompt(false);
+    setPromptDraft("");
     onEditPromptRetry(nextPrompt);
   }, [isBusy, onEditPromptRetry, promptDraft]);
 
@@ -354,7 +352,10 @@ const TurnCard = memo(function TurnCard({
                 <button
                   type="button"
                   className="inline-flex size-7 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 transition hover:bg-gray-50 hover:text-gray-700"
-                  onClick={() => setEditingPrompt(true)}
+                  onClick={() => {
+                    setPromptDraft(turn.prompt);
+                    setEditingPrompt(true);
+                  }}
                   aria-label="修改提示词"
                   title="修改提示词"
                 >
@@ -376,7 +377,7 @@ const TurnCard = memo(function TurnCard({
             <PromptEditForm
               value={promptDraft}
               onCancel={() => {
-                setPromptDraft(turn.prompt);
+                setPromptDraft("");
                 setEditingPrompt(false);
               }}
               onChange={setPromptDraft}
@@ -442,29 +443,13 @@ const TurnCard = memo(function TurnCard({
 
           {/* Error state */}
           {turn.status === "error" && (
-            <div className="mb-3 inline-flex h-[140px] w-full break-inside-avoid flex-col overflow-hidden rounded-2xl border border-red-200 bg-red-50 sm:mb-4">
-              <div className="flex min-h-0 flex-1 items-center justify-center px-4 py-3 text-center text-sm leading-6 text-red-600">
-                {turn.error || "生成失败"}
-              </div>
-              <div className="flex justify-end gap-2 border-t border-red-100 bg-white/70 px-3 py-2">
-                <button
-                  type="button"
-                  className="inline-flex h-7 items-center gap-1.5 rounded-full border border-blue-200 bg-white px-3 text-xs font-medium text-blue-600 transition hover:bg-blue-50"
-                  onClick={onComplianceRetry}
-                >
-                  <ShieldCheck className="size-3" />
-                  合规化重试
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex h-7 items-center gap-1.5 rounded-full border border-red-200 bg-white px-3 text-xs font-medium text-red-600 transition hover:bg-red-50"
-                  onClick={onRetry}
-                >
-                  <RotateCcw className="size-3" />
-                  重试
-                </button>
-              </div>
-            </div>
+            <TurnErrorState
+              error={turn.error}
+              isComplianceRetrying={isComplianceRetrying}
+              progress={progress}
+              onComplianceRetry={onComplianceRetry}
+              onRetry={onRetry}
+            />
           )}
 
           {/* Cancelled state */}
@@ -520,6 +505,110 @@ function PromptEditForm({
           <Check className="size-4" />
         </button>
       </div>
+    </div>
+  );
+}
+
+function TurnErrorState({
+  error,
+  isComplianceRetrying,
+  progress,
+  onComplianceRetry,
+  onRetry,
+}: Readonly<{
+  error: string | undefined;
+  isComplianceRetrying: boolean;
+  progress: TurnProgress | undefined;
+  onComplianceRetry: () => void;
+  onRetry: () => void;
+}>) {
+  const statusMessage = progress?.message || "正在合规化改写...";
+
+  return (
+    <div
+      className={cn(
+        "mb-3 inline-flex h-[140px] w-full break-inside-avoid flex-col overflow-hidden rounded-2xl border sm:mb-4",
+        isComplianceRetrying ? "border-blue-200 bg-blue-50" : "border-red-200 bg-red-50",
+      )}
+      aria-busy={isComplianceRetrying}
+    >
+      <TurnErrorMessage
+        error={error}
+        isComplianceRetrying={isComplianceRetrying}
+        statusMessage={statusMessage}
+      />
+      <TurnErrorActions
+        isComplianceRetrying={isComplianceRetrying}
+        onComplianceRetry={onComplianceRetry}
+        onRetry={onRetry}
+      />
+    </div>
+  );
+}
+
+function TurnErrorMessage({
+  error,
+  isComplianceRetrying,
+  statusMessage,
+}: Readonly<{
+  error: string | undefined;
+  isComplianceRetrying: boolean;
+  statusMessage: string;
+}>) {
+  return (
+    <div className="flex min-h-0 flex-1 items-center justify-center px-4 py-3 text-center text-sm leading-6">
+      {isComplianceRetrying ? (
+        <div className="flex flex-col items-center gap-2 text-blue-600">
+          <span className="inline-flex size-9 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-blue-100">
+            <Loader2 className="size-4 animate-spin" />
+          </span>
+          <span className="font-medium">{statusMessage}</span>
+          <span className="text-xs text-blue-500">改写完成后会自动重新提交生成</span>
+        </div>
+      ) : (
+        <span className="text-red-600">{error || "生成失败"}</span>
+      )}
+    </div>
+  );
+}
+
+function TurnErrorActions({
+  isComplianceRetrying,
+  onComplianceRetry,
+  onRetry,
+}: Readonly<{
+  isComplianceRetrying: boolean;
+  onComplianceRetry: () => void;
+  onRetry: () => void;
+}>) {
+  return (
+    <div className={cn(
+      "flex justify-end gap-2 border-t bg-white/70 px-3 py-2",
+      isComplianceRetrying ? "border-blue-100" : "border-red-100",
+    )}>
+      <button
+        type="button"
+        className={cn(
+          "inline-flex h-7 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-70",
+          isComplianceRetrying
+            ? "border-blue-200 bg-blue-50 text-blue-600"
+            : "border-blue-200 bg-white text-blue-600 hover:bg-blue-50",
+        )}
+        onClick={onComplianceRetry}
+        disabled={isComplianceRetrying}
+      >
+        {isComplianceRetrying ? <Loader2 className="size-3 animate-spin" /> : <ShieldCheck className="size-3" />}
+        {isComplianceRetrying ? "合规化中" : "合规化重试"}
+      </button>
+      <button
+        type="button"
+        className="inline-flex h-7 items-center gap-1.5 rounded-full border border-red-200 bg-white px-3 text-xs font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+        onClick={onRetry}
+        disabled={isComplianceRetrying}
+      >
+        <RotateCcw className="size-3" />
+        重试
+      </button>
     </div>
   );
 }

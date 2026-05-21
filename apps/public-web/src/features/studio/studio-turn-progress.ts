@@ -30,7 +30,7 @@ export function getTurnProgress(key: string): TurnProgress | undefined {
 }
 
 export function getTurnProgressSnapshot(): ReadonlyMap<string, TurnProgress> {
-  return progressMap;
+  return new Map(progressMap);
 }
 
 export function subscribeTurnProgress(callback: () => void): () => void {

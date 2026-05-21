@@ -96,6 +96,13 @@ test("studio compliance retry rewrites the failed prompt before submitting", () 
   assert.doesNotMatch(pageSource, /Fall through with original prompt/);
 });
 
+test("studio failed turn shows compliance retry progress before image submission", () => {
+  assert.match(resultsSource, /isComplianceRetrying/);
+  assert.match(resultsSource, /progress\?\.message \|\| "正在合规化改写\.\.\."/);
+  assert.match(resultsSource, /合规化中/);
+  assert.match(resultsSource, /disabled=\{isComplianceRetrying\}/);
+});
+
 test("studio first image turn requests async backend generated conversation title", () => {
   assert.match(pageSource, /applyGeneratedTitle/);
   assert.match(pageSource, /updatedJob\.title/);
