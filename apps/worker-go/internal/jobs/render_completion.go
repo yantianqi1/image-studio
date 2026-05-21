@@ -5,24 +5,33 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/yantianqi1/image-studio/apps/worker-go/internal/provider"
-	"github.com/yantianqi1/image-studio/apps/worker-go/internal/storage"
+	"github.com/yantianqi1/image-studio/apps/image-runtime-go/pkg/provider"
+	"github.com/yantianqi1/image-studio/apps/image-runtime-go/pkg/storage"
 )
 
 type renderCompletionState struct {
-	request   CompleteRenderRequest
-	newKeys   []string
-	oldKeys   []string
-	committed bool
+	request        CompleteRenderRequest
+	stagedResults  []stagedRenderedResult
+	oldKeys        []string
+	txDone         bool
+	filesCommitted bool
+}
+
+type stagedRenderedResult struct {
+	assetID  int64
+	temp     storage.TempObject
+	finalKey string
 }
 
 func (s *renderCompletionState) rollback(ctx context.Context, tx pgx.Tx) {
-	if s.committed {
+	if !s.txDone {
+		_ = tx.Rollback(ctx)
+	}
+	if s.filesCommitted {
 		return
 	}
-	_ = tx.Rollback(ctx)
-	for _, key := range s.newKeys {
-		_ = s.request.Storage.Delete(key)
+	for _, result := range s.stagedResults {
+		_ = s.request.Storage.Delete(result.temp.Key)
 	}
 }
 
@@ -52,11 +61,22 @@ func (s *renderCompletionState) insertRenderedResult(
 	if err != nil {
 		return 0, err
 	}
-	if err := writeRenderedFile(s.request.Storage, key, rendered); err != nil {
+	temp, err := writeRenderedTemp(s.request.Storage, rendered)
+	if err != nil {
 		return 0, err
 	}
-	s.newKeys = append(s.newKeys, key)
+	s.stagedResults = append(s.stagedResults, stagedRenderedResult{assetID: assetID, temp: temp, finalKey: key})
 	return assetID, insertResultRows(ctx, tx, s.request.Job.ID, index, assetID, key, rendered)
+}
+
+func (s *renderCompletionState) commitStagedFiles() (int64, error) {
+	for _, result := range s.stagedResults {
+		if err := s.request.Storage.CommitTemp(result.temp, result.finalKey); err != nil {
+			return result.assetID, fmt.Errorf("commit staged asset file: %w", err)
+		}
+	}
+	s.filesCommitted = true
+	return 0, nil
 }
 
 func (s *renderCompletionState) deleteOldFiles() {
@@ -113,14 +133,15 @@ func insertAssetRow(ctx context.Context, tx pgx.Tx, job *provider.JobContext, re
 	return assetID, nil
 }
 
-func writeRenderedFile(store storage.AssetStorage, key string, rendered *provider.RenderedImage) error {
+func writeRenderedTemp(store storage.AssetStorage, rendered *provider.RenderedImage) (storage.TempObject, error) {
 	if len(rendered.Content) == 0 {
-		return provider.NewError("provider_response_invalid", "rendered image content empty", false)
+		return storage.TempObject{}, provider.NewError("provider_response_invalid", "rendered image content empty", false)
 	}
-	if err := store.WriteBytes(key, rendered.Content, rendered.MimeType); err != nil {
-		return fmt.Errorf("write rendered asset file: %w", err)
+	temp, err := store.WriteTemp(rendered.Content, rendered.MimeType)
+	if err != nil {
+		return storage.TempObject{}, fmt.Errorf("write rendered temp asset file: %w", err)
 	}
-	return nil
+	return temp, nil
 }
 
 func insertResultRows(
@@ -157,4 +178,38 @@ func aggregateParentJob(ctx context.Context, tx pgx.Tx, jobID int64) error {
 		return fmt.Errorf("aggregate parent image job: %w", err)
 	}
 	return nil
+}
+
+func lockCompletingItem(ctx context.Context, tx pgx.Tx, lock JobLock) (bool, error) {
+	var status string
+	var lockedBy string
+	err := tx.QueryRow(ctx, lockCompletionItemSQL, lock.ItemID).Scan(&status, &lockedBy)
+	if err != nil {
+		return false, fmt.Errorf("lock completing image job item: %w", err)
+	}
+	if status == "succeeded" {
+		return true, nil
+	}
+	if status != "running" || lockedBy != lock.WorkerName {
+		return false, provider.NewError("image_job_not_running", "image job is not running under this worker lock", true)
+	}
+	return false, nil
+}
+
+func markAssetCommitFailed(ctx context.Context, tx pgx.Tx, lock JobLock, assetID int64, resultIndex int, message string) error {
+	var jobID int64
+	err := tx.QueryRow(ctx, markAssetCommitFailedSQL, lock.ItemID, assetID, message).Scan(&jobID)
+	if err != nil {
+		return fmt.Errorf("mark asset commit failed: %w", err)
+	}
+	if _, err := tx.Exec(ctx, deleteAssetCommitResultSQL, jobID, resultIndex, assetID); err != nil {
+		return fmt.Errorf("delete asset commit result: %w", err)
+	}
+	if _, err := tx.Exec(ctx, deleteAssetCommitAssetSQL, assetID); err != nil {
+		return fmt.Errorf("delete asset commit asset: %w", err)
+	}
+	if err := lockParentJob(ctx, tx, jobID); err != nil {
+		return err
+	}
+	return aggregateParentJob(ctx, tx, jobID)
 }

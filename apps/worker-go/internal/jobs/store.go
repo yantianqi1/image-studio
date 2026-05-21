@@ -9,91 +9,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-const ClaimQueuedSQL = `
-WITH picked AS (
-  SELECT i.id
-  FROM image_job_items i
-  JOIN image_jobs j ON j.id = i.job_id
-  WHERE i.status = 'queued'
-    AND i.available_at <= now()
-    AND j.status IN ('queued', 'running')
-  ORDER BY i.available_at ASC, i.id ASC
-  FOR UPDATE SKIP LOCKED
-  LIMIT $1
-),
-claimed AS (
-  UPDATE image_job_items
-  SET
-    status = 'running',
-    attempt_count = attempt_count + 1,
-    started_at = now(),
-    finished_at = NULL,
-    error_code = NULL,
-    error_message = NULL,
-    locked_by = $2,
-    locked_at = now(),
-    heartbeat_at = now(),
-    lease_expires_at = now() + ($3::int * interval '1 second')
-  FROM picked
-  WHERE image_job_items.id = picked.id
-  RETURNING image_job_items.id, image_job_items.job_id
-),
-parents AS (
-  UPDATE image_jobs
-  SET status = 'running',
-      started_at = COALESCE(image_jobs.started_at, now()),
-      finished_at = NULL,
-      error_code = NULL,
-      error_message = NULL
-  WHERE image_jobs.id IN (SELECT job_id FROM claimed)
-  RETURNING image_jobs.id
-)
-SELECT id FROM claimed`
-
-const ClaimQueuedRenderSQL = `
-WITH picked AS (
-  SELECT i.id
-  FROM image_job_items i
-  JOIN image_jobs j ON j.id = i.job_id
-  JOIN providers p ON p.id = j.provider_id
-  WHERE i.status = 'queued'
-    AND i.available_at <= now()
-    AND j.status IN ('queued', 'running')
-    AND p.type = ANY($4::text[])
-    AND j.client_provider_config IS NULL
-  ORDER BY i.available_at ASC, i.id ASC
-  FOR UPDATE SKIP LOCKED
-  LIMIT $1
-),
-claimed AS (
-  UPDATE image_job_items
-  SET
-    status = 'running',
-    attempt_count = attempt_count + 1,
-    started_at = now(),
-    finished_at = NULL,
-    error_code = NULL,
-    error_message = NULL,
-    locked_by = $2,
-    locked_at = now(),
-    heartbeat_at = now(),
-    lease_expires_at = now() + ($3::int * interval '1 second')
-  FROM picked
-  WHERE image_job_items.id = picked.id
-  RETURNING image_job_items.id, image_job_items.job_id
-),
-parents AS (
-  UPDATE image_jobs
-  SET status = 'running',
-      started_at = COALESCE(image_jobs.started_at, now()),
-      finished_at = NULL,
-      error_code = NULL,
-      error_message = NULL
-  WHERE image_jobs.id IN (SELECT job_id FROM claimed)
-  RETURNING image_jobs.id
-)
-SELECT id FROM claimed`
-
 const HeartbeatSQL = `
 UPDATE image_job_items
 SET heartbeat_at = now(),
@@ -122,8 +37,11 @@ UPDATE image_job_items
 SET status='failed',
     finished_at=now(),
     available_at=now(),
+    dead_letter_at=now(),
     error_code='go_worker_simulated_failure',
     error_message=$3,
+    last_error_code='go_worker_simulated_failure',
+    last_error_message=$3,
     locked_by=NULL,
     locked_at=NULL,
     heartbeat_at=NULL,
@@ -136,8 +54,11 @@ UPDATE image_job_items
 SET status='queued',
     finished_at=NULL,
     available_at=now() + ($4::int * interval '1 second'),
+    dead_letter_at=NULL,
     error_code=$3,
     error_message=$5,
+    last_error_code=$3,
+    last_error_message=$5,
     locked_by=NULL,
     locked_at=NULL,
     heartbeat_at=NULL,
@@ -150,8 +71,11 @@ UPDATE image_job_items
 SET status='failed',
     finished_at=now(),
     available_at=now(),
+    dead_letter_at=now(),
     error_code=$3,
     error_message=$4,
+    last_error_code=$3,
+    last_error_message=$4,
     locked_by=NULL,
     locked_at=NULL,
     heartbeat_at=NULL,
@@ -167,6 +91,7 @@ type ClaimRequest struct {
 	Limit                  int
 	WorkerName             string
 	LeaseSeconds           int
+	OwnerConcurrency       int
 	SupportedProviderTypes []string
 }
 
@@ -189,10 +114,16 @@ type FailRequest struct {
 }
 
 type RenderFailureRequest struct {
-	ItemID            int64
-	WorkerName        string
-	Error             error
-	RetryDelaySeconds int
+	ItemID           int64
+	WorkerName       string
+	Error            error
+	RetryBaseSeconds int
+	RetryMaxSeconds  int
+}
+
+type RenderFailureResult struct {
+	Updated bool
+	Retried bool
 }
 
 func NewPostgresStore(pool *pgxpool.Pool) *PostgresStore {
@@ -223,10 +154,11 @@ func (s *PostgresStore) queryClaimQueued(ctx context.Context, request ClaimReque
 	if len(request.SupportedProviderTypes) > 0 {
 		return s.pool.Query(
 			ctx, ClaimQueuedRenderSQL,
-			request.Limit, request.WorkerName, request.LeaseSeconds, request.SupportedProviderTypes,
+			request.Limit, request.WorkerName, request.LeaseSeconds,
+			request.OwnerConcurrency, request.SupportedProviderTypes,
 		)
 	}
-	return s.pool.Query(ctx, ClaimQueuedSQL, request.Limit, request.WorkerName, request.LeaseSeconds)
+	return s.pool.Query(ctx, ClaimQueuedSQL, request.Limit, request.WorkerName, request.LeaseSeconds, request.OwnerConcurrency)
 }
 
 func (s *PostgresStore) Heartbeat(ctx context.Context, request LeaseRequest) (bool, error) {

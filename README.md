@@ -204,6 +204,13 @@ source .venv/bin/activate
 python -m apps.worker.worker.main
 ```
 
+Python worker 默认只处理 comic-task 和 comic-orchestration。image_job_items 推荐由 Go worker 执行：
+
+```bash
+cd apps/worker-go
+GO_WORKER_MODE=simulate go run ./cmd/image-worker
+```
+
 7. 启动两个前端
 
 ```bash
@@ -297,6 +304,8 @@ worker 单次消费：
 source .venv/bin/activate
 python -m apps.worker.worker.main --once
 ```
+
+如需本地验证 image_job_items，使用 `apps/worker-go`；Python image_jobs 分支仅作为 legacy/manual 路径，并受 `WORKER_ENABLE_IMAGE_JOBS` 控制。
 
 worker 观测摘要：
 

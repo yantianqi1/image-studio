@@ -2,21 +2,14 @@ package jobs
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/yantianqi1/image-studio/apps/worker-go/internal/provider"
-	"github.com/yantianqi1/image-studio/apps/worker-go/internal/storage"
-)
-
-const (
-	retryErrorCode       = "image_job_retry_scheduled"
-	terminalErrorCode    = "image_job_failed"
-	defaultRetryDelaySec = 5
+	"github.com/yantianqi1/image-studio/apps/image-runtime-go/pkg/imagejob"
+	"github.com/yantianqi1/image-studio/apps/image-runtime-go/pkg/provider"
+	"github.com/yantianqi1/image-studio/apps/image-runtime-go/pkg/storage"
 )
 
 type CompleteRenderRequest struct {
@@ -47,8 +40,16 @@ func (s *PostgresStore) CompleteRenderedJob(ctx context.Context, request Complet
 	}
 	state := renderCompletionState{request: request}
 	defer state.rollback(ctx, tx)
-	if err := lockRunningJob(ctx, tx, request.Lock); err != nil {
+	alreadyDone, err := lockCompletingItem(ctx, tx, request.Lock)
+	if err != nil {
 		return err
+	}
+	if alreadyDone {
+		if err := tx.Commit(ctx); err != nil {
+			return fmt.Errorf("commit idempotent render completion transaction: %w", err)
+		}
+		state.txDone = true
+		return nil
 	}
 	if err := state.clearExistingOutputs(ctx, tx); err != nil {
 		return err
@@ -72,21 +73,47 @@ func (s *PostgresStore) CompleteRenderedJob(ctx context.Context, request Complet
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit render completion transaction: %w", err)
 	}
-	state.committed = true
+	state.txDone = true
+	if failedAssetID, err := state.commitStagedFiles(); err != nil {
+		return s.handleAssetCommitFailure(ctx, request, failedAssetID, err)
+	}
 	state.deleteOldFiles()
 	return nil
 }
 
-func (s *PostgresStore) HandleRenderFailure(ctx context.Context, request RenderFailureRequest) (bool, error) {
+func (s *PostgresStore) handleAssetCommitFailure(
+	ctx context.Context,
+	request CompleteRenderRequest,
+	assetID int64,
+	commitErr error,
+) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("%w; begin asset commit failure transaction: %v", commitErr, err)
+	}
+	defer tx.Rollback(ctx)
+	message := sanitizeFailureMessage(commitErr)
+	if err := markAssetCommitFailed(ctx, tx, request.Lock, assetID, request.Job.ResultIndex, message); err != nil {
+		return fmt.Errorf("%w; additionally failed to mark item failed: %v", commitErr, err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("%w; additionally failed to commit item failure: %v", commitErr, err)
+	}
+	return commitErr
+}
+
+func (s *PostgresStore) HandleRenderFailure(ctx context.Context, request RenderFailureRequest) (RenderFailureResult, error) {
 	attemptCount, maxAttempts, err := s.loadAttemptState(ctx, request.ItemID, request.WorkerName)
 	if err != nil {
-		return false, err
+		return RenderFailureResult{}, err
 	}
 	message := sanitizeFailureMessage(request.Error)
 	if provider.IsNonRetryable(request.Error) || attemptCount >= maxAttempts {
-		return s.execTerminalFailure(ctx, request, message)
+		updated, err := s.execTerminalFailure(ctx, request, message)
+		return RenderFailureResult{Updated: updated}, err
 	}
-	return s.execRetryableFailure(ctx, request, message)
+	updated, err := s.execRetryableFailure(ctx, request, message)
+	return RenderFailureResult{Updated: updated, Retried: updated}, err
 }
 
 func (s *PostgresStore) loadLockedJob(ctx context.Context, lock JobLock) (*provider.JobContext, error) {
@@ -180,7 +207,7 @@ func (s *PostgresStore) loadAttemptState(ctx context.Context, itemID int64, work
 }
 
 func (s *PostgresStore) execTerminalFailure(ctx context.Context, request RenderFailureRequest, message string) (bool, error) {
-	jobID, ok, err := s.updateItemFailure(ctx, MarkTerminalFailureSQL, request, terminalErrorCode, message)
+	jobID, ok, err := s.updateItemFailure(ctx, MarkTerminalFailureSQL, request, imagejob.TerminalErrorCode, message)
 	if err != nil {
 		return false, fmt.Errorf("mark image job item %d terminal failed: %w", request.ItemID, err)
 	}
@@ -188,11 +215,12 @@ func (s *PostgresStore) execTerminalFailure(ctx context.Context, request RenderF
 }
 
 func (s *PostgresStore) execRetryableFailure(ctx context.Context, request RenderFailureRequest, message string) (bool, error) {
-	delay := request.RetryDelaySeconds
-	if delay < 1 {
-		delay = defaultRetryDelaySec
+	attemptCount, _, err := s.loadAttemptState(ctx, request.ItemID, request.WorkerName)
+	if err != nil {
+		return false, err
 	}
-	jobID, ok, err := s.updateItemFailure(ctx, MarkRetryableFailureSQL, request, retryErrorCode, delay, message)
+	delay := imagejob.RetryBackoffSeconds(attemptCount, request.RetryBaseSeconds, request.RetryMaxSeconds)
+	jobID, ok, err := s.updateItemFailure(ctx, MarkRetryableFailureSQL, request, imagejob.RetryErrorCode, delay, message)
 	if err != nil {
 		return false, fmt.Errorf("mark image job item %d retryable failed: %w", request.ItemID, err)
 	}
@@ -207,34 +235,4 @@ func (s *PostgresStore) updateItemFailure(
 ) (int64, bool, error) {
 	queryArgs := append([]any{request.ItemID, request.WorkerName}, args...)
 	return s.updateItemAndAggregate(ctx, sql, queryArgs...)
-}
-
-func applyRawJSON(job *provider.JobContext, raw rawJobContext) error {
-	if raw.conversationMessages.Valid && raw.conversationMessages.String != "null" {
-		if err := json.Unmarshal([]byte(raw.conversationMessages.String), &job.ConversationMessages); err != nil {
-			return provider.WrapError("conversation_messages_invalid", "conversation messages invalid", true, err)
-		}
-	}
-	if raw.clientProviderConfig.Valid && raw.clientProviderConfig.String != "null" {
-		job.ClientProviderConfigRaw = raw.clientProviderConfig.String
-	}
-	return nil
-}
-
-func uniqueIDs(ids []int64) []int64 {
-	seen := map[int64]bool{}
-	result := make([]int64, 0, len(ids))
-	for _, id := range ids {
-		if id == 0 || seen[id] {
-			continue
-		}
-		seen[id] = true
-		result = append(result, id)
-	}
-	return result
-}
-
-type rawJobContext struct {
-	conversationMessages pgtype.Text
-	clientProviderConfig pgtype.Text
 }

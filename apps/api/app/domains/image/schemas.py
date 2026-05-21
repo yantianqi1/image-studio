@@ -33,3 +33,7 @@ class CreateImageJobRequest(BaseModel):
 
 class UpdateAssetVisibilityRequest(BaseModel):
     visibility: str = Field(default="private", pattern="^(private|public)$")
+
+
+class UpdateImageJobPriorityRequest(BaseModel):
+    priority: int

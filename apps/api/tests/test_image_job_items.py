@@ -143,3 +143,29 @@ def test_repeated_item_claims_do_not_claim_the_same_item_twice() -> None:
     assert len(second_claim) == 1
     assert set(first_claim).isdisjoint(second_claim)
     assert sorted(item.status for item in items) == ["running", "running", "running"]
+
+
+def test_item_claim_prioritizes_high_priority_and_skips_dead_letter() -> None:
+    item_model = image_job_item_model()
+    client = build_client()
+    register_user(client, email="items-priority@example.com")
+    job = create_member_image_job(client, requested_count=3)
+
+    with session_scope() as session:
+        items = list(
+            session.execute(
+                select(item_model)
+                .where(item_model.job_id == job["id"])
+                .order_by(item_model.result_index.asc())
+            ).scalars()
+        )
+        items[0].priority = 1
+        items[1].priority = 9
+        items[2].priority = 20
+        items[2].dead_letter_at = items[2].available_at
+        session.flush()
+
+    with session_scope() as session:
+        claimed_ids = image_service.claim_next_item_ids(session, limit=2, worker_name="priority-worker")
+
+    assert claimed_ids == [items[1].id, items[0].id]

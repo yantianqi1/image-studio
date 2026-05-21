@@ -2,7 +2,12 @@ module github.com/yantianqi1/image-studio/apps/worker-go
 
 go 1.23
 
-require github.com/jackc/pgx/v5 v5.7.2
+require (
+	github.com/jackc/pgx/v5 v5.7.2
+	github.com/yantianqi1/image-studio/apps/image-runtime-go v0.0.0
+)
+
+replace github.com/yantianqi1/image-studio/apps/image-runtime-go => ../image-runtime-go
 
 require (
 	github.com/jackc/pgpassfile v1.0.0 // indirect

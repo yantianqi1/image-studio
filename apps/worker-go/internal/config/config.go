@@ -4,37 +4,53 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
 const (
-	defaultWorkerName       = "image-studio-go-worker"
-	defaultMode             = "simulate"
-	defaultConcurrency      = 2
-	defaultPollSeconds      = 1
-	defaultLeaseSeconds     = 600
-	defaultHeartbeatSeconds = 15
-	defaultSimulateSeconds  = 3
-	defaultRenderSeconds    = 300
-	defaultFailSimulation   = false
-	defaultStorageBackend   = "local"
-	defaultGeneratedAssets  = "./generated-assets"
-	secondsToDurationFactor = time.Second
+	defaultWorkerName          = "image-studio-go-worker"
+	defaultMode                = "simulate"
+	defaultConcurrency         = 2
+	defaultProviderConcurrency = 2
+	defaultOwnerConcurrency    = 1
+	defaultModelConcurrency    = 2
+	defaultPollSeconds         = 1
+	defaultLeaseSeconds        = 600
+	defaultHeartbeatSeconds    = 15
+	defaultSimulateSeconds     = 3
+	defaultRenderSeconds       = 300
+	defaultRetryBaseSeconds    = 5
+	defaultRetryMaxSeconds     = 300
+	defaultFailSimulation      = false
+	defaultStorageBackend      = "local"
+	defaultGeneratedAssets     = "./generated-assets"
+	defaultHTTPAddr            = ":7900"
+	defaultEnableHTTP          = true
+	secondsToDurationFactor    = time.Second
 )
 
 type Config struct {
-	DatabaseURL         string
-	Mode                string
-	WorkerName          string
-	Concurrency         int
-	PollInterval        time.Duration
-	LeaseSeconds        int
-	HeartbeatInterval   time.Duration
-	SimulateDuration    time.Duration
-	RenderTimeout       time.Duration
-	FailSimulation      bool
-	AssetStorageBackend string
-	GeneratedAssetsDir  string
+	DatabaseURL                  string
+	Mode                         string
+	WorkerName                   string
+	Concurrency                  int
+	ProviderConcurrencyDefault   int
+	ProviderConcurrencyOverrides map[string]int
+	OwnerConcurrency             int
+	ModelConcurrencyDefault      int
+	PollInterval                 time.Duration
+	LeaseSeconds                 int
+	HeartbeatInterval            time.Duration
+	SimulateDuration             time.Duration
+	RenderTimeout                time.Duration
+	RetryBaseSeconds             int
+	RetryMaxSeconds              int
+	FailSimulation               bool
+	AssetStorageBackend          string
+	GeneratedAssetsDir           string
+	HTTPAddr                     string
+	EnableHTTP                   bool
 }
 
 type LookupFunc func(string) (string, bool)
@@ -52,6 +68,10 @@ func LoadFromLookup(lookup LookupFunc) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	limiters, err := loadLimiterConfig(lookup)
+	if err != nil {
+		return Config{}, err
+	}
 	pollSeconds, err := parsePositiveInt(lookup, "GO_WORKER_POLL_INTERVAL_SECONDS", defaultPollSeconds)
 	if err != nil {
 		return Config{}, err
@@ -59,6 +79,7 @@ func LoadFromLookup(lookup LookupFunc) (Config, error) {
 	return loadRemaining(lookup, configHead{
 		databaseURL: databaseURL,
 		concurrency: concurrency,
+		limiters:    limiters,
 		pollSeconds: pollSeconds,
 	})
 }
@@ -66,7 +87,15 @@ func LoadFromLookup(lookup LookupFunc) (Config, error) {
 type configHead struct {
 	databaseURL string
 	concurrency int
+	limiters    limiterConfig
 	pollSeconds int
+}
+
+type limiterConfig struct {
+	providerDefault   int
+	providerOverrides map[string]int
+	ownerLimit        int
+	modelDefault      int
 }
 
 func loadRemaining(lookup LookupFunc, head configHead) (Config, error) {
@@ -86,7 +115,19 @@ func loadRemaining(lookup LookupFunc, head configHead) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	retryBaseSeconds, err := parsePositiveInt(lookup, "GO_WORKER_RETRY_BASE_SECONDS", defaultRetryBaseSeconds)
+	if err != nil {
+		return Config{}, err
+	}
+	retryMaxSeconds, err := parsePositiveInt(lookup, "GO_WORKER_RETRY_MAX_SECONDS", defaultRetryMaxSeconds)
+	if err != nil {
+		return Config{}, err
+	}
 	failSimulation, err := parseBool(lookup, "GO_WORKER_FAIL_SIMULATION", defaultFailSimulation)
+	if err != nil {
+		return Config{}, err
+	}
+	enableHTTP, err := parseBool(lookup, "GO_WORKER_ENABLE_HTTP", defaultEnableHTTP)
 	if err != nil {
 		return Config{}, err
 	}
@@ -99,7 +140,10 @@ func loadRemaining(lookup LookupFunc, head configHead) (Config, error) {
 		heartbeatSeconds: heartbeatSeconds,
 		simulateSeconds:  simulateSeconds,
 		renderSeconds:    renderSeconds,
+		retryBaseSeconds: retryBaseSeconds,
+		retryMaxSeconds:  retryMaxSeconds,
 		failSimulation:   failSimulation,
+		enableHTTP:       enableHTTP,
 		mode:             mode,
 	}), nil
 }
@@ -109,7 +153,10 @@ type configTail struct {
 	heartbeatSeconds int
 	simulateSeconds  int
 	renderSeconds    int
+	retryBaseSeconds int
+	retryMaxSeconds  int
 	failSimulation   bool
+	enableHTTP       bool
 	mode             string
 }
 
@@ -119,19 +166,54 @@ func buildConfig(lookup LookupFunc, head configHead, tail configTail) Config {
 		workerName = value
 	}
 	return Config{
-		DatabaseURL:         head.databaseURL,
-		Mode:                tail.mode,
-		WorkerName:          workerName,
-		Concurrency:         head.concurrency,
-		PollInterval:        time.Duration(head.pollSeconds) * secondsToDurationFactor,
-		LeaseSeconds:        tail.leaseSeconds,
-		HeartbeatInterval:   time.Duration(tail.heartbeatSeconds) * secondsToDurationFactor,
-		SimulateDuration:    time.Duration(tail.simulateSeconds) * secondsToDurationFactor,
-		RenderTimeout:       time.Duration(tail.renderSeconds) * secondsToDurationFactor,
-		FailSimulation:      tail.failSimulation,
-		AssetStorageBackend: stringDefault(lookup, "ASSET_STORAGE_BACKEND", defaultStorageBackend),
-		GeneratedAssetsDir:  stringDefault(lookup, "GENERATED_ASSETS_DIR", defaultGeneratedAssets),
+		DatabaseURL:                  head.databaseURL,
+		Mode:                         tail.mode,
+		WorkerName:                   workerName,
+		Concurrency:                  head.concurrency,
+		ProviderConcurrencyDefault:   head.limiters.providerDefault,
+		ProviderConcurrencyOverrides: cloneIntMap(head.limiters.providerOverrides),
+		OwnerConcurrency:             head.limiters.ownerLimit,
+		ModelConcurrencyDefault:      head.limiters.modelDefault,
+		PollInterval:                 time.Duration(head.pollSeconds) * secondsToDurationFactor,
+		LeaseSeconds:                 tail.leaseSeconds,
+		HeartbeatInterval:            time.Duration(tail.heartbeatSeconds) * secondsToDurationFactor,
+		SimulateDuration:             time.Duration(tail.simulateSeconds) * secondsToDurationFactor,
+		RenderTimeout:                time.Duration(tail.renderSeconds) * secondsToDurationFactor,
+		RetryBaseSeconds:             tail.retryBaseSeconds,
+		RetryMaxSeconds:              tail.retryMaxSeconds,
+		FailSimulation:               tail.failSimulation,
+		AssetStorageBackend:          stringDefault(lookup, "ASSET_STORAGE_BACKEND", defaultStorageBackend),
+		GeneratedAssetsDir:           stringDefault(lookup, "GENERATED_ASSETS_DIR", defaultGeneratedAssets),
+		HTTPAddr:                     stringDefault(lookup, "GO_WORKER_HTTP_ADDR", defaultHTTPAddr),
+		EnableHTTP:                   tail.enableHTTP,
 	}
+}
+
+func loadLimiterConfig(lookup LookupFunc) (limiterConfig, error) {
+	providerDefault, err := parsePositiveInt(
+		lookup, "GO_WORKER_PROVIDER_CONCURRENCY_DEFAULT", defaultProviderConcurrency,
+	)
+	if err != nil {
+		return limiterConfig{}, err
+	}
+	ownerLimit, err := parsePositiveInt(lookup, "GO_WORKER_OWNER_CONCURRENCY", defaultOwnerConcurrency)
+	if err != nil {
+		return limiterConfig{}, err
+	}
+	modelDefault, err := parsePositiveInt(lookup, "GO_WORKER_MODEL_CONCURRENCY_DEFAULT", defaultModelConcurrency)
+	if err != nil {
+		return limiterConfig{}, err
+	}
+	overrides, err := parseConcurrencyOverrides(lookup, "GO_WORKER_PROVIDER_CONCURRENCY_OVERRIDES")
+	if err != nil {
+		return limiterConfig{}, err
+	}
+	return limiterConfig{
+		providerDefault:   providerDefault,
+		providerOverrides: overrides,
+		ownerLimit:        ownerLimit,
+		modelDefault:      modelDefault,
+	}, nil
 }
 
 func parseMode(lookup LookupFunc) (string, error) {
@@ -167,6 +249,45 @@ func parseBool(lookup LookupFunc, key string, defaultValue bool) (bool, error) {
 		return false, fmt.Errorf("%s must be a boolean: %w", key, err)
 	}
 	return value, nil
+}
+
+func parseConcurrencyOverrides(lookup LookupFunc, key string) (map[string]int, error) {
+	raw, ok := lookup(key)
+	if !ok || strings.TrimSpace(raw) == "" {
+		return map[string]int{}, nil
+	}
+	result := map[string]int{}
+	for _, item := range strings.Split(raw, ",") {
+		name, limit, err := parseConcurrencyOverrideItem(key, item)
+		if err != nil {
+			return nil, err
+		}
+		result[name] = limit
+	}
+	return result, nil
+}
+
+func parseConcurrencyOverrideItem(key string, item string) (string, int, error) {
+	parts := strings.Split(strings.TrimSpace(item), "=")
+	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" {
+		return "", 0, fmt.Errorf("%s must be name=limit pairs", key)
+	}
+	limit, err := strconv.Atoi(strings.TrimSpace(parts[1]))
+	if err != nil {
+		return "", 0, fmt.Errorf("%s limit must be an integer: %w", key, err)
+	}
+	if limit < 1 {
+		return "", 0, fmt.Errorf("%s limit must be at least 1", key)
+	}
+	return strings.TrimSpace(parts[0]), limit, nil
+}
+
+func cloneIntMap(values map[string]int) map[string]int {
+	clone := make(map[string]int, len(values))
+	for key, value := range values {
+		clone[key] = value
+	}
+	return clone
 }
 
 func stringDefault(lookup LookupFunc, key string, defaultValue string) string {

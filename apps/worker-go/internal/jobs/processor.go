@@ -8,8 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/yantianqi1/image-studio/apps/worker-go/internal/provider"
-	"github.com/yantianqi1/image-studio/apps/worker-go/internal/storage"
+	"github.com/yantianqi1/image-studio/apps/image-runtime-go/pkg/observability"
+	"github.com/yantianqi1/image-studio/apps/image-runtime-go/pkg/provider"
+	"github.com/yantianqi1/image-studio/apps/image-runtime-go/pkg/storage"
 )
 
 const simulatedFailureMessage = "Go worker simulation failed by GO_WORKER_FAIL_SIMULATION=true"
@@ -26,43 +27,57 @@ type Store interface {
 	MarkFailed(context.Context, FailRequest) (bool, error)
 	LoadJobContext(context.Context, JobLock) (*provider.JobContext, error)
 	CompleteRenderedJob(context.Context, CompleteRenderRequest) error
-	HandleRenderFailure(context.Context, RenderFailureRequest) (bool, error)
+	HandleRenderFailure(context.Context, RenderFailureRequest) (RenderFailureResult, error)
 }
 
 type ProcessorConfig struct {
-	Store             Store
-	Mode              string
-	WorkerName        string
-	Concurrency       int
-	PollInterval      time.Duration
-	LeaseSeconds      int
-	HeartbeatInterval time.Duration
-	SimulateDuration  time.Duration
-	RenderTimeout     time.Duration
-	RetryDelaySeconds int
-	FailSimulation    bool
-	RendererFactory   provider.RendererFactory
-	AssetStorage      storage.AssetStorage
-	Logger            *slog.Logger
+	Store                        Store
+	Mode                         string
+	WorkerName                   string
+	Concurrency                  int
+	ProviderConcurrencyDefault   int
+	ProviderConcurrencyOverrides map[string]int
+	OwnerConcurrency             int
+	ModelConcurrencyDefault      int
+	PollInterval                 time.Duration
+	LeaseSeconds                 int
+	HeartbeatInterval            time.Duration
+	SimulateDuration             time.Duration
+	RenderTimeout                time.Duration
+	RetryBaseSeconds             int
+	RetryMaxSeconds              int
+	FailSimulation               bool
+	RendererFactory              provider.RendererFactory
+	AssetStorage                 storage.AssetStorage
+	Metrics                      *observability.Metrics
+	Logger                       *slog.Logger
 }
 
 type Processor struct {
-	store             Store
-	mode              string
-	workerName        string
-	concurrency       int
-	pollInterval      time.Duration
-	leaseSeconds      int
-	heartbeatInterval time.Duration
-	simulateDuration  time.Duration
-	renderTimeout     time.Duration
-	retryDelaySeconds int
-	failSimulation    bool
-	rendererFactory   provider.RendererFactory
-	assetStorage      storage.AssetStorage
-	logger            *slog.Logger
-	semaphore         chan struct{}
-	wg                sync.WaitGroup
+	store                        Store
+	mode                         string
+	workerName                   string
+	concurrency                  int
+	providerConcurrencyDefault   int
+	providerConcurrencyOverrides map[string]int
+	ownerConcurrency             int
+	modelConcurrencyDefault      int
+	pollInterval                 time.Duration
+	leaseSeconds                 int
+	heartbeatInterval            time.Duration
+	simulateDuration             time.Duration
+	renderTimeout                time.Duration
+	retryBaseSeconds             int
+	retryMaxSeconds              int
+	failSimulation               bool
+	rendererFactory              provider.RendererFactory
+	assetStorage                 storage.AssetStorage
+	metrics                      *observability.Metrics
+	logger                       *slog.Logger
+	semaphore                    chan struct{}
+	providerLimiter              *limiterPool
+	modelLimiter                 *limiterPool
+	wg                           sync.WaitGroup
 }
 
 func NewProcessor(cfg ProcessorConfig) (*Processor, error) {
@@ -73,23 +88,39 @@ func NewProcessor(cfg ProcessorConfig) (*Processor, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}
+	metrics := cfg.Metrics
+	if metrics == nil {
+		metrics = observability.NewMetrics()
+	}
 	return &Processor{
-		store:             cfg.Store,
-		mode:              normalizeMode(cfg.Mode),
-		workerName:        cfg.WorkerName,
-		concurrency:       cfg.Concurrency,
-		pollInterval:      cfg.PollInterval,
-		leaseSeconds:      cfg.LeaseSeconds,
-		heartbeatInterval: cfg.HeartbeatInterval,
-		simulateDuration:  cfg.SimulateDuration,
-		renderTimeout:     cfg.RenderTimeout,
-		retryDelaySeconds: cfg.RetryDelaySeconds,
-		failSimulation:    cfg.FailSimulation,
-		rendererFactory:   cfg.RendererFactory,
-		assetStorage:      cfg.AssetStorage,
-		logger:            logger,
-		semaphore:         make(chan struct{}, cfg.Concurrency),
+		store:                        cfg.Store,
+		mode:                         normalizeMode(cfg.Mode),
+		workerName:                   cfg.WorkerName,
+		concurrency:                  cfg.Concurrency,
+		providerConcurrencyDefault:   cfg.ProviderConcurrencyDefault,
+		providerConcurrencyOverrides: cloneLimiterOverrides(cfg.ProviderConcurrencyOverrides),
+		ownerConcurrency:             cfg.OwnerConcurrency,
+		modelConcurrencyDefault:      cfg.ModelConcurrencyDefault,
+		pollInterval:                 cfg.PollInterval,
+		leaseSeconds:                 cfg.LeaseSeconds,
+		heartbeatInterval:            cfg.HeartbeatInterval,
+		simulateDuration:             cfg.SimulateDuration,
+		renderTimeout:                cfg.RenderTimeout,
+		retryBaseSeconds:             cfg.RetryBaseSeconds,
+		retryMaxSeconds:              cfg.RetryMaxSeconds,
+		failSimulation:               cfg.FailSimulation,
+		rendererFactory:              cfg.RendererFactory,
+		assetStorage:                 cfg.AssetStorage,
+		metrics:                      metrics,
+		logger:                       logger,
+		semaphore:                    make(chan struct{}, cfg.Concurrency),
+		providerLimiter:              newLimiterPool(),
+		modelLimiter:                 newLimiterPool(),
 	}, nil
+}
+
+func (p *Processor) Metrics() *observability.Metrics {
+	return p.metrics
 }
 
 func (p *Processor) Run(ctx context.Context) error {
@@ -119,13 +150,21 @@ func (p *Processor) claimAndStart(ctx context.Context) error {
 	if available < 1 {
 		return nil
 	}
-	request := ClaimRequest{Limit: available, WorkerName: p.workerName, LeaseSeconds: p.leaseSeconds}
+	request := ClaimRequest{
+		Limit: available, WorkerName: p.workerName,
+		LeaseSeconds: p.leaseSeconds, OwnerConcurrency: p.ownerConcurrency,
+	}
 	if p.mode == ModeRender {
-		request.SupportedProviderTypes = []string{provider.OpenAIChatCompatibleType}
+		request.SupportedProviderTypes = provider.SupportedRenderProviderTypes()
 	}
 	ids, err := p.store.ClaimQueued(ctx, request)
 	if err != nil {
 		return err
+	}
+	if len(ids) == 0 {
+		p.metrics.IncClaimEmpty()
+	} else {
+		p.metrics.IncClaim(len(ids))
 	}
 	for _, id := range ids {
 		p.startJob(ctx, id)
@@ -140,7 +179,9 @@ func (p *Processor) startJob(ctx context.Context, itemID int64) {
 }
 
 func (p *Processor) processJob(ctx context.Context, itemID int64) {
+	p.metrics.AddRunningItems(1)
 	defer func() {
+		p.metrics.AddRunningItems(-1)
 		<-p.semaphore
 		p.wg.Done()
 	}()
@@ -149,76 +190,6 @@ func (p *Processor) processJob(ctx context.Context, itemID int64) {
 		return
 	}
 	p.processSimulationJob(ctx, itemID)
-}
-
-func (p *Processor) processSimulationJob(ctx context.Context, itemID int64) {
-	p.logger.Info("image job item simulation started", "item_id", itemID)
-	timer := time.NewTimer(p.simulateDuration)
-	ticker := time.NewTicker(p.heartbeatInterval)
-	defer timer.Stop()
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			p.logger.Info("image job item simulation stopped", "item_id", itemID)
-			return
-		case <-ticker.C:
-			if !p.sendHeartbeat(ctx, itemID) {
-				return
-			}
-		case <-timer.C:
-			p.finishSimulation(ctx, itemID)
-			return
-		}
-	}
-}
-
-func (p *Processor) sendHeartbeat(ctx context.Context, itemID int64) bool {
-	ok, err := p.store.Heartbeat(ctx, LeaseRequest{
-		ItemID: itemID, WorkerName: p.workerName, LeaseSeconds: p.leaseSeconds,
-	})
-	if err != nil {
-		p.logger.Error("image job item heartbeat failed", "item_id", itemID, "error", err)
-		return false
-	}
-	if !ok {
-		p.logger.Error("image job heartbeat did not update a running locked item", "item_id", itemID)
-		return false
-	}
-	return true
-}
-
-func (p *Processor) finishSimulation(ctx context.Context, itemID int64) {
-	lock := JobLock{ItemID: itemID, WorkerName: p.workerName}
-	if p.failSimulation {
-		p.markFailed(ctx, itemID)
-		return
-	}
-	ok, err := p.store.MarkSucceeded(ctx, lock)
-	if err != nil {
-		p.logger.Error("image job item succeeded update failed", "item_id", itemID, "error", err)
-		return
-	}
-	if !ok {
-		p.logger.Error("image job item succeeded update did not match lock", "item_id", itemID)
-		return
-	}
-	p.logger.Info("image job item simulation succeeded", "item_id", itemID)
-}
-
-func (p *Processor) markFailed(ctx context.Context, itemID int64) {
-	ok, err := p.store.MarkFailed(ctx, FailRequest{
-		ItemID: itemID, WorkerName: p.workerName, Message: simulatedFailureMessage,
-	})
-	if err != nil {
-		p.logger.Error("image job item failed update failed", "item_id", itemID, "error", err)
-		return
-	}
-	if !ok {
-		p.logger.Error("image job item failed update did not match lock", "item_id", itemID)
-		return
-	}
-	p.logger.Info("image job item simulation failed", "item_id", itemID)
 }
 
 func validateProcessorConfig(cfg ProcessorConfig) error {
@@ -238,6 +209,9 @@ func validateProcessorConfig(cfg ProcessorConfig) error {
 	}
 	if cfg.Concurrency < 1 || cfg.PollInterval <= 0 || cfg.LeaseSeconds < 1 {
 		return fmt.Errorf("worker concurrency, poll interval, and lease seconds must be positive")
+	}
+	if cfg.ProviderConcurrencyDefault < 1 || cfg.OwnerConcurrency < 1 || cfg.ModelConcurrencyDefault < 1 {
+		return fmt.Errorf("worker limiter concurrency values must be positive")
 	}
 	if cfg.HeartbeatInterval <= 0 || cfg.SimulateDuration <= 0 {
 		return fmt.Errorf("heartbeat interval and simulate duration must be positive")

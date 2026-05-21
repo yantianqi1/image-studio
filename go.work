@@ -1,0 +1,7 @@
+go 1.23
+
+use (
+	./apps/image-api-go
+	./apps/image-runtime-go
+	./apps/worker-go
+)

@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+"""Development/test-only synchronous image rendering path.
+
+Public image job creation must enqueue image_job_items and return queued status.
+Production rendering is owned by apps/worker-go.
+"""
+
 from datetime import datetime
 
 from sqlalchemy.orm import Session

@@ -93,13 +93,17 @@ def handle_item_failure(
     exc: Exception,
     retry_delay_seconds: int,
 ) -> None:
+    message = str(exc)
     if is_terminal_item_failure(item=item, exc=exc):
-        mark_item_failed(session, item=item, error_message=str(exc))
+        mark_item_failed(session, item=item, error_message=message)
         return
     retry_at = datetime.utcnow() + timedelta(seconds=retry_delay_seconds)
     item.status = "queued"
     item.error_code = IMAGE_JOB_RETRY_ERROR_CODE
-    item.error_message = str(exc)
+    item.error_message = message
+    item.last_error_code = IMAGE_JOB_RETRY_ERROR_CODE
+    item.last_error_message = message
+    item.dead_letter_at = None
     item.available_at = retry_at
     item.finished_at = None
     clear_item_lock(item)
@@ -116,6 +120,9 @@ def mark_item_failed(session: Session, *, item: ImageJobItem, error_message: str
     item.status = "failed"
     item.error_code = IMAGE_JOB_ITEM_FAILED_ERROR_CODE
     item.error_message = error_message
+    item.last_error_code = IMAGE_JOB_ITEM_FAILED_ERROR_CODE
+    item.last_error_message = error_message
+    item.dead_letter_at = finished_at
     item.available_at = finished_at
     item.finished_at = finished_at
     clear_item_lock(item)

@@ -5,7 +5,13 @@ from apps.api.app.core.cache import app_cache
 from apps.api.app.core.deps import get_db_session
 from apps.api.app.core.response import api_ok
 from apps.api.app.domains.auth.service import require_admin
-from apps.api.app.domains.image.admin_service import list_admin_jobs_paginated, list_admin_jobs_with_results
+from apps.api.app.domains.image.admin_service import (
+    list_admin_jobs_paginated,
+    list_admin_jobs_with_results,
+    list_dead_letter_items,
+    retry_dead_letter_item,
+    update_job_priority,
+)
 from apps.api.app.domains.image.assets import resolve_asset_content, resolve_thumbnail_content
 from apps.api.app.domains.image.gallery import (
     delete_asset_by_admin,
@@ -18,7 +24,7 @@ from apps.api.app.domains.image.payloads import (
     admin_job_payload,
     asset_payload,
 )
-from apps.api.app.domains.image.schemas import UpdateAssetVisibilityRequest
+from apps.api.app.domains.image.schemas import UpdateAssetVisibilityRequest, UpdateImageJobPriorityRequest
 from apps.api.app.domains.image.stats_service import get_image_job_stats
 from apps.api.app.infra.storage.factory import build_asset_storage
 
@@ -65,6 +71,33 @@ def get_image_stats(request: Request, response: Response, session: Session = Dep
     return api_ok(stats)
 
 
+@admin_router.get("/image/dead-letter-items")
+def get_dead_letter_items(request: Request, session: Session = Depends(get_db_session)):
+    require_admin(request, session)
+    return api_ok({"items": [dead_letter_payload(item, job) for item, job in list_dead_letter_items(session)]})
+
+
+@admin_router.post("/image/items/{item_id}/retry")
+def retry_image_job_item(item_id: int, request: Request, session: Session = Depends(get_db_session)):
+    require_admin(request, session)
+    item = retry_dead_letter_item(session, item_id=item_id)
+    session.commit()
+    return api_ok({"item_id": item.id, "job_id": item.job_id, "status": item.status})
+
+
+@admin_router.post("/image/jobs/{job_id}/priority")
+def set_image_job_priority(
+    job_id: int,
+    payload: UpdateImageJobPriorityRequest,
+    request: Request,
+    session: Session = Depends(get_db_session),
+):
+    require_admin(request, session)
+    result = update_job_priority(session, job_id=job_id, priority=payload.priority)
+    session.commit()
+    return api_ok(result)
+
+
 @admin_router.get("/image/assets/{asset_id}")
 def get_admin_image_asset(asset_id: int, request: Request, session: Session = Depends(get_db_session)):
     require_admin(request, session)
@@ -79,6 +112,22 @@ def get_admin_image_asset_thumbnail(asset_id: int, request: Request, session: Se
     asset = get_asset(session, asset_id)
     content, media_type = resolve_thumbnail_content(asset, build_asset_storage())
     return Response(content=content, media_type=media_type, headers=ADMIN_ASSET_CACHE_HEADERS)
+
+
+def dead_letter_payload(item, job) -> dict[str, object]:
+    return {
+        "item_id": item.id,
+        "job_id": item.job_id,
+        "result_index": item.result_index,
+        "status": item.status,
+        "priority": item.priority,
+        "prompt": job.prompt,
+        "model_code": job.model_code,
+        "last_error_code": item.last_error_code,
+        "last_error_message": item.last_error_message,
+        "dead_letter_at": item.dead_letter_at.isoformat() if item.dead_letter_at else None,
+        "manual_retry_count": item.manual_retry_count,
+    }
 
 
 @admin_router.get("/gallery")

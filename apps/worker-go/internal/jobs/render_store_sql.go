@@ -2,7 +2,7 @@ package jobs
 
 const loadJobContextSQL = `
 SELECT
-  i.id, i.result_index,
+  i.id, i.result_index, i.available_at,
   j.id, j.user_id, j.anonymous_session_id, j.client_access_id,
   j.prompt, COALESCE(j.provider_model, ''), j.requested_count,
   j.attempt_count, j.max_attempts, COALESCE(j.storage_subdir, ''),
@@ -36,6 +36,12 @@ const lockRunningJobSQL = `
 SELECT job_id
 FROM image_job_items
 WHERE id = $1 AND locked_by = $2 AND status = 'running'
+FOR UPDATE`
+
+const lockCompletionItemSQL = `
+SELECT status, COALESCE(locked_by, '')
+FROM image_job_items
+WHERE id = $1
 FOR UPDATE`
 
 const lockParentJobSQL = `
@@ -90,6 +96,32 @@ SET status='succeeded',
     lease_expires_at=NULL
 WHERE id=$1 AND locked_by=$2 AND status='running'
 RETURNING job_id`
+
+const markAssetCommitFailedSQL = `
+UPDATE image_job_items
+SET status='failed',
+    finished_at=now(),
+    available_at=now(),
+    dead_letter_at=now(),
+    asset_id=NULL,
+    error_code='asset_commit_failed',
+    error_message=$3,
+    last_error_code='asset_commit_failed',
+    last_error_message=$3,
+    locked_by=NULL,
+    locked_at=NULL,
+    heartbeat_at=NULL,
+    lease_expires_at=NULL
+WHERE id=$1 AND asset_id=$2
+RETURNING job_id`
+
+const deleteAssetCommitResultSQL = `
+DELETE FROM image_job_results
+WHERE job_id=$1 AND result_index=$2 AND asset_id=$3`
+
+const deleteAssetCommitAssetSQL = `
+DELETE FROM assets
+WHERE id=$1`
 
 const AggregateParentJobSQL = `
 WITH counts AS (

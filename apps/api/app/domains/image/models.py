@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, JSON, String, Text
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from apps.api.app.infra.db.base import Base
@@ -77,6 +77,7 @@ class ImageJob(Base):
 
 class ImageJobResult(Base):
     __tablename__ = "image_job_results"
+    __table_args__ = (UniqueConstraint("job_id", "result_index", name="uq_image_job_results_job_result"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     job_id: Mapped[int] = mapped_column(ForeignKey("image_jobs.id"), index=True, nullable=False)
@@ -91,6 +92,9 @@ class ImageJobItem(Base):
     __tablename__ = "image_job_items"
     __table_args__ = (
         Index("ix_image_job_items_queue_pick", "status", "available_at", "id"),
+        Index("ix_image_job_items_priority_queue_pick", "status", "priority", "available_at", "id"),
+        Index("ix_image_job_items_dead_letter_at", "dead_letter_at"),
+        Index("ix_image_job_items_job_status", "job_id", "status"),
         Index("ix_image_job_items_job_result", "job_id", "result_index"),
         Index("ix_image_job_items_running_lease", "status", "lease_expires_at"),
     )
@@ -99,6 +103,7 @@ class ImageJobItem(Base):
     job_id: Mapped[int] = mapped_column(ForeignKey("image_jobs.id", ondelete="CASCADE"), index=True, nullable=False)
     result_index: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(32), default="queued", nullable=False)
+    priority: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     attempt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     max_attempts: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     available_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
@@ -111,6 +116,10 @@ class ImageJobItem(Base):
     asset_id: Mapped[Optional[int]] = mapped_column(ForeignKey("assets.id", ondelete="SET NULL"), nullable=True)
     error_code: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    dead_letter_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    last_error_code: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    last_error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    manual_retry_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
 

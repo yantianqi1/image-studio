@@ -5,7 +5,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/yantianqi1/image-studio/apps/worker-go/internal/provider"
+	"github.com/yantianqi1/image-studio/apps/image-runtime-go/pkg/provider"
 )
 
 func scanJobContext(row pgx.Row) (*provider.JobContext, rawJobContext, error) {
@@ -15,7 +15,7 @@ func scanJobContext(row pgx.Row) (*provider.JobContext, rawJobContext, error) {
 	var clientAccessID pgtype.Text
 	var requestedCount, attemptCount, maxAttempts int
 	err := row.Scan(
-		&job.ItemID, &job.ResultIndex,
+		&job.ItemID, &job.ResultIndex, &job.ItemAvailableAt,
 		&job.ID, &userID, &anonymousID, &clientAccessID,
 		&job.Prompt, &job.ProviderModel, &requestedCount,
 		&attemptCount, &maxAttempts, &job.StorageSubdir,

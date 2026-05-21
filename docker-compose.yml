@@ -89,8 +89,52 @@ services:
       GO_WORKER_SIMULATE_SECONDS: ${GO_WORKER_SIMULATE_SECONDS:-3}
       GO_WORKER_FAIL_SIMULATION: ${GO_WORKER_FAIL_SIMULATION:-false}
       GO_WORKER_RENDER_TIMEOUT_SECONDS: ${GO_WORKER_RENDER_TIMEOUT_SECONDS:-300}
+      GO_WORKER_ENABLE_HTTP: ${GO_WORKER_ENABLE_HTTP:-true}
+      GO_WORKER_HTTP_ADDR: ${GO_WORKER_HTTP_ADDR:-:7900}
+    expose:
+      - "7900"
     volumes:
       - generated_assets_data:/app/generated-assets
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:7900/readyz >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    depends_on:
+      api:
+        condition: service_healthy
+
+  image-api-go:
+    image: ${GHCR_REGISTRY:-ghcr.io}/${GHCR_OWNER:-yantianqi1}/image-studio-image-api-go:${IMAGE_TAG:-latest}
+    container_name: commercial-studio-image-api-go
+    profiles:
+      - image-api-go
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      ASSET_STORAGE_BACKEND: ${ASSET_STORAGE_BACKEND:-local}
+      DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}
+      GENERATED_ASSETS_DIR: /app/generated-assets
+      GO_IMAGE_API_HTTP_ADDR: ${GO_IMAGE_API_HTTP_ADDR:-:7810}
+      GO_IMAGE_API_INTERNAL_DEBUG_TOKEN: ${GO_IMAGE_API_INTERNAL_DEBUG_TOKEN:-}
+      GO_IMAGE_API_ENABLE_INTERNAL_CREATE: ${GO_IMAGE_API_ENABLE_INTERNAL_CREATE:-false}
+      GO_IMAGE_API_CREATE_ENABLED: ${GO_IMAGE_API_CREATE_ENABLED:-false}
+      GO_IMAGE_API_ENABLE_DEBUG_OWNER_HEADERS: ${GO_IMAGE_API_ENABLE_DEBUG_OWNER_HEADERS:-false}
+      USER_SESSION_COOKIE_NAME: ${USER_SESSION_COOKIE_NAME:-studio_user_session}
+      ANONYMOUS_SESSION_COOKIE_NAME: ${ANONYMOUS_SESSION_COOKIE_NAME:-studio_anonymous_session}
+      ANONYMOUS_SESSION_COOKIE_SECURE: ${ANONYMOUS_SESSION_COOKIE_SECURE:-false}
+      ANONYMOUS_SESSION_MAX_AGE_SECONDS: ${ANONYMOUS_SESSION_MAX_AGE_SECONDS:-31536000}
+      SESSION_SECRET: ${SESSION_SECRET:-replace-me}
+    expose:
+      - "7810"
+    volumes:
+      - generated_assets_data:/app/generated-assets
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:7810/readyz >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
     depends_on:
       api:
         condition: service_healthy
@@ -133,8 +177,11 @@ services:
     ports:
       - "${PUBLIC_HTTP_PORT:-7700}:80"
       - "${ADMIN_HTTP_PORT:-7701}:81"
+    environment:
+      GO_IMAGE_API_READS_ENABLED: ${GO_IMAGE_API_READS_ENABLED:-false}
+      GO_IMAGE_API_CREATE_ENABLED: ${GO_IMAGE_API_CREATE_ENABLED:-false}
     volumes:
-      - ./infra/nginx/nginx.prod.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./infra/nginx/nginx.prod.conf:/etc/nginx/templates/default.conf.template:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:80/health || (nginx -s reload && exit 1)"]
       interval: 5s

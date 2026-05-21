@@ -14,7 +14,7 @@ from apps.api.app.domains.image.storage_migration import (
 )
 from apps.api.app.infra.db.session import get_engine, get_session_factory, initialize_database
 
-HEAD_REVISION = "20260520_000029"
+HEAD_REVISION = "20260520_000031"
 REPO_ROOT = Path(__file__).resolve().parents[3]
 IMAGE_JOB_PROVIDER_USAGE_COLUMNS = {
     "provider_input_tokens",
@@ -133,13 +133,22 @@ def assert_image_job_item_schema(inspector) -> None:
         "available_at",
         "asset_id",
         "lease_expires_at",
+        "priority",
+        "dead_letter_at",
+        "last_error_code",
+        "last_error_message",
+        "manual_retry_count",
     } <= item_columns
     item_indexes = {index["name"] for index in inspector.get_indexes("image_job_items")}
     assert {
-        "ix_image_job_items_queue_pick",
+        "ix_image_job_items_priority_queue_pick",
+        "ix_image_job_items_dead_letter_at",
+        "ix_image_job_items_job_status",
         "ix_image_job_items_job_result",
         "ix_image_job_items_running_lease",
     } <= item_indexes
+    result_constraints = {constraint["name"] for constraint in inspector.get_unique_constraints("image_job_results")}
+    assert "uq_image_job_results_job_result" in result_constraints
 
 
 def assert_asset_schema(inspector) -> None:

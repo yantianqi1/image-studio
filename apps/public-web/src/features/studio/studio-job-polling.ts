@@ -15,6 +15,12 @@ const MAX_POLL_DURATION_MS = 5 * 60 * 1000;
 
 type Sleep = (milliseconds: number, signal?: AbortSignal) => Promise<void>;
 type JobUpdateHandler = (job: ImageGenerationResponse) => void;
+type ImageJobEventSource = {
+  addEventListener: (name: string, handler: (event: MessageEvent) => void) => void;
+  close: () => void;
+  onerror: ((event: Event) => void) | null;
+};
+type EventSourceFactory = (url: string) => ImageJobEventSource;
 type ImageJobPollingApi = Readonly<{
   getImageJob: (
     jobId: number,
@@ -30,6 +36,7 @@ type WaitForImageJobOptions = Readonly<{
   onJobUpdate?: JobUpdateHandler;
   signal?: AbortSignal;
   sleep?: Sleep;
+  eventSourceFactory?: EventSourceFactory;
 }>;
 
 export type CompletedImageJob = Readonly<{
@@ -69,6 +76,10 @@ export async function waitForImageJobResults(
   jobId: number,
   options: WaitForImageJobOptions = {},
 ): Promise<CompletedImageJob> {
+  const sseResult = await waitForImageJobResultsWithSSE(api, jobId, options);
+  if (sseResult) {
+    return sseResult;
+  }
   const sleep = options.sleep ?? defaultSleep;
   const startedAt = Date.now();
   while (true) {
@@ -91,6 +102,75 @@ export async function waitForImageJobResults(
     }
     await sleep(POLL_INTERVAL_MS, options.signal);
   }
+}
+
+async function waitForImageJobResultsWithSSE(
+  api: ImageJobPollingApi,
+  jobId: number,
+  options: WaitForImageJobOptions,
+): Promise<CompletedImageJob | null> {
+  const factory = resolveEventSourceFactory(options);
+  if (!factory) {
+    return null;
+  }
+  return new Promise<CompletedImageJob | null>((resolve, reject) => {
+    const source = factory(`/api/public/image/jobs/${jobId}/events`);
+    const close = () => source.close();
+    options.signal?.addEventListener("abort", () => {
+      close();
+      reject(new DOMException("Image job polling aborted", "AbortError"));
+    }, { once: true });
+    source.onerror = () => {
+      close();
+      resolve(null);
+    };
+    source.addEventListener("job_snapshot", (event) => {
+      options.onJobUpdate?.(parseJobEvent(event));
+    });
+    source.addEventListener("item_started", (event) => {
+      options.onJobUpdate?.(parseJobEvent(event));
+    });
+    source.addEventListener("job_failed", (event) => {
+      close();
+      reject(new Error(parseJobEvent(event).error_message || "生成任务失败"));
+    });
+    source.addEventListener("job_succeeded", async (event) => {
+      close();
+      try {
+        const job = parseJobEvent(event);
+        options.onJobUpdate?.(job);
+        resolve({ job, results: await loadCompletedResults(api, jobId, options.signal) });
+      } catch (error) {
+        reject(error);
+      }
+    });
+  });
+}
+
+function resolveEventSourceFactory(options: WaitForImageJobOptions): EventSourceFactory | null {
+  if (options.eventSourceFactory) {
+    return options.eventSourceFactory;
+  }
+  if (typeof EventSource === "undefined") {
+    return null;
+  }
+  return (url) => new EventSource(url);
+}
+
+async function loadCompletedResults(
+  api: ImageJobPollingApi,
+  jobId: number,
+  signal: AbortSignal | undefined,
+): Promise<readonly ImageJobResult[]> {
+  const results = await api.getImageJobResults(jobId, { signal });
+  if (results.length === 0) {
+    throw new Error(MISSING_RESULTS_MESSAGE);
+  }
+  return results;
+}
+
+function parseJobEvent(event: MessageEvent): ImageGenerationResponse {
+  return JSON.parse(event.data) as ImageGenerationResponse;
 }
 
 function throwIfAborted(signal: AbortSignal | undefined) {

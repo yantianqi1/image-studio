@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+"""Legacy Python image job executor.
+
+Production image job execution is owned by apps/worker-go. This module remains
+for tests, manual repair, and legacy rows without image_job_items. The worker
+main branch is gated by WORKER_ENABLE_IMAGE_JOBS and defaults to disabled.
+"""
+
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 import logging

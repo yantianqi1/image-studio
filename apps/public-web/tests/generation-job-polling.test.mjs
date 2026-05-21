@@ -47,6 +47,54 @@ test("waitForImageJobResults polls until succeeded and returns image results", a
   assert.deepEqual(seenStatuses, ["queued", "running", "succeeded"]);
 });
 
+test("waitForImageJobResults uses SSE before polling when event source works", async () => {
+  const { waitForImageJobResults } = loadPolling();
+  const source = new FakeEventSource();
+  const api = {
+    async getImageJob() {
+      throw new Error("polling should not start when SSE succeeds");
+    },
+    async getImageJobResults(jobId) {
+      return [{ id: 9, job_id: jobId, asset_url: "/api/public/image/assets/9" }];
+    },
+  };
+
+  const completedPromise = waitForImageJobResults(api, 11, {
+    eventSourceFactory: () => source,
+  });
+  source.emit("job_succeeded", { id: 11, status: "succeeded" });
+  const completed = await completedPromise;
+
+  assert.equal(completed.job.status, "succeeded");
+  assert.equal(completed.results.length, 1);
+  assert.equal(source.closed, true);
+});
+
+test("waitForImageJobResults falls back to polling when SSE errors", async () => {
+  const { waitForImageJobResults } = loadPolling();
+  const source = new FakeEventSource();
+  let pollCount = 0;
+  const api = {
+    async getImageJob(jobId) {
+      pollCount += 1;
+      return { id: jobId, status: "succeeded", error_message: null };
+    },
+    async getImageJobResults(jobId) {
+      return [{ id: 10, job_id: jobId, asset_url: "/api/public/image/assets/10" }];
+    },
+  };
+
+  const completedPromise = waitForImageJobResults(api, 12, {
+    eventSourceFactory: () => source,
+    sleep: async () => undefined,
+  });
+  source.emitError();
+  const completed = await completedPromise;
+
+  assert.equal(completed.job.status, "succeeded");
+  assert.equal(pollCount, 1);
+});
+
 test("waitForImageJobResults surfaces terminal failure", async () => {
   const { waitForImageJobResults } = loadPolling();
   const api = {
@@ -160,3 +208,20 @@ test("shouldResumeImageJobHistory ignores completed history with images", () => 
 
   assert.equal(shouldResumeImageJobHistory({ status: "success", taskId: 78, images: [{ id: "1" }] }), false);
 });
+
+class FakeEventSource {
+  handlers = new Map();
+  closed = false;
+  addEventListener(name, handler) {
+    this.handlers.set(name, handler);
+  }
+  close() {
+    this.closed = true;
+  }
+  emit(name, data) {
+    this.handlers.get(name)?.({ data: JSON.stringify(data) });
+  }
+  emitError() {
+    this.onerror?.(new Error("sse failed"));
+  }
+}

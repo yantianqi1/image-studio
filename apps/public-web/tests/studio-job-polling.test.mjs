@@ -43,3 +43,40 @@ test("waitForImageJobResults keeps polling a queued studio job without worker ha
   assert.equal(completed.job.status, "succeeded");
   assert.equal(completed.results.length, 1);
 });
+
+test("waitForImageJobResults uses SSE before polling in studio", async () => {
+  const { waitForImageJobResults } = loadStudioPolling();
+  const source = new FakeEventSource();
+  const api = {
+    async getImageJob() {
+      throw new Error("polling should not start when SSE succeeds");
+    },
+    async getImageJobResults(jobId) {
+      return [{ id: 1, job_id: jobId, result_index: 1, asset_id: 2, asset_url: "/asset/2" }];
+    },
+  };
+
+  const completedPromise = waitForImageJobResults(api, 15, {
+    eventSourceFactory: () => source,
+  });
+  source.emit("job_succeeded", { id: 15, status: "succeeded" });
+  const completed = await completedPromise;
+
+  assert.equal(completed.job.status, "succeeded");
+  assert.equal(completed.results.length, 1);
+  assert.equal(source.closed, true);
+});
+
+class FakeEventSource {
+  handlers = new Map();
+  closed = false;
+  addEventListener(name, handler) {
+    this.handlers.set(name, handler);
+  }
+  close() {
+    this.closed = true;
+  }
+  emit(name, data) {
+    this.handlers.get(name)?.({ data: JSON.stringify(data) });
+  }
+}
