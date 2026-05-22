@@ -38,7 +38,10 @@ func run(logger *slog.Logger) error {
 	}
 	defer pool.Close()
 	assetStorage, err := storage.BuildAssetStorage(storage.Config{
-		Backend: cfg.StorageBackend, GeneratedAssetsDir: cfg.GeneratedAssetsDir,
+		Backend:            cfg.StorageBackend,
+		GeneratedAssetsDir: cfg.GeneratedAssetsDir,
+		GCSBucket:          cfg.StorageGCSBucket,
+		GCSPrefix:          cfg.StorageGCSPrefix,
 	})
 	if err != nil {
 		return err

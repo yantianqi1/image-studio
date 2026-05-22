@@ -55,6 +55,29 @@ func TestModelLimiterLimitsConcurrentRenderCalls(t *testing.T) {
 	assertRenderDone(t, secondDone)
 }
 
+func TestProviderLimiterAppliesRuntimeDefaultAfterIdle(t *testing.T) {
+	control := &staticControl{snapshot: ControlSnapshot{
+		Concurrency: 2, PollInterval: time.Second, ProviderConcurrencyDefault: 1,
+	}}
+	processor := newLimiterTestProcessor(t, 1, nil, 10)
+	processor.control = control
+	job := limiterJob("openrouter", provider.OpenRouterChatImageType, "model-a")
+
+	if _, err := processor.renderResults(context.Background(), &countingRenderer{}, job); err != nil {
+		t.Fatalf("initial render returned error: %v", err)
+	}
+	control.snapshot.ProviderConcurrencyDefault = 2
+	renderer := &blockingRenderer{entered: make(chan struct{}, 2), release: make(chan struct{})}
+	firstDone := startRenderResult(processor, renderer, job)
+	waitRenderEntry(t, renderer.entered)
+	secondDone := startRenderResult(processor, renderer, job)
+	waitRenderEntry(t, renderer.entered)
+	close(renderer.release)
+
+	assertRenderDone(t, firstDone)
+	assertRenderDone(t, secondDone)
+}
+
 func TestLimiterReleasesWhenContextCancels(t *testing.T) {
 	processor := newLimiterTestProcessor(t, 1, nil, 10)
 	renderer := &blockingRenderer{entered: make(chan struct{}, 1), release: make(chan struct{})}
@@ -89,21 +112,24 @@ func newLimiterTestProcessor(
 ) *Processor {
 	t.Helper()
 	processor, err := NewProcessor(ProcessorConfig{
-		Store:                        &claimCaptureStore{},
-		Mode:                         ModeRender,
-		WorkerName:                   "worker-1",
-		Concurrency:                  2,
-		ProviderConcurrencyDefault:   providerLimit,
-		ProviderConcurrencyOverrides: providerOverrides,
-		OwnerConcurrency:             1,
-		ModelConcurrencyDefault:      modelLimit,
-		PollInterval:                 time.Second,
-		LeaseSeconds:                 30,
-		HeartbeatInterval:            time.Second,
-		SimulateDuration:             time.Second,
-		RenderTimeout:                time.Second,
-		RendererFactory:              staticRendererFactory{},
-		AssetStorage:                 noopAssetStorage{},
+		Store:                           &claimCaptureStore{},
+		Mode:                            ModeRender,
+		WorkerName:                      "worker-1",
+		Concurrency:                     2,
+		ProviderConcurrencyDefault:      providerLimit,
+		ProviderConcurrencyOverrides:    providerOverrides,
+		OwnerConcurrency:                1,
+		AnonymousOwnerConcurrency:       1,
+		ModelConcurrencyDefault:         modelLimit,
+		PollInterval:                    time.Second,
+		LeaseSeconds:                    30,
+		HeartbeatInterval:               time.Second,
+		SimulateDuration:                time.Second,
+		RenderTimeout:                   time.Second,
+		ProviderCircuitFailureThreshold: 3,
+		ProviderCircuitOpenSeconds:      60,
+		RendererFactory:                 staticRendererFactory{},
+		AssetStorage:                    noopAssetStorage{},
 	})
 	if err != nil {
 		t.Fatalf("NewProcessor returned error: %v", err)

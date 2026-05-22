@@ -80,6 +80,44 @@ func TestPublicAssetWritesCompatibleCacheHeaders(t *testing.T) {
 	}
 }
 
+func TestPublicGalleryReturnsItems(t *testing.T) {
+	handler := NewHandler(&fakeReader{
+		gallery: []service.GalleryItemPayload{{
+			AssetID: 3, AssetURL: "/api/public/image/assets/3",
+			ThumbnailURL: "/api/public/image/assets/3/thumbnail",
+			Visibility:   "public", CreatedAt: "2026-05-21T12:00:00",
+			JobID: 12, ResultIndex: 1, Prompt: "gallery prompt",
+		}},
+	}, Config{})
+	request := httptest.NewRequest(http.MethodGet, "/api/public/image/gallery?scope=public", nil)
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), `"prompt":"gallery prompt"`) {
+		t.Fatalf("unexpected gallery body: %s", response.Body.String())
+	}
+}
+
+func TestPublicDeleteJobReturnsDeletedPayload(t *testing.T) {
+	handler := NewHandler(&fakeReader{deleted: &service.DeleteJobPayload{Deleted: true, ID: "12"}}, Config{})
+	request := httptest.NewRequest(http.MethodDelete, "/api/public/image/jobs/12", nil)
+	request.AddCookie(&http.Cookie{Name: "studio_user_session", Value: "user-token"})
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), `"deleted":true`) {
+		t.Fatalf("unexpected delete body: %s", response.Body.String())
+	}
+}
+
 func TestPublicJobEventsSendInitialSnapshot(t *testing.T) {
 	handler := NewHandler(
 		&fakeReader{job: &service.JobPayload{ID: 12, Status: "running"}},
@@ -174,12 +212,16 @@ func TestInternalCreateReturnsQueuedPayload(t *testing.T) {
 
 type fakeReader struct {
 	job           *service.JobPayload
+	events        []service.JobEventPayload
 	created       *service.JobPayload
 	publicCreated *service.PublicCreateJobResult
 	publicRequest *service.PublicCreateJobRequest
 	asset         *service.AssetContent
+	gallery       []service.GalleryItemPayload
+	deleted       *service.DeleteJobPayload
 	owner         service.Owner
 	requireOwner  bool
+	eventsAfterID int64
 }
 
 func (r fakeReader) ResolveOwner(_ context.Context, tokens service.OwnerTokens) (service.Owner, error) {
@@ -204,7 +246,22 @@ func (r fakeReader) GetPublicJob(_ context.Context, _ int64, owner service.Owner
 }
 
 func (r fakeReader) GetPublicResults(context.Context, int64, service.Owner) ([]service.ResultPayload, error) {
-	return []service.ResultPayload{{ResultIndex: 1, AssetID: 3, AssetURL: "/api/public/image/assets/3"}}, nil
+	return []service.ResultPayload{{
+		ID: 5, JobID: 12, ResultIndex: 1, AssetID: 3,
+		AssetURL: "/api/public/image/assets/3", ThumbnailURL: "/api/public/image/assets/3/thumbnail",
+		Visibility: "private", CreatedAt: "2026-05-21T12:00:00",
+	}}, nil
+}
+
+func (r *fakeReader) GetPublicEvents(
+	_ context.Context,
+	_ int64,
+	_ service.Owner,
+	afterID int64,
+	_ int,
+) ([]service.JobEventPayload, error) {
+	r.eventsAfterID = afterID
+	return r.events, nil
 }
 
 func (r fakeReader) GetAdminDebug(context.Context, int64) (*service.DebugPayload, error) {
@@ -238,4 +295,23 @@ func (r fakeReader) GetPublicAsset(context.Context, int64, service.Owner) (*serv
 
 func (r fakeReader) GetPublicAssetThumbnail(context.Context, int64, service.Owner) (*service.AssetContent, error) {
 	return r.GetPublicAsset(context.Background(), 0, service.Owner{})
+}
+
+func (r fakeReader) GetPublicGallery(
+	context.Context,
+	service.Owner,
+	string,
+) ([]service.GalleryItemPayload, error) {
+	return r.gallery, nil
+}
+
+func (r fakeReader) DeletePublicJob(
+	context.Context,
+	int64,
+	service.Owner,
+) (*service.DeleteJobPayload, error) {
+	if r.deleted == nil {
+		return nil, service.ErrNotFound
+	}
+	return r.deleted, nil
 }

@@ -7,17 +7,22 @@ from pathlib import Path, PurePosixPath
 from PIL import Image, UnidentifiedImageError
 from sqlalchemy.orm import Session
 
-from apps.api.app.core.errors import AppError
+from apps.api.app.domains.image.asset_metadata import build_asset_content_metadata
+from apps.api.app.domains.image.asset_thumbnails import (
+    api_thumbnail_url,
+    ensure_thumbnail_exists,
+    resolve_public_thumbnail_url,
+    resolve_thumbnail_content,
+    thumbnail_asset_key,
+)
+from apps.api.app.domains.image.events import record_asset_created_event
 from apps.api.app.domains.image.models import Asset
 from apps.api.app.infra.storage.asset_storage import AssetStorage
 
 DEFAULT_UPLOAD_EXTENSION = ".bin"
 DEFAULT_UPLOAD_MIME_TYPE = "application/octet-stream"
 MAX_SUFFIX_LENGTH = 10
-RASTER_THUMBNAIL_MIME_TYPE = "image/jpeg"
 SVG_MIME_TYPE = "image/svg+xml"
-THUMBNAIL_MAX_DIMENSION_PX = 640
-THUMBNAIL_SUFFIX = ".thumb.jpg"
 
 MAGIC_BYTES_MAP: list[tuple[bytes, int, str]] = [
     (b"\x89PNG\r\n\x1a\n", 0, "image/png"),
@@ -115,6 +120,7 @@ def persist_rendered_asset(
         owner_anonymous_session_id=anonymous_session_id,
         owner_client_id=client_id,
     )
+    apply_asset_content_metadata(asset, content=rendered.content, storage=storage)
     key = rendered_asset_key(
         asset_id=asset.id,
         mime_type=rendered.mime_type,
@@ -122,6 +128,7 @@ def persist_rendered_asset(
     )
     storage.write_bytes(key, rendered.content, rendered.mime_type)
     asset.storage_path = key
+    record_asset_created_event(session, asset=asset)
     session.flush()
     return asset
 
@@ -161,12 +168,23 @@ def persist_uploaded_asset(
         owner_anonymous_session_id=anonymous_session_id,
         owner_client_id=client_id,
     )
+    apply_asset_content_metadata(asset, content=content, storage=storage)
     suffix = resolve_upload_suffix(filename=filename, mime_type=asset.mime_type)
     key = f"uploads/upload-{asset.id}{suffix}"
     storage.write_bytes(key, content, asset.mime_type)
     asset.storage_path = key
+    record_asset_created_event(session, asset=asset)
     session.flush()
     return asset
+
+
+def apply_asset_content_metadata(asset: Asset, *, content: bytes, storage: AssetStorage) -> None:
+    metadata = build_asset_content_metadata(content=content, mime_type=asset.mime_type, storage=storage)
+    asset.size_bytes = metadata.size_bytes
+    asset.sha256 = metadata.sha256
+    asset.width = metadata.width
+    asset.height = metadata.height
+    asset.storage_backend = metadata.storage_backend
 
 
 def create_pending_asset(
@@ -217,28 +235,6 @@ def resolve_asset_content(asset: Asset, storage: AssetStorage) -> tuple[bytes, s
     return storage.read_bytes(asset.storage_path), asset.mime_type
 
 
-def resolve_thumbnail_content(asset: Asset, storage: AssetStorage) -> tuple[bytes, str]:
-    source_content = storage.read_bytes(asset.storage_path)
-    if asset.mime_type == SVG_MIME_TYPE:
-        return source_content, SVG_MIME_TYPE
-    if not asset.mime_type.startswith("image/"):
-        raise AppError(code="asset_thumbnail_unsupported", message="asset thumbnail unsupported", status_code=415)
-
-    target_key = thumbnail_asset_key(asset.storage_path)
-    if not storage.exists(target_key):
-        storage.write_bytes(target_key, build_thumbnail_bytes(source_content), RASTER_THUMBNAIL_MIME_TYPE)
-    return storage.read_bytes(target_key), RASTER_THUMBNAIL_MIME_TYPE
-
-
-def ensure_thumbnail_exists(asset: Asset, storage: AssetStorage) -> None:
-    if asset.mime_type == SVG_MIME_TYPE or not asset.mime_type.startswith("image/"):
-        return
-    target_key = thumbnail_asset_key(asset.storage_path)
-    if not storage.exists(target_key):
-        source_content = storage.read_bytes(asset.storage_path)
-        storage.write_bytes(target_key, build_thumbnail_bytes(source_content), RASTER_THUMBNAIL_MIME_TYPE)
-
-
 def resolve_asset_public_urls(asset: Asset, storage: AssetStorage) -> tuple[str, str]:
     direct_url = storage.public_url(asset.storage_path)
     if direct_url is None:
@@ -248,46 +244,3 @@ def resolve_asset_public_urls(asset: Asset, storage: AssetStorage) -> tuple[str,
         asset_url = direct_url
         thumb_url = resolve_public_thumbnail_url(asset, storage=storage)
     return asset_url, thumb_url
-
-
-def resolve_public_thumbnail_url(asset: Asset, *, storage: AssetStorage) -> str:
-    thumb_key = thumbnail_asset_key(asset.storage_path)
-    if storage.exists(thumb_key):
-        return storage.public_url(thumb_key) or api_thumbnail_url(asset)
-    return api_thumbnail_url(asset)
-
-
-def api_thumbnail_url(asset: Asset) -> str:
-    return f"/api/public/image/assets/{asset.id}/thumbnail"
-
-
-def thumbnail_asset_key(asset_key: str) -> str:
-    source_key = PurePosixPath(asset_key)
-    return str(source_key.with_name(f"{source_key.stem}{THUMBNAIL_SUFFIX}"))
-
-
-def build_thumbnail_bytes(source_content: bytes) -> bytes:
-    try:
-        with Image.open(BytesIO(source_content)) as image:
-            thumbnail = create_proportional_thumbnail(image)
-            output = BytesIO()
-            thumbnail.save(output, format="JPEG", quality=82, optimize=True)
-            return output.getvalue()
-    except UnidentifiedImageError as error:
-        raise AppError(code="asset_thumbnail_invalid_image", message="asset thumbnail invalid image", status_code=422) from error
-
-
-def create_proportional_thumbnail(image: Image.Image) -> Image.Image:
-    thumbnail = image.copy()
-    thumbnail.thumbnail((THUMBNAIL_MAX_DIMENSION_PX, THUMBNAIL_MAX_DIMENSION_PX), Image.Resampling.LANCZOS)
-    return convert_thumbnail_to_rgb(thumbnail)
-
-
-def convert_thumbnail_to_rgb(image: Image.Image) -> Image.Image:
-    if image.mode in {"RGBA", "LA"}:
-        background = Image.new("RGB", image.size, (255, 255, 255))
-        background.paste(image, mask=image.getchannel("A"))
-        return background
-    if image.mode == "P":
-        return convert_thumbnail_to_rgb(image.convert("RGBA"))
-    return image.convert("RGB")

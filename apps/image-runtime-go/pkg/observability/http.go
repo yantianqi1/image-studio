@@ -3,11 +3,20 @@ package observability
 import (
 	"context"
 	"net/http"
+	"net/http/pprof"
 )
 
 type ReadyFunc func(context.Context) error
 
+type DiagnosticsOptions struct {
+	EnablePprof bool
+}
+
 func NewDiagnosticsHandler(metrics *Metrics, ready ReadyFunc) http.Handler {
+	return NewDiagnosticsHandlerWithOptions(metrics, ready, DiagnosticsOptions{})
+}
+
+func NewDiagnosticsHandlerWithOptions(metrics *Metrics, ready ReadyFunc, opts DiagnosticsOptions) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -26,5 +35,16 @@ func NewDiagnosticsHandler(metrics *Metrics, ready ReadyFunc) http.Handler {
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
 		_, _ = w.Write([]byte(metrics.PrometheusText()))
 	})
+	if opts.EnablePprof {
+		registerPprof(mux)
+	}
 	return mux
+}
+
+func registerPprof(mux *http.ServeMux) {
+	mux.HandleFunc("/debug/pprof/", pprof.Index)
+	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 }

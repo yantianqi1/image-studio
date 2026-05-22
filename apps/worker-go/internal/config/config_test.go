@@ -49,11 +49,8 @@ func TestLoadUsesDefaults(t *testing.T) {
 	if cfg.SimulateDuration != 3*time.Second {
 		t.Fatalf("unexpected simulate duration %s", cfg.SimulateDuration)
 	}
-	if cfg.FailSimulation {
-		t.Fatal("expected fail simulation default to be false")
-	}
-	if cfg.Mode != "simulate" {
-		t.Fatalf("expected default mode simulate, got %q", cfg.Mode)
+	if cfg.Mode != "render" {
+		t.Fatalf("expected default mode render, got %q", cfg.Mode)
 	}
 	if cfg.RenderTimeout != 300*time.Second {
 		t.Fatalf("unexpected render timeout %s", cfg.RenderTimeout)
@@ -61,38 +58,50 @@ func TestLoadUsesDefaults(t *testing.T) {
 	if cfg.RetryBaseSeconds != 5 || cfg.RetryMaxSeconds != 300 {
 		t.Fatalf("unexpected retry defaults: %+v", cfg)
 	}
+	if cfg.ProviderCircuitFailureThreshold != 5 || cfg.ProviderCircuitOpenSeconds != 300 {
+		t.Fatalf("unexpected provider circuit defaults: %+v", cfg)
+	}
 	if cfg.AssetStorageBackend != "local" || cfg.GeneratedAssetsDir != "./generated-assets" {
 		t.Fatalf("unexpected asset storage config: %+v", cfg)
 	}
 	if !cfg.EnableHTTP || cfg.HTTPAddr != ":7900" {
 		t.Fatalf("unexpected http diagnostics config: %+v", cfg)
 	}
+	if cfg.EnablePprof || cfg.RuntimeConfigKey != "worker-go" || cfg.Version != "dev" {
+		t.Fatalf("unexpected runtime control defaults: %+v", cfg)
+	}
 }
 
 func TestLoadParsesOverrides(t *testing.T) {
 	cfg, err := LoadFromLookup(mapLookup(map[string]string{
-		"DATABASE_URL":                             "postgres://db",
-		"GO_WORKER_NAME":                           "go-worker-a",
-		"GO_WORKER_CONCURRENCY":                    "4",
-		"GO_WORKER_PROVIDER_CONCURRENCY_DEFAULT":   "5",
-		"GO_WORKER_PROVIDER_CONCURRENCY_OVERRIDES": "openrouter=2,openai-official=3",
-		"GO_WORKER_OWNER_CONCURRENCY":              "6",
-		"GO_WORKER_MODEL_CONCURRENCY_DEFAULT":      "7",
-		"GO_WORKER_POLL_INTERVAL_SECONDS":          "2",
-		"GO_WORKER_LEASE_SECONDS":                  "30",
-		"GO_WORKER_HEARTBEAT_SECONDS":              "5",
-		"GO_WORKER_SIMULATE_SECONDS":               "7",
-		"GO_WORKER_FAIL_SIMULATION":                "true",
-		"GO_WORKER_MODE":                           "render",
-		"GO_WORKER_RENDER_TIMEOUT_SECONDS":         "120",
-		"GO_WORKER_RETRY_BASE_SECONDS":             "10",
-		"GO_WORKER_RETRY_MAX_SECONDS":              "90",
-		"GO_WORKER_ENABLE_HTTP":                    "false",
-		"GO_WORKER_HTTP_ADDR":                      ":7999",
-		"ASSET_STORAGE_BACKEND":                    "gcs",
-		"ASSET_STORAGE_GCS_BUCKET":                 "image-studio-assets",
-		"ASSET_STORAGE_GCS_PREFIX":                 "generated-assets",
-		"GENERATED_ASSETS_DIR":                     "/tmp/generated-assets",
+		"DATABASE_URL":                                 "postgres://db",
+		"GO_WORKER_NAME":                               "go-worker-a",
+		"GO_WORKER_GLOBAL_CONCURRENCY":                 "4",
+		"GO_WORKER_PROVIDER_CONCURRENCY_DEFAULT":       "5",
+		"GO_WORKER_PROVIDER_CONCURRENCY_OVERRIDES":     "openrouter=2,openai-official=3",
+		"GO_WORKER_OWNER_CONCURRENCY":                  "6",
+		"GO_WORKER_ANONYMOUS_OWNER_CONCURRENCY":        "3",
+		"GO_WORKER_MODEL_CONCURRENCY_DEFAULT":          "7",
+		"GO_WORKER_POLL_INTERVAL_SECONDS":              "2",
+		"GO_WORKER_LEASE_SECONDS":                      "30",
+		"GO_WORKER_HEARTBEAT_SECONDS":                  "5",
+		"GO_WORKER_SIMULATE_SECONDS":                   "7",
+		"GO_WORKER_MODE":                               "render",
+		"GO_WORKER_RENDER_TIMEOUT_SECONDS":             "120",
+		"GO_WORKER_RETRY_BASE_SECONDS":                 "10",
+		"GO_WORKER_RETRY_MAX_SECONDS":                  "90",
+		"GO_WORKER_PROVIDER_CIRCUIT_FAILURE_THRESHOLD": "4",
+		"GO_WORKER_PROVIDER_CIRCUIT_OPEN_SECONDS":      "180",
+		"GO_WORKER_ENABLE_HTTP":                        "false",
+		"GO_WORKER_HTTP_ADDR":                          ":7999",
+		"GO_ENABLE_PPROF":                              "true",
+		"GO_WORKER_RUNTIME_CONFIG_KEY":                 "worker-go-canary",
+		"GO_WORKER_ID":                                 "worker-node-1",
+		"APP_VERSION":                                  "v-test",
+		"ASSET_STORAGE_BACKEND":                        "gcs",
+		"ASSET_STORAGE_GCS_BUCKET":                     "image-studio-assets",
+		"ASSET_STORAGE_GCS_PREFIX":                     "generated-assets",
+		"GENERATED_ASSETS_DIR":                         "/tmp/generated-assets",
 	}))
 
 	if err != nil {
@@ -104,13 +113,16 @@ func TestLoadParsesOverrides(t *testing.T) {
 	if cfg.ProviderConcurrencyDefault != 5 || cfg.OwnerConcurrency != 6 || cfg.ModelConcurrencyDefault != 7 {
 		t.Fatalf("unexpected limiter config: %+v", cfg)
 	}
+	if cfg.AnonymousOwnerConcurrency != 3 {
+		t.Fatalf("unexpected anonymous owner concurrency: %+v", cfg)
+	}
 	if cfg.ProviderConcurrencyOverrides["openrouter"] != 2 || cfg.ProviderConcurrencyOverrides["openai-official"] != 3 {
 		t.Fatalf("unexpected provider overrides: %#v", cfg.ProviderConcurrencyOverrides)
 	}
 	if cfg.PollInterval != 2*time.Second || cfg.HeartbeatInterval != 5*time.Second {
 		t.Fatalf("unexpected intervals: %+v", cfg)
 	}
-	if cfg.SimulateDuration != 7*time.Second || !cfg.FailSimulation {
+	if cfg.SimulateDuration != 7*time.Second {
 		t.Fatalf("unexpected simulation config: %+v", cfg)
 	}
 	if cfg.Mode != "render" || cfg.RenderTimeout != 120*time.Second {
@@ -118,6 +130,9 @@ func TestLoadParsesOverrides(t *testing.T) {
 	}
 	if cfg.RetryBaseSeconds != 10 || cfg.RetryMaxSeconds != 90 {
 		t.Fatalf("unexpected retry config: %+v", cfg)
+	}
+	if cfg.ProviderCircuitFailureThreshold != 4 || cfg.ProviderCircuitOpenSeconds != 180 {
+		t.Fatalf("unexpected provider circuit config: %+v", cfg)
 	}
 	if cfg.GeneratedAssetsDir != "/tmp/generated-assets" {
 		t.Fatalf("unexpected generated assets dir %q", cfg.GeneratedAssetsDir)
@@ -130,6 +145,12 @@ func TestLoadParsesOverrides(t *testing.T) {
 	}
 	if cfg.EnableHTTP || cfg.HTTPAddr != ":7999" {
 		t.Fatalf("unexpected http diagnostics overrides: %+v", cfg)
+	}
+	if !cfg.EnablePprof || cfg.RuntimeConfigKey != "worker-go-canary" {
+		t.Fatalf("unexpected runtime control overrides: %+v", cfg)
+	}
+	if cfg.WorkerID != "worker-node-1" || cfg.Version != "v-test" {
+		t.Fatalf("unexpected worker identity overrides: %+v", cfg)
 	}
 }
 
@@ -149,14 +170,14 @@ func TestLoadRejectsInvalidProviderConcurrencyOverride(t *testing.T) {
 
 func TestLoadRejectsInvalidInteger(t *testing.T) {
 	_, err := LoadFromLookup(mapLookup(map[string]string{
-		"DATABASE_URL":          "postgres://db",
-		"GO_WORKER_CONCURRENCY": "not-an-int",
+		"DATABASE_URL":                 "postgres://db",
+		"GO_WORKER_GLOBAL_CONCURRENCY": "not-an-int",
 	}))
 
 	if err == nil {
 		t.Fatal("expected invalid integer to fail")
 	}
-	if !strings.Contains(err.Error(), "GO_WORKER_CONCURRENCY") {
+	if !strings.Contains(err.Error(), "GO_WORKER_GLOBAL_CONCURRENCY") {
 		t.Fatalf("expected concurrency error, got %v", err)
 	}
 }

@@ -17,7 +17,7 @@ from apps.worker.worker.tasks import image_jobs as worker_image_jobs
 from apps.api.tests.test_comic_pipeline import create_comic_client, create_task, install_llm_outputs
 
 MAX_WORKER_RUNS = 20
-WORKER_IDLE_MESSAGE = "No claimable comic tasks or image jobs."
+WORKER_IDLE_MESSAGE = "No claimable comic tasks."
 
 
 def test_comic_reference_pipeline_generates_page_with_reference_assets(monkeypatch) -> None:
@@ -80,7 +80,9 @@ def run_image_worker_until_idle() -> None:
 
 def run_worker_until_idle() -> None:
     for _ in range(MAX_WORKER_RUNS):
-        if worker_main.run_once() == WORKER_IDLE_MESSAGE:
+        message = worker_main.run_once()
+        run_image_worker_until_idle()
+        if message == WORKER_IDLE_MESSAGE:
             return
     raise AssertionError("worker did not become idle after full comic generation")
 

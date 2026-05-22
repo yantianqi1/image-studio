@@ -1,6 +1,7 @@
 import Image from "next/image";
 
 import { StatusPill } from "@/features/ui/status-pill";
+import { adminApi } from "@/lib/admin-api";
 import type { WorkerSummary } from "@/lib/admin-api";
 import type { AdminImageJob, AdminImageJobResult } from "@/lib/admin-image-job-types";
 
@@ -19,6 +20,8 @@ type LogListProps = Readonly<{
   jobs: readonly AdminImageJob[];
   loading: boolean;
   summary: WorkerSummary | null;
+  onChanged: (message: string) => Promise<void>;
+  onError: (message: string) => void;
 }>;
 
 type DetailItem = Readonly<{
@@ -27,12 +30,18 @@ type DetailItem = Readonly<{
   tone?: "danger" | "success";
 }>;
 
-export function ImageJobLogList({ jobs, loading, summary }: LogListProps) {
+export function ImageJobLogList({ jobs, loading, onChanged, onError, summary }: LogListProps) {
   return (
     <section className="admin-panel image-job-log-panel">
-      <LogHeader jobs={jobs} loading={loading} summary={summary} />
+      <LogHeader
+        jobs={jobs}
+        loading={loading}
+        onChanged={onChanged}
+        onError={onError}
+        summary={summary}
+      />
       <div className="image-job-log-list">
-        <LogRows jobs={jobs} loading={loading} />
+        <LogRows jobs={jobs} loading={loading} onChanged={onChanged} onError={onError} />
       </div>
     </section>
   );
@@ -63,27 +72,55 @@ function QueueStrip({ summary }: Readonly<{ summary: WorkerSummary }>) {
   );
 }
 
-function LogRows({ jobs, loading }: Readonly<{ jobs: readonly AdminImageJob[]; loading: boolean }>) {
+function LogRows({
+  jobs,
+  loading,
+  onChanged,
+  onError,
+}: Readonly<{
+  jobs: readonly AdminImageJob[];
+  loading: boolean;
+  onChanged: (message: string) => Promise<void>;
+  onError: (message: string) => void;
+}>) {
   if (loading && jobs.length === 0) {
     return <p className="image-job-empty">正在读取图片任务。</p>;
   }
   if (jobs.length === 0) {
     return <p className="image-job-empty">暂无图片任务。</p>;
   }
-  return jobs.map((job) => <ImageJobLogRow job={job} key={job.id} />);
+  return jobs.map((job) => (
+    <ImageJobLogRow job={job} key={job.id} onChanged={onChanged} onError={onError} />
+  ));
 }
 
-function ImageJobLogRow({ job }: Readonly<{ job: AdminImageJob }>) {
+function ImageJobLogRow({
+  job,
+  onChanged,
+  onError,
+}: Readonly<{
+  job: AdminImageJob;
+  onChanged: (message: string) => Promise<void>;
+  onError: (message: string) => void;
+}>) {
   return (
     <article className="image-job-log-row">
-      <PromptCell job={job} />
+      <PromptCell job={job} onChanged={onChanged} onError={onError} />
       <DetailCell job={job} />
       <PreviewCell job={job} />
     </article>
   );
 }
 
-function PromptCell({ job }: Readonly<{ job: AdminImageJob }>) {
+function PromptCell({
+  job,
+  onChanged,
+  onError,
+}: Readonly<{
+  job: AdminImageJob;
+  onChanged: (message: string) => Promise<void>;
+  onError: (message: string) => void;
+}>) {
   return (
     <div className="image-job-prompt-cell">
       <div className="image-job-row-kicker">
@@ -95,8 +132,66 @@ function PromptCell({ job }: Readonly<{ job: AdminImageJob }>) {
       {job.error_code || job.error_message ? (
         <p className="image-job-inline-error">错误：{formatJobErrorText(job.error_code, job.error_message)}</p>
       ) : null}
+      <JobActions job={job} onChanged={onChanged} onError={onError} />
     </div>
   );
+}
+
+function JobActions({
+  job,
+  onChanged,
+  onError,
+}: Readonly<{
+  job: AdminImageJob;
+  onChanged: (message: string) => Promise<void>;
+  onError: (message: string) => void;
+}>) {
+  if (!canRetryJob(job) && !canCancelJob(job)) return null;
+  return (
+    <div className="image-job-row-actions">
+      {canRetryJob(job) ? <JobActionButton job={job} kind="retry" onChanged={onChanged} onError={onError} /> : null}
+      {canCancelJob(job) ? <JobActionButton job={job} kind="cancel" onChanged={onChanged} onError={onError} /> : null}
+    </div>
+  );
+}
+
+function JobActionButton({
+  job,
+  kind,
+  onChanged,
+  onError,
+}: Readonly<{
+  job: AdminImageJob;
+  kind: "retry" | "cancel";
+  onChanged: (message: string) => Promise<void>;
+  onError: (message: string) => void;
+}>) {
+  const label = kind === "retry" ? "重试任务" : "取消任务";
+  return (
+    <button
+      className="admin-button image-job-action-button"
+      type="button"
+      onClick={async () => {
+        try {
+          if (kind === "retry") await adminApi.retryImageJob(job.id);
+          if (kind === "cancel") await adminApi.cancelImageJob(job.id);
+          await onChanged(`图片任务 #${job.id} 已${kind === "retry" ? "重试" : "取消"}`);
+        } catch (error) {
+          onError(error instanceof Error ? error.message : `${label}失败`);
+        }
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+function canRetryJob(job: AdminImageJob): boolean {
+  return job.status === "failed" || job.status === "cancelled";
+}
+
+function canCancelJob(job: AdminImageJob): boolean {
+  return job.status === "queued" || job.status === "running";
 }
 
 function DetailCell({ job }: Readonly<{ job: AdminImageJob }>) {

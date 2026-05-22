@@ -2,12 +2,11 @@
 
 `apps/worker-go` is the Go worker for `image_job_items`.
 
-It defaults to simulation mode. It connects to Postgres, claims queued
-`image_job_items`, refreshes the item heartbeat lease, sleeps for
-`GO_WORKER_SIMULATE_SECONDS`, then marks the item `succeeded` or `failed` based
-on `GO_WORKER_FAIL_SIMULATION` and aggregates the parent `image_jobs` status.
+It defaults to render mode and writes real generated assets. The legacy
+`GO_WORKER_MODE=simulate` mode is not a success path: it never marks generated
+output as succeeded and must not be used as production execution.
 
-Set `GO_WORKER_MODE=render` to enable real image rendering. Render mode supports
+Render mode supports
 `openai-compatible`, `openai-chat-compatible`, and `openrouter-chat-image`
 providers. System providers read `base_url`, `api_key_env`, and `default_model`
 from `providers` and load API keys from environment variables. Client providers
@@ -22,15 +21,28 @@ fallback.
 Concurrency controls:
 
 ```bash
-GO_WORKER_CONCURRENCY=2
+GO_WORKER_GLOBAL_CONCURRENCY=2
 GO_WORKER_PROVIDER_CONCURRENCY_DEFAULT=2
 GO_WORKER_PROVIDER_CONCURRENCY_OVERRIDES=openrouter=2,openai-official=3
 GO_WORKER_OWNER_CONCURRENCY=1
+GO_WORKER_ANONYMOUS_OWNER_CONCURRENCY=1
 GO_WORKER_MODEL_CONCURRENCY_DEFAULT=2
+GO_WORKER_PROVIDER_CIRCUIT_FAILURE_THRESHOLD=5
+GO_WORKER_PROVIDER_CIRCUIT_OPEN_SECONDS=300
 ```
 
-Render mode only supports `ASSET_STORAGE_BACKEND=local`. `gcs` returns an
-explicit unsupported error in this first migration step.
+`GO_WORKER_CONCURRENCY` is still accepted for existing deployments when
+`GO_WORKER_GLOBAL_CONCURRENCY` is not set. New deployments should use
+`GO_WORKER_GLOBAL_CONCURRENCY`.
+
+Render mode supports `ASSET_STORAGE_BACKEND=local` and `gcs`. The render claim
+query skips providers whose `provider_runtime_state.status` is `paused`, and it
+does not claim `circuit_open` providers until `circuit_open_until` has passed.
+System provider `provider_request_failed` errors increment
+`provider_runtime_state.failure_count`; reaching
+`GO_WORKER_PROVIDER_CIRCUIT_FAILURE_THRESHOLD` opens the circuit for
+`GO_WORKER_PROVIDER_CIRCUIT_OPEN_SECONDS`. Client provider failures are scoped
+to the user-supplied key and do not update shared provider runtime state.
 
 HTTP diagnostics default to `GO_WORKER_ENABLE_HTTP=true` on `GO_WORKER_HTTP_ADDR=:7900`:
 
@@ -60,25 +72,34 @@ Run tests from this directory:
 go test -timeout=60s ./...
 ```
 
-Dry-run orphan generated asset cleanup:
+Legacy orphan generated asset cleanup wrapper:
 
 ```bash
-go run ./cmd/image-worker cleanup-orphan-assets
+go run ./cmd/image-worker cleanup-orphan-assets --dry-run
 go run ./cmd/image-worker cleanup-orphan-assets --execute
+```
+
+The shared asset operations CLI lives in `../image-runtime-go/cmd/assetctl`.
+Run these from `apps/image-runtime-go`:
+
+```bash
+go run ./cmd/assetctl scan-orphans --dry-run
+go run ./cmd/assetctl scan-orphans --execute
+go run ./cmd/assetctl verify-assets --limit 1000
+go run ./cmd/assetctl rebuild-thumbnails --missing-only
 ```
 
 ## Docker compose migration run
 
 During migration, keep the Python worker responsible for `comic-task` and
-`comic-orchestration`; its `image_jobs` branch defaults off and should only be
-enabled as a legacy fallback for old jobs without `image_job_items`:
+`comic-orchestration`. It does not expose a production `image_jobs` branch;
+legacy rows without `image_job_items` require an explicit manual repair helper:
 
 ```bash
-WORKER_ENABLE_IMAGE_JOBS=false
 GO_WORKER_MODE=render
 docker compose --profile worker-go up -d worker worker-go
 ```
 
-The `worker-go` compose service is opt-in. Keep `GO_WORKER_MODE=simulate` until
-you are ready for the Go worker to call the real provider. Use
-`docs/deploy/go-worker-cutover.md` for simulate, render, and rollback steps.
+The `worker-go` compose service is opt-in in local profiles and defaults to
+render mode in production compose. Use `docs/deploy/go-worker-cutover.md` for
+render and rollback steps.

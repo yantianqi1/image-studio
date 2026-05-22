@@ -9,7 +9,6 @@ from apps.worker.worker import main as worker_main
 BRANCH_ENV_KEYS = (
     "WORKER_ENABLE_COMIC_TASK",
     "WORKER_ENABLE_COMIC_ORCHESTRATION",
-    "WORKER_ENABLE_IMAGE_JOBS",
 )
 
 
@@ -27,22 +26,14 @@ def test_worker_branches_default_to_python_image_jobs_disabled(monkeypatch) -> N
     assert branch_names == ["comic-task", "comic-orchestration"]
 
 
-def test_worker_branches_can_enable_legacy_image_jobs(monkeypatch) -> None:
+def test_worker_branches_ignore_removed_image_jobs_flag(monkeypatch) -> None:
     monkeypatch.setenv("WORKER_ENABLE_IMAGE_JOBS", "true")
     clear_worker_settings_cache()
 
     branch_names = [branch.name for branch in worker_main.build_worker_branches()]
 
-    assert branch_names == ["comic-task", "comic-orchestration", "image-jobs"]
-
-
-def test_worker_branches_can_disable_image_jobs(monkeypatch) -> None:
-    monkeypatch.setenv("WORKER_ENABLE_IMAGE_JOBS", "false")
-    clear_worker_settings_cache()
-
-    branch_names = [branch.name for branch in worker_main.build_worker_branches()]
-
     assert branch_names == ["comic-task", "comic-orchestration"]
+    assert not hasattr(worker_main, "run_image_jobs_branch_once")
 
 
 def test_worker_branches_reject_all_disabled(monkeypatch) -> None:
@@ -65,23 +56,19 @@ def test_worker_run_once_obeys_disabled_image_jobs(monkeypatch) -> None:
         calls.append("comic-orchestration")
         return None
 
-    def process_image_jobs(*, max_workers: int | None = None) -> list[int]:
-        raise AssertionError("image-jobs branch should be disabled")
-
-    monkeypatch.setenv("WORKER_ENABLE_IMAGE_JOBS", "false")
+    monkeypatch.setenv("WORKER_ENABLE_IMAGE_JOBS", "true")
     clear_worker_settings_cache()
     monkeypatch.setattr(worker_main, "run_next_comic_task", process_comic_task)
     monkeypatch.setattr(worker_main, "run_next_comic_orchestration", process_comic_orchestration)
-    monkeypatch.setattr(worker_main, "run_next_image_jobs", process_image_jobs)
 
     message = worker_main.run_once()
 
     assert sorted(calls) == ["comic-orchestration", "comic-task"]
-    assert message == "No claimable comic tasks or image jobs."
+    assert message == "No claimable comic tasks."
 
 
 def test_bootstrap_message_lists_enabled_branches(monkeypatch) -> None:
-    monkeypatch.setenv("WORKER_ENABLE_IMAGE_JOBS", "false")
+    monkeypatch.setenv("WORKER_ENABLE_IMAGE_JOBS", "true")
     clear_worker_settings_cache()
 
     message = worker_main.build_bootstrap_message()

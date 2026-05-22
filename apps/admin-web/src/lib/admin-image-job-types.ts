@@ -44,6 +44,7 @@ export type ImageJobStats = Readonly<{
     succeeded: number;
     failed: number;
     success_rate: number;
+    failed_rate: number;
   };
   costs: {
     total_cents: number;
@@ -52,6 +53,23 @@ export type ImageJobStats = Readonly<{
   };
   performance: {
     avg_duration_seconds: number | null;
+    queue_wait_seconds: PercentileMetric;
+    render_duration_seconds: PercentileMetric;
+  };
+  queue: {
+    queued: number;
+    running: number;
+    succeeded: number;
+    failed: number;
+    cancelled: number;
+    dead_letter: number;
+  };
+  provider_health: {
+    healthy: number;
+    degraded: number;
+    paused: number;
+    circuit_open: number;
+    failure_count: number;
   };
   distribution: {
     model: readonly DistributionItem[];
@@ -64,6 +82,7 @@ export type ImageJobStats = Readonly<{
 }>;
 
 export type DistributionItem = Readonly<{ key: string; count: number }>;
+export type PercentileMetric = Readonly<{ p50: number | null; p95: number | null }>;
 export type ChannelCostItem = Readonly<{
   key: string;
   count: number;

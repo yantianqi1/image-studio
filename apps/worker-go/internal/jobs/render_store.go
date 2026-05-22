@@ -61,6 +61,9 @@ func (s *PostgresStore) CompleteRenderedJob(ctx context.Context, request Complet
 	if err != nil {
 		return err
 	}
+	if err := recordProviderUsage(ctx, tx, request.Job, request.Lock.ItemID, request.Results[0].Usage); err != nil {
+		return err
+	}
 	if err := markRenderSucceeded(ctx, tx, request.Lock, assetID); err != nil {
 		return err
 	}
@@ -70,12 +73,18 @@ func (s *PostgresStore) CompleteRenderedJob(ctx context.Context, request Complet
 	if err := aggregateParentJob(ctx, tx, request.Job.ID); err != nil {
 		return err
 	}
+	if err := resetProviderSuccessInTx(ctx, tx, request.Job); err != nil {
+		return err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit render completion transaction: %w", err)
 	}
 	state.txDone = true
 	if failedAssetID, err := state.commitStagedFiles(); err != nil {
 		return s.handleAssetCommitFailure(ctx, request, failedAssetID, err)
+	}
+	if err := s.recordAssetCreatedEvents(ctx, state.stagedResults); err != nil {
+		return err
 	}
 	state.deleteOldFiles()
 	return nil
@@ -211,7 +220,10 @@ func (s *PostgresStore) execTerminalFailure(ctx context.Context, request RenderF
 	if err != nil {
 		return false, fmt.Errorf("mark image job item %d terminal failed: %w", request.ItemID, err)
 	}
-	return ok, s.aggregateIfUpdated(ctx, ok, jobID)
+	if err := s.aggregateIfUpdated(ctx, ok, jobID); err != nil {
+		return ok, err
+	}
+	return ok, s.recordProviderFailureIfUpdated(ctx, ok, request.ProviderCircuit)
 }
 
 func (s *PostgresStore) execRetryableFailure(ctx context.Context, request RenderFailureRequest, message string) (bool, error) {
@@ -224,7 +236,10 @@ func (s *PostgresStore) execRetryableFailure(ctx context.Context, request Render
 	if err != nil {
 		return false, fmt.Errorf("mark image job item %d retryable failed: %w", request.ItemID, err)
 	}
-	return ok, s.aggregateIfUpdated(ctx, ok, jobID)
+	if err := s.aggregateIfUpdated(ctx, ok, jobID); err != nil {
+		return ok, err
+	}
+	return ok, s.recordProviderFailureIfUpdated(ctx, ok, request.ProviderCircuit)
 }
 
 func (s *PostgresStore) updateItemFailure(
@@ -235,4 +250,35 @@ func (s *PostgresStore) updateItemFailure(
 ) (int64, bool, error) {
 	queryArgs := append([]any{request.ItemID, request.WorkerName}, args...)
 	return s.updateItemAndAggregate(ctx, sql, queryArgs...)
+}
+
+func (s *PostgresStore) recordProviderFailureIfUpdated(
+	ctx context.Context,
+	updated bool,
+	request *ProviderCircuitRequest,
+) error {
+	if !updated || request == nil {
+		return nil
+	}
+	_, err := s.pool.Exec(
+		ctx,
+		recordProviderFailureSQL,
+		request.ProviderID,
+		request.FailureThreshold,
+		request.OpenSeconds,
+	)
+	if err != nil {
+		return fmt.Errorf("record provider runtime failure: %w", err)
+	}
+	return nil
+}
+
+func resetProviderSuccessInTx(ctx context.Context, tx pgx.Tx, job *provider.JobContext) error {
+	if job == nil || job.ClientProviderConfigRaw != "" || job.Provider.ID < 1 {
+		return nil
+	}
+	if _, err := tx.Exec(ctx, resetProviderSuccessSQL, job.Provider.ID); err != nil {
+		return fmt.Errorf("reset provider runtime state: %w", err)
+	}
+	return nil
 }

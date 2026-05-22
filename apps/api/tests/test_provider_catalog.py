@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import base64
 from dataclasses import dataclass
+from io import BytesIO
 
 from fastapi.testclient import TestClient
+from PIL import Image
 
 from apps.api.app.domains.auth.ownership import OwnerContext
 from apps.api.app.domains.auth.service import create_admin_account
@@ -17,6 +19,15 @@ from apps.worker.worker.tasks import image_jobs as worker_image_jobs
 VALID_PNG_BYTES = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
 )
+
+
+def build_jpeg_bytes() -> bytes:
+    output = BytesIO()
+    Image.new("RGB", (1, 1), color=(255, 255, 255)).save(output, format="JPEG")
+    return output.getvalue()
+
+
+VALID_JPEG_BYTES = build_jpeg_bytes()
 
 
 def build_client() -> TestClient:
@@ -170,7 +181,7 @@ def test_openai_compatible_edit_job_uses_multipart_adapter(monkeypatch) -> None:
     register_user(client, email="provider-edit@example.com")
     upload_response = client.post(
         "/api/public/image/uploads",
-        files={"file": ("source.png", b"source-bytes", "image/png")},
+        files={"file": ("source.png", VALID_PNG_BYTES, "image/png")},
     )
     captured: dict[str, object] = {}
 
@@ -211,7 +222,7 @@ def test_openai_compatible_edit_job_uses_multipart_adapter(monkeypatch) -> None:
     assert captured["data"]["prompt"] == "Make the source dog watercolor"
     assert captured["filename"].startswith("upload-")
     assert captured["mime_type"] == "image/png"
-    assert captured["content"] == b"source-bytes"
+    assert captured["content"] == VALID_PNG_BYTES
     assert results_response.json()["data"][0]["provider_request_id"] == "req-edit-1"
 
 
@@ -280,8 +291,8 @@ def test_public_image_job_accepts_reference_asset_ids(monkeypatch) -> None:
     provider = create_openai_provider(client)
     create_sellable_model(client, provider_id=provider["id"])
     register_user(client, email="provider-public-reference@example.com")
-    first_upload = client.post("/api/public/image/uploads", files={"file": ("first.png", b"first", "image/png")})
-    second_upload = client.post("/api/public/image/uploads", files={"file": ("second.jpg", b"second", "image/jpeg")})
+    first_upload = client.post("/api/public/image/uploads", files={"file": ("first.png", VALID_PNG_BYTES, "image/png")})
+    second_upload = client.post("/api/public/image/uploads", files={"file": ("second.jpg", VALID_JPEG_BYTES, "image/jpeg")})
     captured: dict[str, object] = {}
 
     def fake_post(url: str, *, headers, data=None, files=None, timeout: float, **_kwargs):
@@ -318,7 +329,7 @@ def test_public_image_job_accepts_reference_asset_ids(monkeypatch) -> None:
     assert captured["headers"] == {"Authorization": "Bearer sk-test"}
     assert captured["file_fields"] == ["image", "image"]
     assert captured["filenames"] == ["upload-1.png", "upload-2.jpg"]
-    assert captured["contents"] == [b"first", b"second"]
+    assert captured["contents"] == [VALID_PNG_BYTES, VALID_JPEG_BYTES]
     assert results_response.json()["data"][0]["provider_request_id"] == "req-public-ref-1"
 
 

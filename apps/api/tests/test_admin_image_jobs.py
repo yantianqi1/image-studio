@@ -9,7 +9,8 @@ from sqlalchemy import select
 from apps.api.app.domains.auth.service import create_admin_account
 from apps.api.app.domains.image import stats_service
 from apps.api.app.domains.image import service as image_service
-from apps.api.app.domains.image.models import ImageJob, ImageJobItem, ImageJobResult
+from apps.api.app.domains.image.models import ImageJob, ImageJobItem, ImageJobResult, ProviderRuntimeState
+from apps.api.app.domains.llm.models import Provider
 from apps.api.app.domains.llm.service import RenderedImage
 from apps.api.app.infra.db.session import initialize_database, session_scope
 from apps.api.app.main import create_app
@@ -184,19 +185,58 @@ def test_admin_image_stats_returns_duration_without_sqlite_julianday():
     seed_admin()
     now = datetime.utcnow()
     with session_scope() as session:
-        session.add(
-            ImageJob(
-                source="admin",
-                mode="generate",
-                prompt="Stats duration image",
-                model_code="gpt-image-2",
-                status="succeeded",
-                requested_count=1,
-                internal_cost_cents=250,
-                started_at=now,
-                finished_at=now + timedelta(seconds=12),
-            )
+        provider = Provider(name="stats-provider", type="openai-compatible", status="active")
+        session.add(provider)
+        session.flush()
+        job = ImageJob(
+            source="admin",
+            mode="generate",
+            prompt="Stats duration image",
+            model_code="gpt-image-2",
+            provider_id=provider.id,
+            status="succeeded",
+            requested_count=3,
+            internal_cost_cents=250,
+            started_at=now,
+            finished_at=now + timedelta(seconds=12),
         )
+        session.add(job)
+        session.flush()
+        session.add_all([
+            ImageJobItem(
+                job_id=job.id,
+                result_index=1,
+                status="queued",
+                created_at=now,
+                available_at=now,
+            ),
+            ImageJobItem(
+                job_id=job.id,
+                result_index=2,
+                status="succeeded",
+                created_at=now,
+                available_at=now,
+                started_at=now + timedelta(seconds=4),
+                finished_at=now + timedelta(seconds=14),
+            ),
+            ImageJobItem(
+                job_id=job.id,
+                result_index=3,
+                status="failed",
+                created_at=now,
+                available_at=now,
+                started_at=now + timedelta(seconds=8),
+                finished_at=now + timedelta(seconds=28),
+                dead_letter_at=now + timedelta(seconds=28),
+            ),
+            ProviderRuntimeState(
+                provider_id=provider.id,
+                status="circuit_open",
+                failure_count=3,
+                last_failure_at=now,
+                circuit_open_until=now + timedelta(minutes=5),
+            ),
+        ])
     admin_login(client)
 
     response = client.get("/api/admin/image/stats")
@@ -204,76 +244,14 @@ def test_admin_image_stats_returns_duration_without_sqlite_julianday():
     assert response.status_code == 200
     data = response.json()["data"]
     assert data["performance"]["avg_duration_seconds"] == 12.0
+    assert data["performance"]["queue_wait_seconds"]["p50"] == 6.0
+    assert data["performance"]["queue_wait_seconds"]["p95"] == 7.8
+    assert data["performance"]["render_duration_seconds"]["p50"] == 15.0
+    assert data["performance"]["render_duration_seconds"]["p95"] == 19.5
+    assert data["queue"]["queued"] == 1
+    assert data["queue"]["dead_letter"] == 1
+    assert data["provider_health"]["circuit_open"] == 1
+    assert data["provider_health"]["failure_count"] == 3
     assert data["costs"]["total_cents"] == 250
     assert "revenue" not in data
     assert "julianday" not in inspect.getsource(stats_service._avg_duration)
-
-
-def test_admin_dead_letter_items_and_manual_retry():
-    client = build_client()
-    seed_admin()
-    with session_scope() as session:
-        job = ImageJob(
-            source="admin",
-            mode="generate",
-            prompt="Dead letter image",
-            model_code="gpt-image-2",
-            status="failed",
-            requested_count=1,
-        )
-        session.add(job)
-        session.flush()
-        item = ImageJobItem(
-            job_id=job.id,
-            result_index=1,
-            status="failed",
-            error_code="image_job_failed",
-            error_message="provider failed",
-            last_error_code="image_job_failed",
-            last_error_message="provider failed",
-            dead_letter_at=datetime.utcnow(),
-        )
-        session.add(item)
-        session.flush()
-        item_id = item.id
-    admin_login(client)
-
-    list_response = client.get("/api/admin/image/dead-letter-items")
-    assert list_response.status_code == 200
-    payload = list_response.json()["data"]
-    assert payload["items"][0]["item_id"] == item_id
-    assert payload["items"][0]["last_error_message"] == "provider failed"
-
-    retry_response = client.post(f"/api/admin/image/items/{item_id}/retry")
-    assert retry_response.status_code == 200
-    with session_scope() as session:
-        retried = session.get(ImageJobItem, item_id)
-        assert retried.status == "queued"
-        assert retried.dead_letter_at is None
-        assert retried.manual_retry_count == 1
-
-
-def test_admin_can_update_image_job_priority():
-    client = build_client()
-    seed_admin()
-    with session_scope() as session:
-        job = ImageJob(
-            source="admin",
-            mode="generate",
-            prompt="Priority image",
-            model_code="gpt-image-2",
-            status="queued",
-            requested_count=1,
-        )
-        session.add(job)
-        session.flush()
-        session.add(ImageJobItem(job_id=job.id, result_index=1, status="queued", priority=0))
-        job_id = job.id
-    admin_login(client)
-
-    response = client.post(f"/api/admin/image/jobs/{job_id}/priority", json={"priority": 9})
-
-    assert response.status_code == 200
-    with session_scope() as session:
-        item = session.execute(select(ImageJobItem).where(ImageJobItem.job_id == job_id)).scalar_one()
-        assert item.priority == 9

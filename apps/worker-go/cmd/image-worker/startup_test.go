@@ -70,6 +70,32 @@ func TestValidateStartupAllowsSimulateMode(t *testing.T) {
 	}
 }
 
+func TestParseCleanupFlagsRequiresExplicitMode(t *testing.T) {
+	if _, err := parseCleanupFlags([]string{}); err == nil {
+		t.Fatal("expected missing cleanup mode to fail")
+	}
+	if _, err := parseCleanupFlags([]string{"--dry-run", "--execute"}); err == nil {
+		t.Fatal("expected conflicting cleanup modes to fail")
+	}
+}
+
+func TestParseCleanupFlagsAcceptsDryRunAndExecute(t *testing.T) {
+	dryRun, err := parseCleanupFlags([]string{"--dry-run"})
+	if err != nil {
+		t.Fatalf("parse dry-run failed: %v", err)
+	}
+	if dryRun.Execute {
+		t.Fatal("dry-run parsed as execute")
+	}
+	execute, err := parseCleanupFlags([]string{"--execute"})
+	if err != nil {
+		t.Fatalf("parse execute failed: %v", err)
+	}
+	if !execute.Execute {
+		t.Fatal("execute flag did not enable cleanup")
+	}
+}
+
 func mapLookup(values map[string]string) func(string) (string, bool) {
 	return func(key string) (string, bool) {
 		value, ok := values[key]

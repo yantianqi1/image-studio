@@ -18,8 +18,20 @@ const imageJobTypesSource = readFileSync(
   new URL("../src/lib/admin-image-job-types.ts", import.meta.url),
   "utf8",
 );
+const adminApiSource = readFileSync(
+  new URL("../src/lib/admin-api.ts", import.meta.url),
+  "utf8",
+);
+const adminWorkerApiSource = readFileSync(
+  new URL("../src/lib/admin-worker-api.ts", import.meta.url),
+  "utf8",
+);
 const styleSource = readFileSync(
   new URL("../src/features/jobs/image-jobs.css", import.meta.url),
+  "utf8",
+);
+const workerRuntimeSource = readFileSync(
+  new URL("../src/features/jobs/image-worker-runtime-panel.tsx", import.meta.url),
   "utf8",
 );
 
@@ -49,4 +61,29 @@ test("image job rows expose upstream cost and preview fields", () => {
   assert.match(logListSource, /src=\{result\.thumbnail_url\}/);
   assert.doesNotMatch(logListSource, /src=\{result\.asset_url\}/);
   assert.match(styleSource, /object-fit: contain/);
+});
+
+test("image jobs page exposes dead letter and queue recovery actions", () => {
+  assert.match(pageSource, /dead-letter/);
+  assert.match(pageSource, /死信队列/);
+  assert.match(logListSource, /retryImageJob/);
+  assert.match(logListSource, /cancelImageJob/);
+  assert.match(adminApiSource, /retryImageItem/);
+  assert.match(adminApiSource, /cancelImageItem/);
+});
+
+test("image jobs page exposes worker summary and real drain controls", () => {
+  assert.match(pageSource, /ImageWorkerRuntimePanel/);
+  assert.match(workerRuntimeSource, /Worker runtime/);
+  assert.match(pageSource, /useImageQueueSummary/);
+  assert.match(pageSource, /useRunningImageItems/);
+  assert.match(pageSource, /drainWorker/);
+  assert.match(pageSource, /resumeWorker/);
+  assert.match(workerRuntimeSource, /Drain/);
+  assert.match(workerRuntimeSource, /Resume/);
+  assert.match(workerRuntimeSource, /RunningItems/);
+  assert.match(adminWorkerApiSource, /queueSummary/);
+  assert.match(adminWorkerApiSource, /runningItems/);
+  assert.match(adminWorkerApiSource, /drainWorker/);
+  assert.match(adminWorkerApiSource, /resumeWorker/);
 });

@@ -38,7 +38,7 @@ def add_seed_parser(subcommands: argparse._SubParsersAction[argparse.ArgumentPar
     parser.add_argument("--owner-count", type=positive_int, required=True)
     parser.add_argument("--provider-id", type=positive_int, required=True)
     parser.add_argument("--model-code", required=True)
-    parser.add_argument("--mode", choices=["simulate", "render-mock"], required=True)
+    parser.add_argument("--mode", choices=["render-mock"], required=True)
     parser.add_argument("--allow-production", action="store_true")
     parser.set_defaults(func=seed_jobs)
 

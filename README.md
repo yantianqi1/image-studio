@@ -208,7 +208,7 @@ Python worker 默认只处理 comic-task 和 comic-orchestration。image_job_ite
 
 ```bash
 cd apps/worker-go
-GO_WORKER_MODE=simulate go run ./cmd/image-worker
+GO_WORKER_MODE=render go run ./cmd/image-worker
 ```
 
 7. 启动两个前端
@@ -280,7 +280,7 @@ docker compose up -d
 
 生产 Compose 只对外发布 `7700` 和 `7701`。`public-web:7700`、`admin-web:7701`、`api:7800`、`postgres:5432` 只在 Docker 网络内部给 nginx、API 和 worker 使用。
 
-生产建议见 `infra/docker/README.md`、`infra/nginx/README.md`、`db/migrations/README.md`、`db/seeds/README.md`。
+生产建议见 `infra/docker/README.md`、`infra/nginx/README.md`、`db/migrations/README.md`、`db/seeds/README.md`、`docs/deploy/go-runtime-cutover.md`、`docs/runbooks/image-runtime.md`。
 
 ## 最小自检
 
@@ -305,7 +305,7 @@ source .venv/bin/activate
 python -m apps.worker.worker.main --once
 ```
 
-如需本地验证 image_job_items，使用 `apps/worker-go`；Python image_jobs 分支仅作为 legacy/manual 路径，并受 `WORKER_ENABLE_IMAGE_JOBS` 控制。
+如需本地验证 image_job_items，使用 `apps/worker-go`；Python worker 不再调度生产 image jobs。
 
 worker 观测摘要：
 

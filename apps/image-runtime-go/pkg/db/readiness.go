@@ -7,7 +7,15 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-var RequiredImageJobTables = []string{"image_job_items", "image_jobs", "assets", "image_job_results"}
+var RequiredImageJobTables = []string{
+	"image_job_items",
+	"image_jobs",
+	"assets",
+	"image_job_results",
+	"image_job_events",
+	"image_provider_usage_events",
+	"outbox_events",
+}
 
 type Execer interface {
 	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)

@@ -23,7 +23,8 @@ Python worker owns comic execution:
 - `comic-task`
 - `comic-orchestration`
 
-The Python image job executor is legacy/manual/test-only. Its branch is gated by `WORKER_ENABLE_IMAGE_JOBS=false` by default.
+The Python image job executor is deprecated legacy/manual/test-only code. The
+Python worker main loop does not import or schedule it in production.
 
 ## Data Model
 

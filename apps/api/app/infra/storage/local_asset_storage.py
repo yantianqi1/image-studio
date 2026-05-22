@@ -6,6 +6,8 @@ from typing import BinaryIO
 
 
 class LocalAssetStorage:
+    backend_name = "local"
+
     def __init__(self, *, root: Path) -> None:
         self.root = root
 

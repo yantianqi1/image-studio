@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+
 from fastapi.testclient import TestClient
 
 from apps.api.app.domains.auth.service import create_admin_account
@@ -8,6 +10,10 @@ from apps.api.app.domains.llm.service import RenderedImage
 from apps.api.app.infra.db.session import initialize_database, session_scope
 from apps.api.app.main import create_app
 from apps.worker.worker.tasks import image_jobs as worker_image_jobs
+
+VALID_PNG_BYTES = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
+)
 
 
 def build_client() -> TestClient:
@@ -36,7 +42,7 @@ def create_image_job(client: TestClient, prompt: str = "Owner scoped image") -> 
 def upload_asset(client: TestClient) -> dict:
     response = client.post(
         "/api/public/image/uploads",
-        files={"file": ("source.png", b"source-image", "image/png")},
+        files={"file": ("source.png", VALID_PNG_BYTES, "image/png")},
     )
     assert response.status_code == 201
     return response.json()["data"]

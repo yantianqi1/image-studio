@@ -16,6 +16,7 @@ from apps.api.app.domains.image.job_items import (
     mark_item_succeeded,
 )
 from apps.api.app.domains.image.models import ImageJob, ImageJobItem
+from apps.api.app.domains.image.provider_usage import record_rendered_usage
 from apps.api.app.domains.image.repository import get_job, list_reference_asset_ids
 from apps.api.app.infra.storage.asset_storage import AssetStorage
 from apps.api.app.infra.storage.factory import build_asset_storage
@@ -64,7 +65,7 @@ def render_item(
         reference_asset_ids=reference_asset_ids,
         client_config=client_config,
     )
-    image_service.apply_rendered_usage(job, rendered.usage)
+    record_rendered_usage(session, job=job, item_id=item.id, usage=rendered.usage)
     asset = persist_rendered_asset(
         session,
         storage=storage,

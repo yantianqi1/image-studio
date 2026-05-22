@@ -18,10 +18,16 @@ from apps.api.app.domains.image.gallery import (
     load_assets_by_id,
     update_owned_asset_visibility,
 )
+from apps.api.app.domains.image.item_actions import (
+    cancel_public_image_job_item,
+    list_public_image_job_items,
+    retry_public_image_job_item,
+)
 from apps.api.app.domains.image.payloads import (
     asset_payload,
     build_asset_download_disposition,
     gallery_item_payload,
+    item_payload,
     job_payload,
     result_payload,
     upload_payload,
@@ -133,12 +139,32 @@ def get_image_results(job_id: int, request: Request, session: Session = Depends(
     return api_ok([result_payload(item, asset=assets_by_id.get(item.asset_id), storage=storage) for item in results])
 
 
+@public_router.get("/jobs/{job_id}/items")
+def get_image_job_items(job_id: int, request: Request, session: Session = Depends(get_db_session)):
+    items = list_public_image_job_items(session, job_id=job_id, owner=resolve_request_owner(request, session))
+    return api_ok([item_payload(item) for item in items])
+
+
 @public_router.delete("/jobs/{job_id}")
 def delete_image_job(job_id: int, request: Request, session: Session = Depends(get_db_session)):
     owner = resolve_request_owner(request, session)
     result = delete_job(session, job_id=job_id, owner=owner)
     session.commit()
     return api_ok(result)
+
+
+@public_router.post("/items/{item_id}/retry")
+def retry_image_job_item(item_id: int, request: Request, session: Session = Depends(get_db_session)):
+    item = retry_public_image_job_item(session, item_id=item_id, owner=resolve_request_owner(request, session))
+    session.commit()
+    return api_ok(item_payload(item))
+
+
+@public_router.post("/items/{item_id}/cancel")
+def cancel_image_job_item(item_id: int, request: Request, session: Session = Depends(get_db_session)):
+    item = cancel_public_image_job_item(session, item_id=item_id, owner=resolve_request_owner(request, session))
+    session.commit()
+    return api_ok(item_payload(item))
 
 
 ASSET_CACHE_HEADERS = {"Cache-Control": "public, max-age=86400, s-maxage=604800", "CDN-Cache-Control": "public, max-age=604800"}

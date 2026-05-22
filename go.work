@@ -1,6 +1,7 @@
 go 1.23.0
 
 use (
+	./apps/core-api-go
 	./apps/image-api-go
 	./apps/image-runtime-go
 	./apps/worker-go

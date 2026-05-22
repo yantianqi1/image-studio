@@ -15,6 +15,16 @@ export const adminProviderApi = {
       method: "DELETE",
     });
   },
+  pauseImageProvider(providerId: number) {
+    return apiFetch<ProviderRuntimeState>(`/api/admin/image/providers/${providerId}/pause`, {
+      method: "POST",
+    });
+  },
+  resumeImageProvider(providerId: number) {
+    return apiFetch<ProviderRuntimeState>(`/api/admin/image/providers/${providerId}/resume`, {
+      method: "POST",
+    });
+  },
   models() {
     return apiFetch<readonly SellableModelPayload[]>("/api/admin/models");
   },
@@ -62,6 +72,16 @@ type ProviderPayload = Readonly<{
   api_key_env: string | null;
   default_model: string | null;
   status: string;
+  runtime_state: ProviderRuntimeState | null;
+}>;
+
+type ProviderRuntimeState = Readonly<{
+  provider_id: number;
+  status: string;
+  failure_count: number;
+  last_failure_at: string | null;
+  circuit_open_until: string | null;
+  updated_at: string | null;
 }>;
 
 type CreateProviderInput = Readonly<{

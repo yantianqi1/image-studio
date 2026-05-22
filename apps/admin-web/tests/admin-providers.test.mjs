@@ -12,6 +12,10 @@ const modelPanelsSource = readFileSync(
   new URL("../src/features/providers/model-panels.tsx", import.meta.url),
   "utf8",
 );
+const providerPanelsSource = readFileSync(
+  new URL("../src/features/providers/provider-panels.tsx", import.meta.url),
+  "utf8",
+);
 const overviewSource = readFileSync(
   new URL("../src/features/providers/provider-overview.tsx", import.meta.url),
   "utf8",
@@ -62,6 +66,25 @@ test("providers page manages NewAPI catalog without local pricing controls", () 
   assert.match(overviewSource, /可见模型/);
   assert.doesNotMatch(modelPanelsSource, /formatPriceCents|VariantQuickActions|PriceInputs/);
   assert.doesNotMatch(providersPageSource, /价格矩阵|推荐价|利润率/);
+});
+
+test("providers page exposes runtime health pause and resume controls", async () => {
+  const calls = [];
+  const { adminProviderApi } = loadProviderApi({
+    apiFetch: async (path, options = {}) => {
+      calls.push({ path, options });
+      return { provider_id: 3, status: "paused" };
+    },
+    apiUpload: unexpectedApiUpload,
+  });
+
+  await adminProviderApi.pauseImageProvider(3);
+  await adminProviderApi.resumeImageProvider(3);
+
+  assert.equal(calls[0].path, "/api/admin/image/providers/3/pause");
+  assert.equal(calls[1].path, "/api/admin/image/providers/3/resume");
+  assert.match(providerPanelsSource, /runtime_state/);
+  assert.match(providerPanelsSource, /暂停渲染|恢复渲染/);
 });
 
 function unexpectedApiUpload() {

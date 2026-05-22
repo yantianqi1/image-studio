@@ -15,6 +15,8 @@ type Config struct {
 	HTTPAddr                      string
 	GeneratedAssetsDir            string
 	StorageBackend                string
+	StorageGCSBucket              string
+	StorageGCSPrefix              string
 	InternalDebugToken            string
 	EnableInternalCreate          bool
 	EnablePublicCreate            bool
@@ -43,6 +45,8 @@ func Load() (Config, error) {
 		HTTPAddr:             stringDefault("GO_IMAGE_API_HTTP_ADDR", defaultHTTPAddr),
 		GeneratedAssetsDir:   stringDefault("GENERATED_ASSETS_DIR", "./generated-assets"),
 		StorageBackend:       stringDefault("ASSET_STORAGE_BACKEND", "local"),
+		StorageGCSBucket:     os.Getenv("ASSET_STORAGE_GCS_BUCKET"),
+		StorageGCSPrefix:     stringDefault("ASSET_STORAGE_GCS_PREFIX", "generated-assets"),
 		InternalDebugToken:   os.Getenv("GO_IMAGE_API_INTERNAL_DEBUG_TOKEN"),
 		EnableInternalCreate: os.Getenv("GO_IMAGE_API_ENABLE_INTERNAL_CREATE") == "true",
 		EnablePublicCreate:   os.Getenv("GO_IMAGE_API_CREATE_ENABLED") == "true",

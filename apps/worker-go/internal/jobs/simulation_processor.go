@@ -46,22 +46,7 @@ func (p *Processor) sendHeartbeat(ctx context.Context, itemID int64) bool {
 }
 
 func (p *Processor) finishSimulation(ctx context.Context, itemID int64) {
-	lock := JobLock{ItemID: itemID, WorkerName: p.workerName}
-	if p.failSimulation {
-		p.markFailed(ctx, itemID)
-		return
-	}
-	ok, err := p.store.MarkSucceeded(ctx, lock)
-	if err != nil {
-		p.logger.Error("image job item succeeded update failed", "item_id", itemID, "error", err)
-		return
-	}
-	if !ok {
-		p.logger.Error("image job item succeeded update did not match lock", "item_id", itemID)
-		return
-	}
-	p.metrics.IncItemSucceeded()
-	p.logger.Info("image job item simulation succeeded", "item_id", itemID)
+	p.markFailed(ctx, itemID)
 }
 
 func (p *Processor) markFailed(ctx context.Context, itemID int64) {

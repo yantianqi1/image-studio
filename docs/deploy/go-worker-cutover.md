@@ -1,14 +1,16 @@
 # Go Worker Image Job Cutover
 
-The Go worker is the recommended executor for `image_job_items`. Keep the Python worker enabled for `comic-task` and `comic-orchestration`; keep its image job branch off during Go render takeover.
+The Go worker is the production executor for `image_job_items`. Keep the Python
+worker enabled for `comic-task` and `comic-orchestration`; it no longer exposes
+a production image job branch.
 
-## Simulate Validation
+## Render Validation
 
 ```bash
-WORKER_ENABLE_IMAGE_JOBS=false
-GO_WORKER_MODE=simulate
+GO_WORKER_MODE=render
 GO_WORKER_CONCURRENCY=2
 GO_WORKER_PROVIDER_CONCURRENCY_DEFAULT=2
+ASSET_STORAGE_BACKEND=local
 docker compose --profile worker-go up -d worker worker-go
 ```
 
@@ -23,7 +25,6 @@ docker compose exec worker-go wget -qO- http://127.0.0.1:7900/metrics
 ## Render Takeover
 
 ```bash
-WORKER_ENABLE_IMAGE_JOBS=false
 GO_WORKER_MODE=render
 GO_WORKER_CONCURRENCY=8
 GO_WORKER_PROVIDER_CONCURRENCY_DEFAULT=2
@@ -38,7 +39,7 @@ Startup validation fails fast when:
 - `ASSET_STORAGE_BACKEND` is not `local`
 - the Go render provider support list is empty
 
-It logs warnings when `WORKER_ENABLE_IMAGE_JOBS=true` is visible or `GO_WORKER_CONCURRENCY > 32`.
+It logs warnings when `GO_WORKER_CONCURRENCY > 32`.
 
 `/readyz` checks DB ping, required tables, and local storage write/delete in render mode.
 
@@ -50,11 +51,8 @@ Stop the Go worker:
 docker compose --profile worker-go stop worker-go
 ```
 
-Temporarily restore Python image job consumption:
-
-```bash
-WORKER_ENABLE_IMAGE_JOBS=true
-docker compose up -d worker
-```
-
-Do not keep both workers consuming image jobs. If Go worker stopped while items were `running`, wait for their lease to expire; the queue claim logic will retry eligible queued work after `lease_expires_at`.
+Do not roll production image execution back to the Python worker. If Go worker
+stopped while items were `running`, wait for their lease to expire; the queue
+claim logic will retry eligible queued work after `lease_expires_at` when the
+Go worker is started again. The Python image executor is reserved for explicit
+manual repair of legacy rows without `image_job_items`.

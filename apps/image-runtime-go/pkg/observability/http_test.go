@@ -69,3 +69,29 @@ func TestDiagnosticsMetricsIncludesRequiredSeries(t *testing.T) {
 		}
 	}
 }
+
+func TestDiagnosticsPprofDisabledByDefault(t *testing.T) {
+	handler := NewDiagnosticsHandlerWithOptions(NewMetrics(), func(context.Context) error { return nil }, DiagnosticsOptions{})
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/debug/pprof/", nil))
+
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("pprof status = %d, want 404", response.Code)
+	}
+}
+
+func TestDiagnosticsPprofCanBeExplicitlyEnabled(t *testing.T) {
+	handler := NewDiagnosticsHandlerWithOptions(
+		NewMetrics(),
+		func(context.Context) error { return nil },
+		DiagnosticsOptions{EnablePprof: true},
+	)
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/debug/pprof/", nil))
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("pprof status = %d, want 200", response.Code)
+	}
+}

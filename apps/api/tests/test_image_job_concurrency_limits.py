@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from apps.api.app.domains.auth.ownership import OwnerContext
 from apps.api.app.domains.image import service as image_service
-from apps.api.app.domains.image.models import ImageJob
+from apps.api.app.domains.image.models import ImageJob, ImageJobItem
 from apps.api.app.infra.db.session import session_scope
 from apps.api.tests.test_image_jobs import (
     build_client,
@@ -70,6 +70,7 @@ def test_worker_claims_all_requested_jobs_for_anonymous_session() -> None:
             create_legacy_anonymous_job(session, owner=owner, prompt=f"Legacy anonymous job {index}")
             for index in range(1, 4)
         ]
+        session.execute(delete(ImageJobItem).where(ImageJobItem.job_id.in_(job_ids)))
 
     claimed_ids = worker_image_jobs.claim_next_image_job_ids(max_jobs=3)
 

@@ -22,9 +22,12 @@ const (
 type Reader interface {
 	ResolveOwner(context.Context, service.OwnerTokens) (service.Owner, error)
 	GetPublicJob(context.Context, int64, service.Owner) (*service.JobPayload, error)
+	GetPublicEvents(context.Context, int64, service.Owner, int64, int) ([]service.JobEventPayload, error)
 	GetPublicResults(context.Context, int64, service.Owner) ([]service.ResultPayload, error)
 	GetPublicAsset(context.Context, int64, service.Owner) (*service.AssetContent, error)
 	GetPublicAssetThumbnail(context.Context, int64, service.Owner) (*service.AssetContent, error)
+	GetPublicGallery(context.Context, service.Owner, string) ([]service.GalleryItemPayload, error)
+	DeletePublicJob(context.Context, int64, service.Owner) (*service.DeleteJobPayload, error)
 	GetAdminDebug(context.Context, int64) (*service.DebugPayload, error)
 	CreateInternalJob(context.Context, service.CreateJobRequest) (*service.JobPayload, error)
 	CreatePublicJob(context.Context, service.PublicCreateJobRequest) (*service.PublicCreateJobResult, error)
@@ -67,10 +70,14 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeData(w, map[string]string{"status": "ok"})
 	case r.Method == http.MethodGet && path == "readyz":
 		h.handleReady(w, r)
+	case r.Method == http.MethodGet && path == "api/public/image/gallery":
+		h.handlePublicGallery(w, r)
 	case r.Method == http.MethodGet && strings.HasPrefix(path, "api/public/image/jobs/"):
 		h.handlePublicJob(w, r, path)
 	case r.Method == http.MethodPost && path == "api/public/image/jobs":
 		h.handlePublicCreate(w, r)
+	case r.Method == http.MethodDelete && strings.HasPrefix(path, "api/public/image/jobs/"):
+		h.handlePublicDeleteJob(w, r, path)
 	case r.Method == http.MethodGet && strings.HasPrefix(path, "api/public/image/assets/"):
 		h.handlePublicAsset(w, r, path)
 	case r.Method == http.MethodGet && strings.HasPrefix(path, "api/admin/image/jobs/"):

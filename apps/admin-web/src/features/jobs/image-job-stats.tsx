@@ -39,6 +39,10 @@ function MetricCards({ stats }: { stats: ImageJobStats }) {
       <MetricCard label="成功率" value={`${(stats.overview.success_rate * 100).toFixed(1)}%`} tone="success" />
       <MetricCard label="总成本" value={formatCents(stats.costs.total_cents)} />
       <MetricCard label="平均耗时" value={avgDuration != null ? `${avgDuration.toFixed(1)} 秒` : "—"} />
+      <MetricCard label="队列 p95" value={formatSeconds(stats.performance.queue_wait_seconds.p95)} />
+      <MetricCard label="渲染 p95" value={formatSeconds(stats.performance.render_duration_seconds.p95)} />
+      <MetricCard label="死信单元" value={String(stats.queue.dead_letter)} tone={stats.queue.dead_letter > 0 ? "danger" : undefined} />
+      <MetricCard label="供应商熔断" value={String(stats.provider_health.circuit_open)} tone={stats.provider_health.circuit_open > 0 ? "danger" : undefined} />
     </div>
   );
 }
@@ -73,9 +77,10 @@ function ChannelCostPanel({ items }: { items: readonly ChannelCostItem[] }) {
 }
 
 function MetricCard({ label, value, tone }: { label: string; value: string; tone?: string }) {
+  const toneClass = tone === "success" ? "text-emerald-600" : tone === "danger" ? "text-red-600" : "";
   return (
     <div className="admin-card flex flex-col items-center justify-center gap-1 py-4">
-      <span className={`text-xl font-bold ${tone === "success" ? "text-emerald-600" : ""}`}>{value}</span>
+      <span className={`text-xl font-bold ${toneClass}`}>{value}</span>
       <span className="text-xs text-gray-500">{label}</span>
     </div>
   );
@@ -131,6 +136,10 @@ function CostTrendChart({ data }: { data: readonly DailyTrendItem[] }) {
 
 function formatCents(value: number) {
   return `¥${(value / 100).toFixed(2)}`;
+}
+
+function formatSeconds(value: number | null) {
+  return value != null ? `${value.toFixed(1)} 秒` : "—";
 }
 
 function DistributionPanel({

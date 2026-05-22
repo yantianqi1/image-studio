@@ -52,10 +52,44 @@ type JobPayload struct {
 }
 
 type ResultPayload struct {
-	ResultIndex  int    `json:"result_index"`
-	AssetID      int64  `json:"asset_id"`
-	AssetURL     string `json:"asset_url"`
-	ThumbnailURL string `json:"thumbnail_url,omitempty"`
+	ID                int64   `json:"id"`
+	JobID             int64   `json:"job_id"`
+	ResultIndex       int     `json:"result_index"`
+	AssetID           int64   `json:"asset_id"`
+	AssetURL          string  `json:"asset_url"`
+	ThumbnailURL      string  `json:"thumbnail_url"`
+	Visibility        string  `json:"visibility"`
+	PublishedAt       *string `json:"published_at"`
+	CreatedAt         string  `json:"created_at"`
+	RevisedPrompt     *string `json:"revised_prompt"`
+	ProviderRequestID *string `json:"provider_request_id"`
+}
+
+type GalleryItemPayload struct {
+	AssetID       int64   `json:"asset_id"`
+	AssetURL      string  `json:"asset_url"`
+	ThumbnailURL  string  `json:"thumbnail_url"`
+	Visibility    string  `json:"visibility"`
+	PublishedAt   *string `json:"published_at"`
+	CreatedAt     string  `json:"created_at"`
+	JobID         int64   `json:"job_id"`
+	ResultIndex   int     `json:"result_index"`
+	Prompt        string  `json:"prompt"`
+	RevisedPrompt *string `json:"revised_prompt"`
+}
+
+type DeleteJobPayload struct {
+	Deleted bool   `json:"deleted"`
+	ID      string `json:"id"`
+}
+
+type JobEventPayload struct {
+	ID        int64          `json:"id"`
+	JobID     int64          `json:"job_id"`
+	ItemID    *int64         `json:"item_id"`
+	EventType string         `json:"event_type"`
+	Payload   map[string]any `json:"payload"`
+	CreatedAt string         `json:"created_at"`
 }
 
 type AssetContent struct {

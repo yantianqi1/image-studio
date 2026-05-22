@@ -28,6 +28,24 @@ On item completion it owns only:
 
 It should skip billing work because there is no reservation table or `reservation_id` to reconcile.
 
+Provider usage is still local operational data. Each rendered item with provider
+usage writes one `image_provider_usage_events` row and aggregates the same values
+onto `image_jobs` for public/admin payload compatibility:
+
+- `provider_input_tokens`
+- `provider_output_tokens`
+- `provider_total_tokens`
+- `raw_provider_cost_cents`
+- `provider_fee_cents`
+- `internal_cost_cents`
+- `provider_usage`
+
+The reconciliation entrypoint is `scripts/reconcile-image-billing.py`. It
+reports `local_billing=removed` for the current schema and checks
+`image_provider_usage_events` against the aggregated `image_jobs` fields by
+`job_id`, provider, and model. It must not recreate wallet tables or fake
+reservation checks.
+
 ## Why Phase-6 Reservation Commit Is Not Implemented
 
 The third-phase refactor plan mentioned committing or releasing wallet reservations from Go worker aggregation. That instruction was written for the older local-wallet architecture.

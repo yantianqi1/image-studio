@@ -105,28 +105,110 @@ function ProviderCard({
         <div className="truncate">
           <span className="text-gray-300">默认模型</span> {provider.default_model || "-"}
         </div>
+        <div>
+          <span className="text-gray-300">运行状态</span> {runtimeStatusText(provider.runtime_state?.status)}
+        </div>
+        <div>
+          <span className="text-gray-300">失败计数</span> {provider.runtime_state?.failure_count ?? 0}
+        </div>
+        <div className="truncate">
+          <span className="text-gray-300">熔断到期</span> {provider.runtime_state?.circuit_open_until || "-"}
+        </div>
       </div>
-      <button
-        className="admin-button border border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
-        type="button"
-        disabled={pending}
-        onClick={async () => {
-          if (!window.confirm(`确认删除供应商 ${provider.name}？`)) return;
-          setPending(true);
-          try {
-            await adminApi.deleteProvider(provider.id);
-            await onDeleted(`供应商 ${provider.name} 已删除`);
-          } catch (error) {
-            onError(error instanceof Error ? error.message : "删除供应商失败");
-          } finally {
-            setPending(false);
-          }
-        }}
-      >
-        {pending ? "删除中..." : "删除供应商"}
-      </button>
+      <div className="flex flex-wrap gap-2">
+        <RuntimeAction provider={provider} pending={pending} setPending={setPending} onChanged={onDeleted} onError={onError} />
+        <DeleteProviderButton provider={provider} pending={pending} setPending={setPending} onDeleted={onDeleted} onError={onError} />
+      </div>
     </div>
   );
+}
+
+function RuntimeAction({
+  provider,
+  pending,
+  setPending,
+  onChanged,
+  onError,
+}: {
+  provider: Provider;
+  pending: boolean;
+  setPending: (pending: boolean) => void;
+  onChanged: (message: string) => Promise<void>;
+  onError: (message: string) => void;
+}) {
+  const paused = provider.runtime_state?.status === "paused";
+  return (
+    <button
+      className="admin-button"
+      disabled={pending}
+      type="button"
+      onClick={() => updateRuntimeState(provider, paused ? "resume" : "pause", setPending, onChanged, onError)}
+    >
+      {paused ? "恢复渲染" : "暂停渲染"}
+    </button>
+  );
+}
+
+function DeleteProviderButton({
+  provider,
+  pending,
+  setPending,
+  onDeleted,
+  onError,
+}: {
+  provider: Provider;
+  pending: boolean;
+  setPending: (pending: boolean) => void;
+  onDeleted: (message: string) => Promise<void>;
+  onError: (message: string) => void;
+}) {
+  return (
+    <button
+      className="admin-button border border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+      type="button"
+      disabled={pending}
+      onClick={() => deleteProvider(provider, setPending, onDeleted, onError)}
+    >
+      {pending ? "处理中..." : "删除供应商"}
+    </button>
+  );
+}
+
+async function updateRuntimeState(
+  provider: Provider,
+  action: "pause" | "resume",
+  setPending: (pending: boolean) => void,
+  onChanged: (message: string) => Promise<void>,
+  onError: (message: string) => void,
+) {
+  setPending(true);
+  try {
+    if (action === "pause") await adminApi.pauseImageProvider(provider.id);
+    if (action === "resume") await adminApi.resumeImageProvider(provider.id);
+    await onChanged(`供应商 ${provider.name} 已${action === "pause" ? "暂停渲染" : "恢复渲染"}`);
+  } catch (error) {
+    onError(error instanceof Error ? error.message : "更新供应商运行状态失败");
+  } finally {
+    setPending(false);
+  }
+}
+
+async function deleteProvider(
+  provider: Provider,
+  setPending: (pending: boolean) => void,
+  onDeleted: (message: string) => Promise<void>,
+  onError: (message: string) => void,
+) {
+  if (!window.confirm(`确认删除供应商 ${provider.name}？`)) return;
+  setPending(true);
+  try {
+    await adminApi.deleteProvider(provider.id);
+    await onDeleted(`供应商 ${provider.name} 已删除`);
+  } catch (error) {
+    onError(error instanceof Error ? error.message : "删除供应商失败");
+  } finally {
+    setPending(false);
+  }
 }
 
 function providerStatusClass(status: string) {
@@ -136,6 +218,14 @@ function providerStatusClass(status: string) {
 
 function providerStatusText(status: string) {
   return status === "active" ? "启用中" : "已停用";
+}
+
+function runtimeStatusText(status?: string) {
+  if (status === "paused") return "已暂停";
+  if (status === "circuit_open") return "熔断中";
+  if (status === "degraded") return "降级";
+  if (status === "healthy") return "健康";
+  return "未记录";
 }
 
 function providerTypeText(type: string) {

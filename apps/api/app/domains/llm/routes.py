@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, Request, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from apps.api.app.core.deps import get_db_session
 from apps.api.app.core.response import api_ok
 from apps.api.app.domains.auth.service import require_admin
+from apps.api.app.domains.image.models import ProviderRuntimeState
 from apps.api.app.domains.llm.admin_ops import delete_provider, delete_sellable_model
 from apps.api.app.domains.llm.feature_settings import (
     list_allowed_llm_models,
@@ -53,7 +55,9 @@ def get_models(session: Session = Depends(get_db_session)):
 @provider_admin_router.get("")
 def get_provider_list(request: Request, session: Session = Depends(get_db_session)):
     require_admin(request, session)
-    providers = [provider_payload(provider) for provider in list_providers(session)]
+    providers = list_providers(session)
+    runtime_states = load_provider_runtime_states(session, provider_ids=[provider.id for provider in providers])
+    providers = [provider_payload(provider, runtime_states.get(provider.id)) for provider in providers]
     session.commit()
     return api_ok(providers)
 
@@ -194,6 +198,19 @@ def llm_feature_settings_response(session: Session) -> dict[str, object]:
         for definition in definitions
     ]
     return {"features": features, "models": [sellable_model_payload(model) for model in model_lookup.values()]}
+
+
+def load_provider_runtime_states(
+    session: Session,
+    *,
+    provider_ids: list[int],
+) -> dict[int, ProviderRuntimeState]:
+    if not provider_ids:
+        return {}
+    states = session.execute(
+        select(ProviderRuntimeState).where(ProviderRuntimeState.provider_id.in_(provider_ids))
+    ).scalars()
+    return {state.provider_id: state for state in states}
 
 
 @model_admin_router.patch("/{model_code:path}")

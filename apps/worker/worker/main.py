@@ -10,15 +10,12 @@ from apps.api.app.infra.db.session import initialize_database
 from apps.worker.worker.config import get_settings
 from apps.worker.worker.tasks.comic_orchestration import run_next_comic_orchestration
 from apps.worker.worker.tasks.comic_tasks import run_next_comic_task
-from apps.worker.worker.tasks.image_jobs import run_next_image_jobs
 
 COMIC_TASK_BRANCH_NAME = "comic-task"
 COMIC_ORCHESTRATION_BRANCH_NAME = "comic-orchestration"
-IMAGE_JOBS_BRANCH_NAME = "image-jobs"
 WORKER_BRANCH_ENV_KEYS = (
     "WORKER_ENABLE_COMIC_TASK",
     "WORKER_ENABLE_COMIC_ORCHESTRATION",
-    "WORKER_ENABLE_IMAGE_JOBS",
 )
 
 
@@ -53,7 +50,7 @@ def format_run_messages(messages: list[str | None]) -> str:
     ]
     message = join_processed_messages(processed_messages)
     if message is None:
-        return "No claimable comic tasks or image jobs."
+        return "No claimable comic tasks."
     return message
 
 
@@ -61,14 +58,6 @@ def strip_terminal_period(message: str) -> str:
     if message.endswith("."):
         return message[:-1]
     return message
-
-
-def format_image_job_messages(image_job_ids: list[int]) -> list[str]:
-    if len(image_job_ids) == 1:
-        return [f"Processed image job {image_job_ids[0]}"]
-    if len(image_job_ids) > 1:
-        return [f"Processed image jobs {', '.join(str(job_id) for job_id in image_job_ids)}"]
-    return []
 
 
 def join_processed_messages(messages: list[str]) -> str | None:
@@ -108,8 +97,6 @@ def build_worker_branches() -> list[WorkerBranch]:
             name=COMIC_ORCHESTRATION_BRANCH_NAME,
             run_once=run_comic_orchestration_branch_once,
         ))
-    if settings.worker_enable_image_jobs:
-        branches.append(WorkerBranch(name=IMAGE_JOBS_BRANCH_NAME, run_once=run_image_jobs_branch_once))
     if not branches:
         env_names = ", ".join(WORKER_BRANCH_ENV_KEYS)
         raise RuntimeError(f"No worker branches are enabled. Enable at least one of {env_names}.")
@@ -142,13 +129,6 @@ def run_comic_orchestration_branch_once() -> str | None:
     if comic_action is None:
         return None
     return f"Processed comic orchestration {comic_action}."
-
-
-def run_image_jobs_branch_once() -> str | None:
-    settings = get_settings()
-    return join_processed_messages(format_image_job_messages(
-        run_next_image_jobs(max_workers=settings.worker_image_job_concurrency),
-    ))
 
 
 def main() -> None:

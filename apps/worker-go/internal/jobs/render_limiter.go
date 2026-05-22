@@ -12,11 +12,17 @@ const unnamedLimiterKey = "_default"
 
 type limiterPool struct {
 	mu         sync.Mutex
-	semaphores map[string]chan struct{}
+	semaphores map[string]*limiterSemaphore
+}
+
+type limiterSemaphore struct {
+	limit     int
+	semaphore chan struct{}
+	waiters   int
 }
 
 func newLimiterPool() *limiterPool {
-	return &limiterPool{semaphores: map[string]chan struct{}{}}
+	return &limiterPool{semaphores: map[string]*limiterSemaphore{}}
 }
 
 func (p *Processor) acquireRenderLimiters(ctx context.Context, job provider.JobContext) (func(), error) {
@@ -37,26 +43,60 @@ func (p *Processor) acquireRenderLimiters(ctx context.Context, job provider.JobC
 }
 
 func (l *limiterPool) acquire(ctx context.Context, key string, limit int) (func(), error) {
-	semaphore := l.semaphore(key, limit)
+	entry := l.semaphore(key, limit)
+	if release, ok := l.tryAcquire(entry); ok {
+		return release, nil
+	}
+	l.mu.Lock()
+	entry.waiters++
+	l.mu.Unlock()
 	select {
-	case semaphore <- struct{}{}:
-		var once sync.Once
-		return func() { once.Do(func() { <-semaphore }) }, nil
+	case entry.semaphore <- struct{}{}:
+		l.finishWait(entry)
+		return limiterRelease(entry), nil
 	case <-ctx.Done():
+		l.finishWait(entry)
 		return nil, ctx.Err()
 	}
 }
 
-func (l *limiterPool) semaphore(key string, limit int) chan struct{} {
+func (l *limiterPool) semaphore(key string, limit int) *limiterSemaphore {
 	normalizedKey := normalizeLimiterKey(key)
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if semaphore, ok := l.semaphores[normalizedKey]; ok {
-		return semaphore
+	if current, ok := l.semaphores[normalizedKey]; ok {
+		if !canResizeLimiter(current, limit) {
+			return current
+		}
 	}
-	semaphore := make(chan struct{}, limit)
-	l.semaphores[normalizedKey] = semaphore
-	return semaphore
+	entry := &limiterSemaphore{limit: limit, semaphore: make(chan struct{}, limit)}
+	l.semaphores[normalizedKey] = entry
+	return entry
+}
+
+func (l *limiterPool) tryAcquire(entry *limiterSemaphore) (func(), bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if len(entry.semaphore) >= entry.limit {
+		return nil, false
+	}
+	entry.semaphore <- struct{}{}
+	return limiterRelease(entry), true
+}
+
+func (l *limiterPool) finishWait(entry *limiterSemaphore) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	entry.waiters--
+}
+
+func canResizeLimiter(current *limiterSemaphore, nextLimit int) bool {
+	return current.limit != nextLimit && len(current.semaphore) == 0 && current.waiters == 0
+}
+
+func limiterRelease(entry *limiterSemaphore) func() {
+	var once sync.Once
+	return func() { once.Do(func() { <-entry.semaphore }) }
 }
 
 func (p *Processor) providerLimiterSpec(job provider.JobContext) (string, int) {
@@ -68,7 +108,7 @@ func (p *Processor) providerLimiterSpec(job provider.JobContext) (string, int) {
 	if limit, ok := p.providerConcurrencyOverrides[providerType]; ok && providerType != "" {
 		return "type:" + providerType, limit
 	}
-	return providerLimiterKey(job), p.providerConcurrencyDefault
+	return providerLimiterKey(job), p.controlSnapshot().ProviderConcurrencyDefault
 }
 
 func providerLimiterKey(job provider.JobContext) string {

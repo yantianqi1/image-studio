@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass
 
 from fastapi.testclient import TestClient
@@ -10,6 +11,9 @@ from apps.api.app.main import create_app
 
 COOKIE_NAME = "studio_anonymous_session"
 PASSWORD = "top-secret"
+VALID_PNG_BYTES = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
+)
 
 
 @dataclass(frozen=True)
@@ -70,7 +74,7 @@ def create_task(client: TestClient, project_id: str) -> dict:
 def upload_asset(client: TestClient) -> dict:
     response = client.post(
         "/api/public/image/uploads",
-        files={"file": ("anonymous.png", b"anonymous-image", "image/png")},
+        files={"file": ("anonymous.png", VALID_PNG_BYTES, "image/png")},
     )
     assert response.status_code == 201
     return response.json()["data"]

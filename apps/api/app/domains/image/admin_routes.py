@@ -6,10 +6,15 @@ from apps.api.app.core.deps import get_db_session
 from apps.api.app.core.response import api_ok
 from apps.api.app.domains.auth.service import require_admin
 from apps.api.app.domains.image.admin_service import (
+    cancel_image_job,
+    cancel_image_job_item,
     list_admin_jobs_paginated,
     list_admin_jobs_with_results,
     list_dead_letter_items,
+    pause_provider_runtime,
     retry_dead_letter_item,
+    retry_image_job,
+    resume_provider_runtime,
     update_job_priority,
 )
 from apps.api.app.domains.image.assets import resolve_asset_content, resolve_thumbnail_content
@@ -85,6 +90,46 @@ def retry_image_job_item(item_id: int, request: Request, session: Session = Depe
     return api_ok({"item_id": item.id, "job_id": item.job_id, "status": item.status})
 
 
+@admin_router.post("/image/items/{item_id}/cancel")
+def cancel_image_item(item_id: int, request: Request, session: Session = Depends(get_db_session)):
+    require_admin(request, session)
+    item = cancel_image_job_item(session, item_id=item_id)
+    session.commit()
+    return api_ok({"item_id": item.id, "job_id": item.job_id, "status": item.status})
+
+
+@admin_router.post("/image/jobs/{job_id}/retry")
+def retry_admin_image_job(job_id: int, request: Request, session: Session = Depends(get_db_session)):
+    require_admin(request, session)
+    result = retry_image_job(session, job_id=job_id)
+    session.commit()
+    return api_ok(result)
+
+
+@admin_router.post("/image/jobs/{job_id}/cancel")
+def cancel_admin_image_job(job_id: int, request: Request, session: Session = Depends(get_db_session)):
+    require_admin(request, session)
+    result = cancel_image_job(session, job_id=job_id)
+    session.commit()
+    return api_ok(result)
+
+
+@admin_router.post("/image/providers/{provider_id}/pause")
+def pause_image_provider(provider_id: int, request: Request, session: Session = Depends(get_db_session)):
+    require_admin(request, session)
+    state = pause_provider_runtime(session, provider_id=provider_id)
+    session.commit()
+    return api_ok(provider_runtime_payload(state))
+
+
+@admin_router.post("/image/providers/{provider_id}/resume")
+def resume_image_provider(provider_id: int, request: Request, session: Session = Depends(get_db_session)):
+    require_admin(request, session)
+    state = resume_provider_runtime(session, provider_id=provider_id)
+    session.commit()
+    return api_ok(provider_runtime_payload(state))
+
+
 @admin_router.post("/image/jobs/{job_id}/priority")
 def set_image_job_priority(
     job_id: int,
@@ -127,6 +172,17 @@ def dead_letter_payload(item, job) -> dict[str, object]:
         "last_error_message": item.last_error_message,
         "dead_letter_at": item.dead_letter_at.isoformat() if item.dead_letter_at else None,
         "manual_retry_count": item.manual_retry_count,
+    }
+
+
+def provider_runtime_payload(state) -> dict[str, object]:
+    return {
+        "provider_id": state.provider_id,
+        "status": state.status,
+        "failure_count": state.failure_count,
+        "last_failure_at": state.last_failure_at.isoformat() if state.last_failure_at else None,
+        "circuit_open_until": state.circuit_open_until.isoformat() if state.circuit_open_until else None,
+        "updated_at": state.updated_at.isoformat() if state.updated_at else None,
     }
 
 

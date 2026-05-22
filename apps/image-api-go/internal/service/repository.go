@@ -97,6 +97,9 @@ func (r *Repository) CreateInternalJob(ctx context.Context, request CreateJobReq
 	if err := insertShadowReferences(ctx, tx, jobID, request.ReferenceAssetIDs); err != nil {
 		return nil, err
 	}
+	if err := recordCreatedEvent(ctx, tx, jobID); err != nil {
+		return nil, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit internal image job create: %w", err)
 	}

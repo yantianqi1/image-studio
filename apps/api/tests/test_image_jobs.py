@@ -478,7 +478,7 @@ def test_reference_and_edit_size_quality_does_not_add_local_charge() -> None:
     register_user(client, email="priced-edit@example.com")
     upload_response = client.post(
         "/api/public/image/uploads",
-        files={"file": ("source.png", b"source-image", "image/png")},
+        files={"file": ("source.png", VALID_PNG_BYTES, "image/png")},
     )
 
     create_response = client.post(
@@ -505,7 +505,7 @@ def test_edit_job_records_uploaded_source_asset_and_passes_it_to_renderer(monkey
     register_user(client, email="edit-source@example.com")
     upload_response = client.post(
         "/api/public/image/uploads",
-        files={"file": ("source.png", b"source-image", "image/png")},
+        files={"file": ("source.png", VALID_PNG_BYTES, "image/png")},
     )
     assert upload_response.status_code == 201
     source_asset_id = upload_response.json()["data"]["id"]
@@ -734,6 +734,107 @@ def test_delete_image_job_removes_job_record():
     assert response.status_code == 200
     with session_scope() as session:
         assert session.get(ImageJob, job["id"]) is None
+
+
+def test_user_can_retry_own_failed_image_job_item():
+    client = build_client()
+    register_user(client, email="retry-item@example.com")
+    job = create_image_job(client, prompt="Retry failed item")
+    with session_scope() as session:
+        item = session.execute(select(ImageJobItem).where(ImageJobItem.job_id == job["id"])).scalar_one()
+        item.status = "failed"
+        item.error_code = "image_job_failed"
+        item.error_message = "provider failed"
+        item.dead_letter_at = datetime.utcnow()
+        item.finished_at = datetime.utcnow()
+        session.flush()
+        item_id = item.id
+
+    response = client.post(f"/api/public/image/items/{item_id}/retry")
+
+    assert response.status_code == 200
+    assert response.json()["data"]["status"] == "queued"
+    with session_scope() as session:
+        retried = session.get(ImageJobItem, item_id)
+        assert retried.status == "queued"
+        assert retried.dead_letter_at is None
+        assert retried.manual_retry_count == 1
+        assert session.get(ImageJob, job["id"]).status == "queued"
+
+
+def test_user_can_list_own_image_job_items():
+    client = build_client()
+    register_user(client, email="list-items@example.com")
+    job = create_image_job(client, prompt="List item states")
+    with session_scope() as session:
+        item = session.execute(select(ImageJobItem).where(ImageJobItem.job_id == job["id"])).scalar_one()
+        item.status = "failed"
+        item.error_code = "image_job_failed"
+        item.error_message = "provider failed"
+        session.flush()
+        item_id = item.id
+
+    response = client.get(f"/api/public/image/jobs/{job['id']}/items")
+
+    assert response.status_code == 200
+    assert response.json()["data"] == [{
+        "id": item_id,
+        "job_id": job["id"],
+        "result_index": 1,
+        "status": "failed",
+        "asset_id": None,
+        "error_code": "image_job_failed",
+        "error_message": "provider failed",
+        "manual_retry_count": 0,
+        "created_at": response.json()["data"][0]["created_at"],
+        "available_at": response.json()["data"][0]["available_at"],
+        "started_at": None,
+        "finished_at": None,
+        "cancelled_at": None,
+    }]
+
+
+def test_user_can_cancel_own_running_image_job_item():
+    client = build_client()
+    register_user(client, email="cancel-item@example.com")
+    job = create_image_job(client, prompt="Cancel one item")
+    with session_scope() as session:
+        item = session.execute(select(ImageJobItem).where(ImageJobItem.job_id == job["id"])).scalar_one()
+        item.status = "running"
+        item.locked_by = "go-worker"
+        item.locked_at = datetime.utcnow()
+        item.heartbeat_at = datetime.utcnow()
+        session.flush()
+        item_id = item.id
+
+    response = client.post(f"/api/public/image/items/{item_id}/cancel")
+
+    assert response.status_code == 200
+    assert response.json()["data"]["status"] == "cancelled"
+    with session_scope() as session:
+        cancelled = session.get(ImageJobItem, item_id)
+        assert cancelled.status == "cancelled"
+        assert cancelled.cancelled_at is not None
+        assert cancelled.cancel_reason == "user_cancelled"
+        assert cancelled.locked_by is None
+        assert session.get(ImageJob, job["id"]).status == "cancelled"
+
+
+def test_user_cannot_retry_another_users_image_job_item():
+    owner_client = build_client()
+    register_user(owner_client, email="item-owner@example.com")
+    job = create_image_job(owner_client, prompt="Private failed item")
+    with session_scope() as session:
+        item_id = session.execute(
+            select(ImageJobItem.id).where(ImageJobItem.job_id == job["id"])
+        ).scalar_one()
+
+    other_client = build_client()
+    register_user(other_client, email="item-other@example.com")
+
+    response = other_client.post(f"/api/public/image/items/{item_id}/retry")
+
+    assert response.status_code == 404
 
 
 def test_worker_retries_failed_job_before_terminal_failure(monkeypatch):

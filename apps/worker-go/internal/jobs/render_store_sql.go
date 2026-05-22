@@ -68,8 +68,9 @@ WHERE id IN (SELECT asset_id FROM deleted_results)`
 const insertAssetSQL = `
 INSERT INTO assets (
   owner_user_id, owner_anonymous_session_id, owner_client_id,
-  storage_path, mime_type, visibility, created_at
-) VALUES ($1, $2, $3, '', $4, $5, now())
+  storage_path, mime_type, visibility, size_bytes, sha256,
+  width, height, storage_backend, created_at
+) VALUES ($1, $2, $3, '', $4, $5, $6, $7, $8, $9, $10, now())
 RETURNING id`
 
 const updateAssetPathSQL = `
@@ -82,7 +83,73 @@ INSERT INTO image_job_results (
   job_id, result_index, asset_id, asset_url, revised_prompt, provider_request_id
 ) VALUES ($1, $2, $3, $4, $5, $6)`
 
+const insertAssetCreatedOutboxSQL = `
+INSERT INTO outbox_events (
+  aggregate_type, aggregate_id, event_type, payload, status, attempts, available_at, created_at
+) VALUES (
+  'asset', $1::text, 'asset.created',
+  jsonb_build_object(
+    'asset_id', $1,
+    'storage_path', $2,
+    'size_bytes', $3,
+    'sha256', $4,
+    'width', $5,
+    'height', $6,
+    'storage_backend', $7
+  ),
+  'pending', 0, now(), now()
+)`
+
+const insertProviderUsageEventSQL = `
+INSERT INTO image_provider_usage_events (
+  job_id, item_id, provider_id, provider_name, provider_model,
+  input_tokens, output_tokens, total_tokens,
+  raw_provider_cost_cents, provider_fee_cents, internal_cost_cents,
+  raw_payload, created_at
+) VALUES (
+  $1, $2, $3, $4, $5,
+  $6, $7, $8,
+  $9, $10, $11,
+  $12::jsonb, now()
+)`
+
+const aggregateProviderUsageSQL = `
+UPDATE image_jobs
+SET provider_input_tokens = CASE
+      WHEN $2::int IS NULL THEN provider_input_tokens
+      ELSE COALESCE(provider_input_tokens, 0) + $2::int
+    END,
+    provider_output_tokens = CASE
+      WHEN $3::int IS NULL THEN provider_output_tokens
+      ELSE COALESCE(provider_output_tokens, 0) + $3::int
+    END,
+    provider_total_tokens = CASE
+      WHEN $4::int IS NULL THEN provider_total_tokens
+      ELSE COALESCE(provider_total_tokens, 0) + $4::int
+    END,
+    raw_provider_cost_cents = CASE
+      WHEN $5::int IS NULL THEN raw_provider_cost_cents
+      ELSE COALESCE(raw_provider_cost_cents, 0) + $5::int
+    END,
+    provider_fee_cents = CASE
+      WHEN $6::int IS NULL THEN provider_fee_cents
+      ELSE COALESCE(provider_fee_cents, 0) + $6::int
+    END,
+    internal_cost_cents = CASE
+      WHEN $7::int IS NULL THEN internal_cost_cents
+      ELSE COALESCE(internal_cost_cents, 0) + $7::int
+    END,
+    provider_usage = CASE
+      WHEN $8::jsonb IS NULL THEN provider_usage
+      ELSE jsonb_build_object(
+        'results',
+        COALESCE(provider_usage->'results', '[]'::jsonb) || jsonb_build_array($8::jsonb)
+      )
+    END
+WHERE id = $1`
+
 const markRenderSucceededSQL = `
+WITH updated AS (
 UPDATE image_job_items
 SET status='succeeded',
     finished_at=now(),
@@ -95,9 +162,28 @@ SET status='succeeded',
     heartbeat_at=NULL,
     lease_expires_at=NULL
 WHERE id=$1 AND locked_by=$2 AND status='running'
-RETURNING job_id`
+RETURNING id, job_id
+),
+events AS (
+  INSERT INTO image_job_events (job_id, item_id, event_type, payload, created_at)
+  SELECT job_id, id, 'image_job_item.succeeded',
+    jsonb_build_object('id', job_id, 'status', 'succeeded', 'item_id', id, 'asset_id', $3),
+    now()
+  FROM updated
+  RETURNING job_id, event_type, payload
+),
+outbox AS (
+  INSERT INTO outbox_events (
+    aggregate_type, aggregate_id, event_type, payload, status, attempts, available_at, created_at
+  )
+  SELECT 'image_job', job_id::text, event_type, payload, 'pending', 0, now(), now()
+  FROM events
+  RETURNING id
+)
+SELECT job_id FROM updated`
 
 const markAssetCommitFailedSQL = `
+WITH updated AS (
 UPDATE image_job_items
 SET status='failed',
     finished_at=now(),
@@ -113,7 +199,25 @@ SET status='failed',
     heartbeat_at=NULL,
     lease_expires_at=NULL
 WHERE id=$1 AND asset_id=$2
-RETURNING job_id`
+RETURNING id, job_id
+),
+events AS (
+  INSERT INTO image_job_events (job_id, item_id, event_type, payload, created_at)
+  SELECT job_id, id, 'image_job_item.dead_lettered',
+    jsonb_build_object('id', job_id, 'status', 'failed', 'item_id', id, 'error_code', 'asset_commit_failed', 'error_message', $3),
+    now()
+  FROM updated
+  RETURNING job_id, event_type, payload
+),
+outbox AS (
+  INSERT INTO outbox_events (
+    aggregate_type, aggregate_id, event_type, payload, status, attempts, available_at, created_at
+  )
+  SELECT 'image_job', job_id::text, event_type, payload, 'pending', 0, now(), now()
+  FROM events
+  RETURNING id
+)
+SELECT job_id FROM updated`
 
 const deleteAssetCommitResultSQL = `
 DELETE FROM image_job_results
@@ -122,63 +226,3 @@ WHERE job_id=$1 AND result_index=$2 AND asset_id=$3`
 const deleteAssetCommitAssetSQL = `
 DELETE FROM assets
 WHERE id=$1`
-
-const AggregateParentJobSQL = `
-WITH counts AS (
-  SELECT
-    job_id,
-    COUNT(*) AS total,
-    COUNT(*) FILTER (WHERE status = 'running') AS running,
-    COUNT(*) FILTER (WHERE status = 'succeeded') AS succeeded,
-    COUNT(*) FILTER (WHERE status = 'failed') AS failed,
-    COALESCE(MAX(attempt_count), 0) AS max_attempt
-  FROM image_job_items
-  WHERE job_id = $1
-  GROUP BY job_id
-),
-retry_error AS (
-  SELECT error_code, error_message
-  FROM image_job_items
-  WHERE job_id = $1 AND status = 'queued' AND error_code IS NOT NULL
-  ORDER BY result_index ASC
-  LIMIT 1
-),
-failed_error AS (
-  SELECT error_message
-  FROM image_job_items
-  WHERE job_id = $1 AND status = 'failed'
-  ORDER BY result_index ASC
-  LIMIT 1
-)
-UPDATE image_jobs j
-SET status = CASE
-      WHEN counts.running > 0 THEN 'running'
-      WHEN counts.succeeded = counts.total THEN 'succeeded'
-      WHEN counts.failed > 0 AND counts.succeeded + counts.failed = counts.total THEN 'failed'
-      ELSE 'queued'
-    END,
-    attempt_count = counts.max_attempt,
-    finished_at = CASE
-      WHEN counts.succeeded = counts.total THEN now()
-      WHEN counts.failed > 0 AND counts.succeeded + counts.failed = counts.total THEN now()
-      ELSE NULL
-    END,
-    available_at = CASE
-      WHEN counts.succeeded = counts.total THEN now()
-      WHEN counts.failed > 0 AND counts.succeeded + counts.failed = counts.total THEN now()
-      ELSE j.available_at
-    END,
-    error_code = CASE
-      WHEN counts.failed > 0 AND counts.succeeded + counts.failed = counts.total THEN 'image_job_failed'
-      WHEN counts.running = 0 AND retry_error.error_code IS NOT NULL THEN retry_error.error_code
-      ELSE NULL
-    END,
-    error_message = CASE
-      WHEN counts.failed > 0 AND counts.succeeded + counts.failed = counts.total THEN failed_error.error_message
-      WHEN counts.running = 0 AND retry_error.error_code IS NOT NULL THEN retry_error.error_message
-      ELSE NULL
-    END
-FROM counts
-LEFT JOIN retry_error ON TRUE
-LEFT JOIN failed_error ON TRUE
-WHERE j.id = counts.job_id`

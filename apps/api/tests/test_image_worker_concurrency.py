@@ -1,10 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-import threading
-import time
 
-import pytest
 from sqlalchemy import select
 
 from apps.api.app.domains.image import service as image_service
@@ -12,11 +9,7 @@ from apps.api.app.domains.image.models import ImageJob, ImageJobItem
 from apps.api.app.infra.db.session import session_scope
 from apps.worker.worker import config as worker_config
 from apps.worker.worker import main as worker_main
-from apps.api.tests.test_image_jobs import build_client, build_rendered_image, register_user
-
-
-EXPECTED_JOB_COUNT = 4
-EXPECTED_WORKER_CONCURRENCY = 2
+from apps.api.tests.test_image_jobs import build_client, register_user
 
 
 def test_claim_next_job_ids_claims_queued_job_with_sqlite_fallback() -> None:
@@ -93,65 +86,19 @@ def test_postgres_claim_sql_uses_skip_locked_and_limit_parameter() -> None:
     assert "RETURNING image_jobs.id" in claim_sql
 
 
-def test_worker_image_job_concurrency_reads_environment(monkeypatch) -> None:
+def test_python_worker_settings_do_not_expose_image_job_concurrency(monkeypatch) -> None:
     monkeypatch.setenv("WORKER_IMAGE_JOB_CONCURRENCY", "4")
     worker_config.get_settings.cache_clear()
 
-    assert worker_config.get_settings().worker_image_job_concurrency == 4
+    assert not hasattr(worker_config.get_settings(), "worker_image_job_concurrency")
 
 
-def test_worker_image_job_concurrency_rejects_invalid_environment(monkeypatch) -> None:
-    monkeypatch.setenv("WORKER_IMAGE_JOB_CONCURRENCY", "0")
-    worker_config.get_settings.cache_clear()
-
-    with pytest.raises(ValueError, match="WORKER_IMAGE_JOB_CONCURRENCY must be at least 1"):
-        worker_config.get_settings()
+def test_python_worker_main_has_no_image_jobs_branch() -> None:
+    assert not hasattr(worker_main, "run_image_jobs_branch_once")
+    assert "image-jobs" not in [branch.name for branch in worker_main.build_worker_branches()]
 
 
-def test_image_jobs_branch_uses_configured_concurrency(monkeypatch) -> None:
-    seen_max_workers: list[int | None] = []
-
-    def process_image_jobs(*, max_workers: int | None = None) -> list[int]:
-        seen_max_workers.append(max_workers)
-        return [101, 102]
-
-    monkeypatch.setenv("WORKER_IMAGE_JOB_CONCURRENCY", "2")
-    worker_config.get_settings.cache_clear()
-    monkeypatch.setattr(worker_main, "run_next_image_jobs", process_image_jobs)
-
-    message = worker_main.run_image_jobs_branch_once()
-
-    assert seen_max_workers == [2]
-    assert message == "Processed image jobs 101, 102."
-
-
-def test_worker_run_once_limits_image_jobs_to_configured_concurrency(monkeypatch) -> None:
-    monkeypatch.setenv("WORKER_IMAGE_JOB_CONCURRENCY", str(EXPECTED_WORKER_CONCURRENCY))
-    monkeypatch.setenv("WORKER_ENABLE_IMAGE_JOBS", "true")
-    worker_config.get_settings.cache_clear()
-    client = build_client()
-    register_user(client, email="worker-concurrency@example.com")
-    job_ids = [
-        create_member_job(client, prompt=f"Concurrent image {index}")["id"]
-        for index in range(1, EXPECTED_JOB_COUNT + 1)
-    ]
-    tracker = RenderConcurrencyTracker()
-    monkeypatch.setattr(image_service, "render_image", tracker.render, raising=False)
-
-    message = worker_main.run_once()
-
-    claimed_job_ids = job_ids[:EXPECTED_WORKER_CONCURRENCY]
-    queued_job_ids = job_ids[EXPECTED_WORKER_CONCURRENCY:]
-    assert message == f"Processed image jobs {', '.join(str(job_id) for job_id in claimed_job_ids)}."
-    assert tracker.max_active == EXPECTED_WORKER_CONCURRENCY
-    with session_scope() as session:
-        jobs = list(session.execute(select(ImageJob).where(ImageJob.id.in_(job_ids))).scalars())
-        statuses_by_id = {job.id: job.status for job in jobs}
-    assert [statuses_by_id[job_id] for job_id in claimed_job_ids] == ["succeeded", "succeeded"]
-    assert [statuses_by_id[job_id] for job_id in queued_job_ids] == ["queued", "queued"]
-
-
-def test_worker_run_once_processes_image_jobs_when_comic_task_is_claimed(monkeypatch) -> None:
+def test_worker_run_once_ignores_removed_image_jobs_flag(monkeypatch) -> None:
     calls: list[str] = []
 
     def process_comic_task() -> str:
@@ -162,21 +109,15 @@ def test_worker_run_once_processes_image_jobs_when_comic_task_is_claimed(monkeyp
         calls.append("comic-orchestration")
         return None
 
-    def process_image_jobs(*, max_workers: int | None = None) -> list[int]:
-        calls.append("image-jobs")
-        assert max_workers == 2
-        return [101, 102]
-
     monkeypatch.setenv("WORKER_ENABLE_IMAGE_JOBS", "true")
     worker_config.get_settings.cache_clear()
     monkeypatch.setattr(worker_main, "run_next_comic_task", process_comic_task)
     monkeypatch.setattr(worker_main, "run_next_comic_orchestration", process_comic_orchestration)
-    monkeypatch.setattr(worker_main, "run_next_image_jobs", process_image_jobs)
 
     message = worker_main.run_once()
 
-    assert sorted(calls) == ["comic-orchestration", "comic-task", "image-jobs"]
-    assert message == "Processed comic task comic-task-1; Processed image jobs 101, 102."
+    assert sorted(calls) == ["comic-orchestration", "comic-task"]
+    assert message == "Processed comic task comic-task-1."
 
 
 def test_serve_forever_starts_independent_worker_branches(monkeypatch) -> None:
@@ -210,24 +151,8 @@ def test_serve_forever_starts_independent_worker_branches(monkeypatch) -> None:
 
     worker_main.serve_forever()
 
-    assert max_workers_seen == [3]
-    assert submitted_branches == ["comic-task", "comic-orchestration", "image-jobs"]
-
-
-class RenderConcurrencyTracker:
-    def __init__(self) -> None:
-        self.active = 0
-        self.max_active = 0
-        self.lock = threading.Lock()
-
-    def render(self, _session=None, **kwargs):
-        with self.lock:
-            self.active += 1
-            self.max_active = max(self.max_active, self.active)
-        time.sleep(0.05)
-        with self.lock:
-            self.active -= 1
-        return build_rendered_image(prompt=kwargs["prompt"], model_code=kwargs["model_code"])
+    assert max_workers_seen == [2]
+    assert submitted_branches == ["comic-task", "comic-orchestration"]
 
 
 def create_member_job(client, *, prompt: str) -> dict[str, object]:

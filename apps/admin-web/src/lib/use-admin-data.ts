@@ -4,8 +4,12 @@ import type { AdminImageJob } from "@/lib/admin-image-job-types";
 import type { AdminUserList, AdminUsersQuery } from "@/lib/admin-users";
 import type {
   AdminAuditLogList,
+  AdminDeadLetterItem,
   AdminGalleryItem,
   AdminLlmFacilityResponse,
+  ImageQueueSummary,
+  RunningImageItem,
+  WorkerNode,
   WorkerSummary,
 } from "@/lib/admin-api";
 import type { ImageJobStats } from "@/lib/admin-image-job-types";
@@ -64,8 +68,32 @@ export function useWorkerSummary() {
   });
 }
 
+export function useWorkerNodes() {
+  return useSWR<{ items: readonly WorkerNode[] }>("/api/admin/ops/workers", {
+    refreshInterval: WORKER_SUMMARY_REFRESH_INTERVAL_MS,
+  });
+}
+
+export function useImageQueueSummary() {
+  return useSWR<ImageQueueSummary>("/api/admin/ops/image/queue-summary", {
+    refreshInterval: WORKER_SUMMARY_REFRESH_INTERVAL_MS,
+  });
+}
+
+export function useRunningImageItems() {
+  return useSWR<{ items: readonly RunningImageItem[] }>("/api/admin/ops/image/running-items", {
+    refreshInterval: WORKER_SUMMARY_REFRESH_INTERVAL_MS,
+  });
+}
+
 export function useAdminStats() {
   return useSWR<ImageJobStats>("/api/admin/image/stats", {
+    refreshInterval: IMAGE_JOBS_REFRESH_INTERVAL_MS,
+  });
+}
+
+export function useDeadLetterItems() {
+  return useSWR<{ items: readonly AdminDeadLetterItem[] }>("/api/admin/image/dead-letter-items", {
     refreshInterval: IMAGE_JOBS_REFRESH_INTERVAL_MS,
   });
 }
@@ -109,6 +137,14 @@ type Provider = {
   api_key_env: string | null;
   default_model: string | null;
   status: string;
+  runtime_state: {
+    provider_id: number;
+    status: string;
+    failure_count: number;
+    last_failure_at: string | null;
+    circuit_open_until: string | null;
+    updated_at: string | null;
+  } | null;
 };
 
 type SellableModel = {

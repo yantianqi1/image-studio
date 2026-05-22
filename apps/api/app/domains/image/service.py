@@ -14,6 +14,7 @@ from apps.api.app.domains.image.conversation_messages import (
     normalize_conversation_messages,
     validate_conversation_message_assets,
 )
+from apps.api.app.domains.image.events import record_image_job_event
 from apps.api.app.domains.image.gallery import set_asset_visibility
 from apps.api.app.domains.image.job_builder import CreateImageJobRecordInput, create_image_job_record
 from apps.api.app.domains.image.job_claiming import (
@@ -31,6 +32,7 @@ from apps.api.app.domains.image.job_item_claiming import (
 )
 from apps.api.app.domains.image.job_items import create_job_items
 from apps.api.app.domains.image.models import ImageJob
+from apps.api.app.domains.image.provider_usage import record_rendered_usage
 from apps.api.app.domains.image.repository import (
     clear_job_outputs,
     complete_job,
@@ -49,7 +51,6 @@ from apps.api.app.domains.image.repository import (
     resolve_source_asset,
 )
 from apps.api.app.domains.llm.client_provider import ClientProviderConfig
-from apps.api.app.domains.llm.rendering import ProviderUsage
 from apps.api.app.domains.llm.service import (
     render_image,
     resolve_model_execution_target,
@@ -118,6 +119,12 @@ def persist_new_image_job(session: Session, *, job: ImageJob, reference_assets) 
     session.flush()
     create_job_items(session, job=job)
     create_reference_asset_rows(session, job_id=job.id, assets=reference_assets)
+    record_image_job_event(
+        session,
+        job_id=job.id,
+        event_type="image_job.created",
+        payload={"id": job.id, "status": job.status},
+    )
 
 
 def claim_next_job(
@@ -194,7 +201,7 @@ def process_render_results(session: Session, *, job: ImageJob) -> None:
     )
     for result_index in range(1, job.requested_count + 1):
         rendered = render_job_image(session, job=job, reference_asset_ids=reference_asset_ids, client_config=client_config)
-        apply_rendered_usage(job, rendered.usage)
+        record_rendered_usage(session, job=job, item_id=None, usage=rendered.usage)
         asset = persist_rendered_asset(
             session,
             storage=storage,
@@ -207,49 +214,6 @@ def process_render_results(session: Session, *, job: ImageJob) -> None:
         ensure_thumbnail_exists(asset, storage)
         set_asset_visibility(asset, job.visibility)
         add_job_result(session, job=job, result_index=result_index, asset_id=asset.id, rendered=rendered)
-
-
-def apply_rendered_usage(job: ImageJob, usage: ProviderUsage | None) -> None:
-    if usage is None:
-        return
-    job.provider_input_tokens = add_nullable_int(job.provider_input_tokens, usage.input_tokens)
-    job.provider_output_tokens = add_nullable_int(job.provider_output_tokens, usage.output_tokens)
-    job.provider_total_tokens = add_nullable_int(job.provider_total_tokens, usage.total_tokens)
-    job.raw_provider_cost_cents = add_nullable_int(job.raw_provider_cost_cents, usage.raw_provider_cost_cents)
-    job.provider_fee_cents = add_nullable_int(job.provider_fee_cents, usage.provider_fee_cents)
-    job.internal_cost_cents = add_nullable_int(job.internal_cost_cents, usage.internal_cost_cents)
-    job.provider_usage = append_usage_payload(existing=job.provider_usage, raw_payload=usage.raw_payload)
-
-
-def add_nullable_int(existing: int | None, value: int | None) -> int | None:
-    if value is None:
-        return existing
-    return (existing or 0) + value
-
-
-def append_usage_payload(*, existing: object, raw_payload: dict[str, object] | None) -> dict[str, object] | None:
-    if raw_payload is None:
-        if existing is None or isinstance(existing, dict):
-            return existing
-        raise AppError(code="provider_usage_invalid", message="stored provider usage invalid", status_code=500)
-    entries = extract_usage_entries(existing)
-    return {"results": [*entries, raw_payload]}
-
-
-def extract_usage_entries(existing: object) -> list[dict[str, object]]:
-    if existing is None:
-        return []
-    if not isinstance(existing, dict):
-        raise AppError(code="provider_usage_invalid", message="stored provider usage invalid", status_code=500)
-    entries = existing.get("results")
-    if not isinstance(entries, list):
-        raise AppError(code="provider_usage_invalid", message="stored provider usage invalid", status_code=500)
-    result: list[dict[str, object]] = []
-    for entry in entries:
-        if not isinstance(entry, dict):
-            raise AppError(code="provider_usage_invalid", message="stored provider usage invalid", status_code=500)
-        result.append(entry)
-    return result
 
 
 def render_job_image(

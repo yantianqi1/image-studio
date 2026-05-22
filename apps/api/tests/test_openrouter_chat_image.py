@@ -212,7 +212,7 @@ def test_openrouter_size_quality_does_not_add_local_job_charge(monkeypatch) -> N
     register_user(client, email="openrouter-price@example.com")
     source_response = client.post(
         "/api/public/image/uploads",
-        files={"file": ("source.png", b"source-image", "image/png")},
+        files={"file": ("source.png", VALID_PNG_BYTES, "image/png")},
     )
 
     create_response = client.post(

@@ -63,3 +63,19 @@ func parseConcurrencyOverrideItem(key string, item string) (string, int, error) 
 	}
 	return strings.TrimSpace(parts[0]), limit, nil
 }
+
+func cloneIntMap(values map[string]int) map[string]int {
+	clone := make(map[string]int, len(values))
+	for key, value := range values {
+		clone[key] = value
+	}
+	return clone
+}
+
+func stringDefault(lookup LookupFunc, key string, defaultValue string) string {
+	value, ok := lookup(key)
+	if !ok || value == "" {
+		return defaultValue
+	}
+	return value
+}

@@ -9,8 +9,10 @@
 - `GET /api/public/image/jobs/{job_id}`
 - `GET /api/public/image/jobs/{job_id}/results`
 - `GET /api/public/image/jobs/{job_id}/events`
+- `GET /api/public/image/gallery`
 - `GET /api/public/image/assets/{asset_id}`
 - `GET /api/public/image/assets/{asset_id}/thumbnail`
+- `DELETE /api/public/image/jobs/{job_id}`
 - `GET /api/admin/image/jobs/{job_id}/debug`
 - `POST /internal/image/jobs`
 - `POST /api/public/image/jobs`
@@ -62,30 +64,41 @@ When enabled, `POST /api/public/image/jobs` resolves the same user and anonymous
 
 Local wallet billing is intentionally not implemented in Go create because the repository removed local billing tables and `image_jobs.reservation_id` / `charge_cents` in `20260518_000026_remove_local_billing.py`. Do not recreate those tables in the Go takeover path.
 
-The SSE endpoint sends `job_snapshot` first, then status events such as `item_started`, `job_succeeded`, `job_failed`, and `heartbeat`. The public web client tries EventSource first and falls back to existing polling on SSE error.
+The SSE endpoint sends `job_snapshot` first, then status events such as `item_started`, `item_succeeded`, `item_failed`, `item_cancelled`, `item_retry_scheduled`, `job_succeeded`, `job_failed`, and `heartbeat`. The public web client tries EventSource first and falls back to existing polling on SSE error.
 
 ## Optional Read Routing
 
-Nginx keeps routing public image reads to FastAPI by default:
+Nginx keeps routing public image reads to FastAPI by default. Each route family has its own flag:
 
 ```bash
 GO_IMAGE_API_READS_ENABLED=false
+GO_IMAGE_API_ASSETS_ENABLED=false
+GO_IMAGE_API_SSE_ENABLED=false
+GO_IMAGE_API_GALLERY_ENABLED=false
+GO_IMAGE_API_DELETE_ENABLED=false
 ```
 
-To route only the read endpoints to Go, start the Go API profile and render the nginx template with:
+To route only job and result read endpoints to Go, start the Go API profile and render the nginx template with:
 
 ```bash
 GO_IMAGE_API_READS_ENABLED=true docker compose --profile image-api-go up -d image-api-go nginx
 ```
 
-Only these GET routes are switched:
+Only these GET routes are switched by `GO_IMAGE_API_READS_ENABLED`:
 
 - `/api/public/image/jobs/{job_id}`
 - `/api/public/image/jobs/{job_id}/results`
-- `/api/public/image/assets/{asset_id}`
-- `/api/public/image/assets/{asset_id}/thumbnail`
 
-`POST /api/public/image/jobs` and all other public APIs still go to FastAPI unless the create flag below is enabled. Rollback is setting `GO_IMAGE_API_READS_ENABLED=false` and recreating/reloading nginx.
+These flags switch additional route families independently:
+
+| Flag | Routes |
+| --- | --- |
+| `GO_IMAGE_API_ASSETS_ENABLED` | `GET /api/public/image/assets/{asset_id}`, `GET /api/public/image/assets/{asset_id}/thumbnail` |
+| `GO_IMAGE_API_SSE_ENABLED` | `GET /api/public/image/jobs/{job_id}/events` |
+| `GO_IMAGE_API_GALLERY_ENABLED` | `GET /api/public/image/gallery` |
+| `GO_IMAGE_API_DELETE_ENABLED` | `DELETE /api/public/image/jobs/{job_id}` |
+
+`GET /api/public/image/assets/{asset_id}/download`, uploads, visibility updates, and asset deletion still route to FastAPI. Rollback is setting the affected `GO_IMAGE_API_*_ENABLED=false` flag and recreating/reloading nginx.
 
 ## Optional Create Routing
 

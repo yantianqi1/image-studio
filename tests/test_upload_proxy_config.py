@@ -37,20 +37,49 @@ def test_go_image_api_reads_are_disabled_by_default_and_scoped_to_get_routes() -
 
     assert "${GO_IMAGE_API_READS_ENABLED}" in source
     assert "http://image-api-go:7810" in source
-    assert "~^GET:/api/public/image/jobs/[0-9]+:true:(true|false)$" in source
-    assert "~^GET:/api/public/image/assets/[0-9]+/thumbnail:true:(true|false)$" in source
+    assert "~^GET:/api/public/image/jobs/[0-9]+:true:(true|false):(true|false):" in source
+    assert "~^GET:/api/public/image/jobs/[0-9]+/results:true:(true|false):(true|false):" in source
+    assert "GO_IMAGE_API_READS_ENABLED}" in source
+    assert "GO_IMAGE_API_ASSETS_ENABLED}" in source
+    assert "GO_IMAGE_API_SSE_ENABLED}" in source
+
+
+def test_go_image_api_asset_routes_have_independent_flag() -> None:
+    source = NGINX_CONFIG.read_text()
+
+    assert "${GO_IMAGE_API_ASSETS_ENABLED}" in source
+    assert "~^GET:/api/public/image/assets/[0-9]+:(true|false):true:" in source
+    assert "~^GET:/api/public/image/assets/[0-9]+/thumbnail:(true|false):true:" in source
+    assert "~^GET:/api/public/image/assets/[0-9]+/download:(true|false):true:" not in source
+
+
+def test_go_image_api_sse_and_gallery_routes_have_independent_flags() -> None:
+    source = NGINX_CONFIG.read_text()
+
+    assert "${GO_IMAGE_API_SSE_ENABLED}" in source
+    assert "~^GET:/api/public/image/jobs/[0-9]+/events:(true|false):(true|false):true:" in source
+    assert "~^GET:/api/public/image/gallery:(true|false):(true|false):(true|false):true:" in source
 
 
 def test_go_image_api_create_is_disabled_by_default_and_scoped_to_job_post() -> None:
     source = NGINX_CONFIG.read_text()
 
     assert "${GO_IMAGE_API_CREATE_ENABLED}" in source
-    assert "~^POST:/api/public/image/jobs:(true|false):true$" in source
+    assert "~^POST:/api/public/image/jobs:(true|false):(true|false):(true|false):(true|false):(true|false):true$" in source
     assert "/api/public/image/jobs/[0-9]+:(true|false):true" not in source
+
+
+def test_go_image_api_delete_is_disabled_by_default_and_scoped_to_job_delete() -> None:
+    source = NGINX_CONFIG.read_text()
+
+    assert "${GO_IMAGE_API_DELETE_ENABLED}" in source
+    assert "~^DELETE:/api/public/image/jobs/[0-9]+:(true|false):(true|false):(true|false):(true|false):true:" in source
+    assert "/api/public/image/assets/[0-9]+:(true|false):(true|false):(true|false):(true|false):true" not in source
 
 
 def test_public_proxy_strips_debug_owner_headers() -> None:
     source = NGINX_CONFIG.read_text()
+    public_block = source.split("location /api/public/ {", 1)[1].split("}", 1)[0]
 
-    assert 'proxy_set_header X-Debug-Owner-User-ID "";' in source
-    assert 'proxy_set_header X-Debug-Anonymous-Session-ID "";' in source
+    assert 'proxy_set_header X-Debug-Owner-User-ID "";' in public_block
+    assert 'proxy_set_header X-Debug-Anonymous-Session-ID "";' in public_block

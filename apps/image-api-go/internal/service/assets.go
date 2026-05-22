@@ -1,33 +1,15 @@
 package service
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"image"
-	_ "image/gif"
-	"image/jpeg"
-	_ "image/png"
-	"path"
-	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/yantianqi1/image-studio/apps/image-runtime-go/pkg/assetops"
 )
 
-const (
-	svgMimeType           = "image/svg+xml"
-	thumbnailMimeType     = "image/jpeg"
-	thumbnailMaxDimension = 640
-	thumbnailSuffix       = ".thumb.jpg"
-	jpegThumbnailQuality  = 82
-)
-
-type assetRecord struct {
-	ID          int64
-	StoragePath string
-	MimeType    string
-}
+type assetRecord = assetops.AssetRecord
 
 func (r *Repository) GetPublicAsset(ctx context.Context, assetID int64, owner Owner) (*AssetContent, error) {
 	asset, err := r.loadPublicAsset(ctx, assetID, owner)
@@ -46,26 +28,33 @@ func (r *Repository) GetPublicAssetThumbnail(ctx context.Context, assetID int64,
 	if err != nil {
 		return nil, err
 	}
-	if asset.MimeType == svgMimeType {
+	if asset.MimeType == assetops.SVGMimeType {
 		return r.GetPublicAsset(ctx, assetID, owner)
 	}
-	key := thumbnailAssetKey(asset.StoragePath)
-	if !r.storage.Exists(key) {
-		if err := r.writeThumbnail(asset, key); err != nil {
-			return nil, err
+	if !assetops.SupportsThumbnail(asset.MimeType) {
+		return nil, ErrUnsupported
+	}
+	key, _, err := assetops.EnsureThumbnail(r.storage, asset)
+	if err != nil {
+		if errors.Is(err, assetops.ErrThumbnailInvalidSource) {
+			return nil, fmt.Errorf("%w: %v", ErrUnsupported, err)
 		}
+		return nil, err
+	}
+	if err := r.updateThumbnailStoragePath(ctx, asset, key); err != nil {
+		return nil, err
 	}
 	content, err := r.storage.ReadBytes(key)
 	if err != nil {
 		return nil, fmt.Errorf("read public asset thumbnail: %w", err)
 	}
-	return &AssetContent{Content: content, MimeType: thumbnailMimeType}, nil
+	return &AssetContent{Content: content, MimeType: assetops.ThumbnailMimeType}, nil
 }
 
 func (r *Repository) loadPublicAsset(ctx context.Context, assetID int64, owner Owner) (assetRecord, error) {
 	var asset assetRecord
 	err := r.pool.QueryRow(ctx, publicAssetSQL(owner), publicAssetArgs(assetID, owner)...).Scan(
-		&asset.ID, &asset.StoragePath, &asset.MimeType,
+		&asset.ID, &asset.StoragePath, &asset.MimeType, &asset.ThumbnailStoragePath,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return asset, ErrNotFound
@@ -96,63 +85,12 @@ func publicAssetSQL(owner Owner) string {
 	return publicAssetBaseSQL + " AND visibility='public'"
 }
 
-func (r *Repository) writeThumbnail(asset assetRecord, key string) error {
-	if !strings.HasPrefix(asset.MimeType, "image/") {
-		return ErrUnsupported
+func (r *Repository) updateThumbnailStoragePath(ctx context.Context, asset assetRecord, key string) error {
+	if asset.ThumbnailStoragePath != nil && *asset.ThumbnailStoragePath == key {
+		return nil
 	}
-	content, err := r.storage.ReadBytes(asset.StoragePath)
-	if err != nil {
-		return fmt.Errorf("read thumbnail source: %w", err)
+	if _, err := r.pool.Exec(ctx, updateAssetThumbnailPathSQL, asset.ID, key); err != nil {
+		return fmt.Errorf("update public asset thumbnail path: %w", err)
 	}
-	thumbnail, err := buildThumbnailBytes(content)
-	if err != nil {
-		return err
-	}
-	return r.storage.WriteBytes(key, thumbnail, thumbnailMimeType)
-}
-
-func thumbnailAssetKey(assetKey string) string {
-	base := path.Base(assetKey)
-	stem := strings.TrimSuffix(base, path.Ext(base))
-	return path.Join(path.Dir(assetKey), stem+thumbnailSuffix)
-}
-
-func buildThumbnailBytes(content []byte) ([]byte, error) {
-	source, _, err := image.Decode(bytes.NewReader(content))
-	if err != nil {
-		return nil, fmt.Errorf("%w: decode thumbnail source: %v", ErrUnsupported, err)
-	}
-	thumb := resizeNearest(source, thumbnailDimensions(source.Bounds()))
-	var output bytes.Buffer
-	if err := jpeg.Encode(&output, thumb, &jpeg.Options{Quality: jpegThumbnailQuality}); err != nil {
-		return nil, fmt.Errorf("encode thumbnail: %w", err)
-	}
-	return output.Bytes(), nil
-}
-
-func thumbnailDimensions(bounds image.Rectangle) image.Rectangle {
-	width := bounds.Dx()
-	height := bounds.Dy()
-	if width <= thumbnailMaxDimension && height <= thumbnailMaxDimension {
-		return image.Rect(0, 0, width, height)
-	}
-	if width >= height {
-		scaledHeight := height * thumbnailMaxDimension / width
-		return image.Rect(0, 0, thumbnailMaxDimension, max(scaledHeight, 1))
-	}
-	scaledWidth := width * thumbnailMaxDimension / height
-	return image.Rect(0, 0, max(scaledWidth, 1), thumbnailMaxDimension)
-}
-
-func resizeNearest(source image.Image, target image.Rectangle) *image.RGBA {
-	output := image.NewRGBA(target)
-	sourceBounds := source.Bounds()
-	for y := 0; y < target.Dy(); y++ {
-		for x := 0; x < target.Dx(); x++ {
-			sourceX := sourceBounds.Min.X + x*sourceBounds.Dx()/target.Dx()
-			sourceY := sourceBounds.Min.Y + y*sourceBounds.Dy()/target.Dy()
-			output.Set(x, y, source.At(sourceX, sourceY))
-		}
-	}
-	return output
+	return nil
 }

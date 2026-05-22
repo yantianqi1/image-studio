@@ -22,6 +22,10 @@ func NewGCSAssetStorage(bucketName string, prefix string) *GCSAssetStorage {
 	return &GCSAssetStorage{bucketName: strings.TrimSpace(bucketName), prefix: normalizeGCSPrefix(prefix)}
 }
 
+func (s *GCSAssetStorage) Backend() string {
+	return BackendGCS
+}
+
 func NewGCSAssetStorageWithDefaultClient(bucketName string, prefix string) (*GCSAssetStorage, error) {
 	store := NewGCSAssetStorage(bucketName, prefix)
 	if strings.TrimSpace(store.bucketName) == "" {

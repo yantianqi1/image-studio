@@ -105,6 +105,7 @@ func (p *Processor) handleRenderFailure(ctx context.Context, itemID int64, job *
 	outcome, updateErr := p.store.HandleRenderFailure(ctx, RenderFailureRequest{
 		ItemID: itemID, WorkerName: p.workerName,
 		Error: err, RetryBaseSeconds: p.retryBaseSeconds, RetryMaxSeconds: p.retryMaxSeconds,
+		ProviderCircuit: p.providerCircuitRequest(job, err),
 	})
 	if updateErr != nil {
 		attrs := append(renderLogAttrs(p.workerName, itemID, job), "error", updateErr)
@@ -121,6 +122,23 @@ func (p *Processor) handleRenderFailure(ctx context.Context, itemID int64, job *
 		return
 	}
 	p.metrics.IncItemFailed()
+}
+
+func (p *Processor) providerCircuitRequest(
+	job *provider.JobContext,
+	err error,
+) *ProviderCircuitRequest {
+	if job == nil || job.ClientProviderConfigRaw != "" || job.Provider.ID < 1 {
+		return nil
+	}
+	if provider.ErrorCode(err) != "provider_request_failed" {
+		return nil
+	}
+	return &ProviderCircuitRequest{
+		ProviderID:       job.Provider.ID,
+		FailureThreshold: p.providerCircuitFailureThreshold,
+		OpenSeconds:      p.providerCircuitOpenSeconds,
+	}
 }
 
 func (p *Processor) observeQueueWait(job provider.JobContext) {

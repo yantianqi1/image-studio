@@ -169,3 +169,31 @@ def test_item_claim_prioritizes_high_priority_and_skips_dead_letter() -> None:
         claimed_ids = image_service.claim_next_item_ids(session, limit=2, worker_name="priority-worker")
 
     assert claimed_ids == [items[1].id, items[0].id]
+
+
+def test_item_claim_uses_scheduler_score_and_skips_cancelled_items() -> None:
+    item_model = image_job_item_model()
+    client = build_client()
+    register_user(client, email="items-score@example.com")
+    job = create_member_image_job(client, requested_count=3)
+
+    with session_scope() as session:
+        items = list(
+            session.execute(
+                select(item_model)
+                .where(item_model.job_id == job["id"])
+                .order_by(item_model.result_index.asc())
+            ).scalars()
+        )
+        items[0].priority = 5
+        items[0].scheduler_score = 10
+        items[1].priority = 5
+        items[1].scheduler_score = 80
+        items[2].priority = 99
+        items[2].cancelled_at = items[2].available_at
+        session.flush()
+
+    with session_scope() as session:
+        claimed_ids = image_service.claim_next_item_ids(session, limit=2, worker_name="score-worker")
+
+    assert claimed_ids == [items[1].id, items[0].id]

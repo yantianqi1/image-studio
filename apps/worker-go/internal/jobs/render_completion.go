@@ -21,6 +21,7 @@ type stagedRenderedResult struct {
 	assetID  int64
 	temp     storage.TempObject
 	finalKey string
+	metadata renderedAssetMetadata
 }
 
 func (s *renderCompletionState) rollback(ctx context.Context, tx pgx.Tx) {
@@ -53,7 +54,13 @@ func (s *renderCompletionState) insertRenderedResult(
 	index int,
 	rendered *provider.RenderedImage,
 ) (int64, error) {
-	assetID, err := insertAssetRow(ctx, tx, s.request.Job, rendered)
+	metadata, err := buildRenderedAssetMetadata(rendered, s.request.Storage)
+	if err != nil {
+		return 0, err
+	}
+	assetID, err := insertAssetRow(ctx, tx, insertAssetRowRequest{
+		Job: s.request.Job, Rendered: rendered, Metadata: metadata,
+	})
 	if err != nil {
 		return 0, err
 	}
@@ -65,7 +72,9 @@ func (s *renderCompletionState) insertRenderedResult(
 	if err != nil {
 		return 0, err
 	}
-	s.stagedResults = append(s.stagedResults, stagedRenderedResult{assetID: assetID, temp: temp, finalKey: key})
+	s.stagedResults = append(s.stagedResults, stagedRenderedResult{
+		assetID: assetID, temp: temp, finalKey: key, metadata: metadata,
+	})
 	return assetID, insertResultRows(ctx, tx, s.request.Job.ID, index, assetID, key, rendered)
 }
 
@@ -77,6 +86,27 @@ func (s *renderCompletionState) commitStagedFiles() (int64, error) {
 	}
 	s.filesCommitted = true
 	return 0, nil
+}
+
+func (s *PostgresStore) recordAssetCreatedEvents(ctx context.Context, results []stagedRenderedResult) error {
+	for _, result := range results {
+		if _, err := s.pool.Exec(ctx, insertAssetCreatedOutboxSQL, assetCreatedOutboxArgs(result)...); err != nil {
+			return fmt.Errorf("record asset created event: %w", err)
+		}
+	}
+	return nil
+}
+
+func assetCreatedOutboxArgs(result stagedRenderedResult) []any {
+	return []any{
+		result.assetID,
+		result.finalKey,
+		result.metadata.SizeBytes,
+		result.metadata.SHA256,
+		intOrNil(result.metadata.Width),
+		intOrNil(result.metadata.Height),
+		result.metadata.StorageBackend,
+	}
 }
 
 func (s *renderCompletionState) deleteOldFiles() {
@@ -120,17 +150,33 @@ func listExistingOutputKeys(ctx context.Context, tx pgx.Tx, jobID int64, resultI
 	return keys, rows.Err()
 }
 
-func insertAssetRow(ctx context.Context, tx pgx.Tx, job *provider.JobContext, rendered *provider.RenderedImage) (int64, error) {
+type insertAssetRowRequest struct {
+	Job      *provider.JobContext
+	Rendered *provider.RenderedImage
+	Metadata renderedAssetMetadata
+}
+
+func insertAssetRow(ctx context.Context, tx pgx.Tx, request insertAssetRowRequest) (int64, error) {
 	var assetID int64
 	err := tx.QueryRow(
 		ctx, insertAssetSQL,
-		job.UserID, job.AnonymousSessionID, job.ClientAccessID,
-		rendered.MimeType, job.Visibility,
+		request.Job.UserID, request.Job.AnonymousSessionID, request.Job.ClientAccessID,
+		request.Rendered.MimeType, request.Job.Visibility,
+		request.Metadata.SizeBytes, request.Metadata.SHA256,
+		intOrNil(request.Metadata.Width), intOrNil(request.Metadata.Height),
+		request.Metadata.StorageBackend,
 	).Scan(&assetID)
 	if err != nil {
 		return 0, fmt.Errorf("insert rendered asset: %w", err)
 	}
 	return assetID, nil
+}
+
+func intOrNil(value *int) any {
+	if value == nil {
+		return nil
+	}
+	return *value
 }
 
 func writeRenderedTemp(store storage.AssetStorage, rendered *provider.RenderedImage) (storage.TempObject, error) {

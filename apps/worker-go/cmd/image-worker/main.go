@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/yantianqi1/image-studio/apps/image-runtime-go/pkg/assetops"
 	"github.com/yantianqi1/image-studio/apps/image-runtime-go/pkg/observability"
 	"github.com/yantianqi1/image-studio/apps/image-runtime-go/pkg/provider"
 	"github.com/yantianqi1/image-studio/apps/image-runtime-go/pkg/storage"
@@ -54,42 +55,36 @@ func runWorker(ctx context.Context, cfg config.Config, logger *slog.Logger) erro
 	if err != nil {
 		return err
 	}
-	processor, err := jobs.NewProcessor(jobs.ProcessorConfig{
-		Store:                        jobs.NewPostgresStore(pool),
-		WorkerName:                   cfg.WorkerName,
-		Mode:                         cfg.Mode,
-		Concurrency:                  cfg.Concurrency,
-		ProviderConcurrencyDefault:   cfg.ProviderConcurrencyDefault,
-		ProviderConcurrencyOverrides: cfg.ProviderConcurrencyOverrides,
-		OwnerConcurrency:             cfg.OwnerConcurrency,
-		ModelConcurrencyDefault:      cfg.ModelConcurrencyDefault,
-		PollInterval:                 cfg.PollInterval,
-		LeaseSeconds:                 cfg.LeaseSeconds,
-		HeartbeatInterval:            cfg.HeartbeatInterval,
-		SimulateDuration:             cfg.SimulateDuration,
-		RenderTimeout:                cfg.RenderTimeout,
-		RetryBaseSeconds:             cfg.RetryBaseSeconds,
-		RetryMaxSeconds:              cfg.RetryMaxSeconds,
-		FailSimulation:               cfg.FailSimulation,
-		RendererFactory:              rendererFactory,
-		AssetStorage:                 assetStorage,
-		Logger:                       logger,
+	metrics := observability.NewMetrics()
+	controller, err := startWorkerControl(workerControlStartRequest{
+		Context: ctx, Config: cfg, Pool: pool, Metrics: metrics, Logger: logger,
 	})
 	if err != nil {
 		return err
 	}
-	stopDiagnostics, err := startDiagnostics(ctx, cfg, pool, assetStorage, processor.Metrics(), logger)
+	processor, err := newProcessor(processorBuildRequest{
+		Config: cfg, Pool: pool, AssetStorage: assetStorage,
+		RendererFactory: rendererFactory, Metrics: metrics, Controller: controller, Logger: logger,
+	})
 	if err != nil {
-		return err
+		return stopWorkerControlAfterError(ctx, controller, err)
+	}
+	stopDiagnostics, err := startDiagnostics(ctx, cfg, pool, assetStorage, metrics, logger)
+	if err != nil {
+		return stopWorkerControlAfterError(ctx, controller, err)
 	}
 	defer stopDiagnostics()
-	return processor.Run(ctx)
+	runErr := processor.Run(ctx)
+	stopErr := stopWorkerControl(ctx, controller)
+	if runErr != nil {
+		return runErr
+	}
+	return stopErr
 }
 
 func runCleanupOrphanAssets(ctx context.Context, cfg config.Config, args []string) error {
-	flags := flag.NewFlagSet("cleanup-orphan-assets", flag.ContinueOnError)
-	execute := flags.Bool("execute", false, "delete orphan generated asset files")
-	if err := flags.Parse(args); err != nil {
+	opts, err := parseCleanupFlags(args)
+	if err != nil {
 		return err
 	}
 	assetStorage, err := storage.BuildAssetStorage(storage.Config{
@@ -99,7 +94,33 @@ func runCleanupOrphanAssets(ctx context.Context, cfg config.Config, args []strin
 	if err != nil {
 		return err
 	}
-	lister, ok := assetStorage.(jobs.OrphanAssetStorage)
+	return executeCleanupOrphanAssets(ctx, cfg, assetStorage, opts.Execute)
+}
+
+type cleanupFlags struct {
+	Execute bool
+}
+
+func parseCleanupFlags(args []string) (cleanupFlags, error) {
+	flags := flag.NewFlagSet("cleanup-orphan-assets", flag.ContinueOnError)
+	dryRun := flags.Bool("dry-run", false, "scan orphan generated asset files without deleting")
+	execute := flags.Bool("execute", false, "delete orphan generated asset files")
+	if err := flags.Parse(args); err != nil {
+		return cleanupFlags{}, err
+	}
+	if *dryRun == *execute {
+		return cleanupFlags{}, fmt.Errorf("cleanup-orphan-assets requires exactly one of --dry-run or --execute")
+	}
+	return cleanupFlags{Execute: *execute}, nil
+}
+
+func executeCleanupOrphanAssets(
+	ctx context.Context,
+	cfg config.Config,
+	assetStorage storage.AssetStorage,
+	execute bool,
+) error {
+	generatedStorage, ok := assetStorage.(assetops.GeneratedAssetStorage)
 	if !ok {
 		return fmt.Errorf("asset storage does not support orphan cleanup")
 	}
@@ -108,14 +129,14 @@ func runCleanupOrphanAssets(ctx context.Context, cfg config.Config, args []strin
 		return err
 	}
 	defer pool.Close()
-	summary, err := jobs.CleanupOrphanAssets(ctx, jobs.OrphanCleanupRequest{
-		Storage: lister, Store: jobs.NewPostgresStore(pool), Execute: *execute,
+	summary, err := assetops.ScanOrphans(ctx, assetops.OrphanScanRequest{
+		Storage: generatedStorage, Store: assetops.NewRepository(pool), Execute: execute,
 	})
 	if err != nil {
 		return err
 	}
 	fmt.Fprintf(os.Stdout, "orphan_assets scanned=%d referenced=%d orphaned=%d deleted=%d dry_run=%t\n",
-		summary.Scanned, summary.Referenced, summary.Orphaned, summary.Deleted, !*execute)
+		summary.Scanned, summary.Referenced, summary.Orphaned, summary.Deleted, !execute)
 	return nil
 }
 
@@ -137,7 +158,11 @@ func startDiagnostics(
 	if !cfg.EnableHTTP {
 		return func() {}, nil
 	}
-	handler := observability.NewDiagnosticsHandler(metrics, newReadyFunc(pool, assetStorage, cfg.Mode))
+	handler := observability.NewDiagnosticsHandlerWithOptions(
+		metrics,
+		newReadyFunc(pool, assetStorage, cfg.Mode),
+		observability.DiagnosticsOptions{EnablePprof: cfg.EnablePprof},
+	)
 	server := &http.Server{Addr: cfg.HTTPAddr, Handler: handler}
 	listener, err := net.Listen("tcp", cfg.HTTPAddr)
 	if err != nil {

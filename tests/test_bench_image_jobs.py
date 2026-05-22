@@ -47,6 +47,29 @@ def test_seed_args_parse_required_shape():
     assert args.mode == "render-mock"
 
 
+def test_seed_args_reject_simulate_mode():
+    bench = load_script()
+
+    with pytest.raises(SystemExit):
+        bench.build_parser().parse_args(
+            [
+                "seed",
+                "--jobs",
+                "1",
+                "--items-per-job",
+                "1",
+                "--owner-count",
+                "1",
+                "--provider-id",
+                "2",
+                "--model-code",
+                "gpt-image-2",
+                "--mode",
+                "simulate",
+            ]
+        )
+
+
 def test_production_guard_requires_explicit_override(monkeypatch):
     bench = load_script()
     monkeypatch.setenv("APP_ENV", "production")

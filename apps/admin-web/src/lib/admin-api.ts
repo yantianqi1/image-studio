@@ -3,9 +3,11 @@ import { adminAuditApi } from "@/lib/admin-audit-api";
 import type { AdminImageJob, ImageJobStats } from "@/lib/admin-image-job-types";
 import { adminProviderApi } from "@/lib/admin-provider-api";
 import { buildUsersSearch, type AdminUserList, type AdminUsersQuery } from "@/lib/admin-users";
+import { adminWorkerApi } from "@/lib/admin-worker-api";
 
 export type { AdminAuditLog, AdminAuditLogList, AdminAuditLogsQuery } from "@/lib/admin-audit-api";
 export type { AdminUser, AdminUserList, AdminUsersQuery } from "@/lib/admin-users";
+export type { ImageQueueSummary, RunningImageItem, WorkerNode, WorkerSummary } from "@/lib/admin-worker-api";
 
 export type AdminGalleryItem = Readonly<{
   asset_id: number;
@@ -43,22 +45,29 @@ export type AdminCharacterLibraryUpdateInput = Readonly<{
   name: string;
 }>;
 
-export type WorkerSummary = Readonly<{
-  image_jobs: {
-    queued: number;
-    running: number;
-    succeeded: number;
-    failed: number;
-    stale_running: number;
-    stale_after_seconds: number;
-  };
-  alerts: readonly {
-    code: string;
-    level: string;
-    message: string;
-    count: number;
-    threshold: number;
-  }[];
+export type AdminDeadLetterItem = Readonly<{
+  item_id: number;
+  job_id: number;
+  result_index: number;
+  status: string;
+  priority: number;
+  prompt: string;
+  model_code: string;
+  last_error_code: string | null;
+  last_error_message: string | null;
+  dead_letter_at: string | null;
+  manual_retry_count: number;
+}>;
+
+export type AdminImageItemActionResult = Readonly<{
+  item_id: number;
+  job_id: number;
+  status: string;
+}>;
+
+export type AdminImageJobActionResult = Readonly<{
+  job_id: number;
+  updated_items: number;
 }>;
 
 export type AdminLlmFeatureModel = Readonly<{
@@ -122,11 +131,35 @@ export const adminApi = {
   },
   ...adminAuditApi,
   ...adminProviderApi,
+  ...adminWorkerApi,
   imageJobs() {
     return apiFetch<readonly AdminImageJob[]>("/api/admin/image/jobs");
   },
   imageJobStats() {
     return apiFetch<ImageJobStats>("/api/admin/image/stats");
+  },
+  deadLetterItems() {
+    return apiFetch<{ items: readonly AdminDeadLetterItem[] }>("/api/admin/image/dead-letter-items");
+  },
+  retryImageItem(itemId: number) {
+    return apiFetch<AdminImageItemActionResult>(`/api/admin/image/items/${itemId}/retry`, {
+      method: "POST",
+    });
+  },
+  cancelImageItem(itemId: number) {
+    return apiFetch<AdminImageItemActionResult>(`/api/admin/image/items/${itemId}/cancel`, {
+      method: "POST",
+    });
+  },
+  retryImageJob(jobId: number) {
+    return apiFetch<AdminImageJobActionResult>(`/api/admin/image/jobs/${jobId}/retry`, {
+      method: "POST",
+    });
+  },
+  cancelImageJob(jobId: number) {
+    return apiFetch<AdminImageJobActionResult>(`/api/admin/image/jobs/${jobId}/cancel`, {
+      method: "POST",
+    });
   },
   llmFacilities() {
     return apiFetch<AdminLlmFacilityResponse>("/api/admin/llm/features");
@@ -136,9 +169,6 @@ export const adminApi = {
       method: "PATCH",
       body: JSON.stringify(input),
     });
-  },
-  workerSummary() {
-    return apiFetch<WorkerSummary>("/api/admin/ops/worker-summary");
   },
   comicTasks() {
     return apiFetch<readonly { id: string; task_type: string; status: string; created_at: string }[]>(

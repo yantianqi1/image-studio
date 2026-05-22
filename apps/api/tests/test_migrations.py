@@ -13,18 +13,10 @@ from apps.api.app.domains.image.storage_migration import (
     migrate_local_assets_to_storage,
 )
 from apps.api.app.infra.db.session import get_engine, get_session_factory, initialize_database
+from apps.api.tests.migration_schema_assertions import assert_core_schema
 
-HEAD_REVISION = "20260520_000031"
+HEAD_REVISION = "20260521_000036"
 REPO_ROOT = Path(__file__).resolve().parents[3]
-IMAGE_JOB_PROVIDER_USAGE_COLUMNS = {
-    "provider_input_tokens",
-    "provider_output_tokens",
-    "provider_total_tokens",
-    "raw_provider_cost_cents",
-    "provider_fee_cents",
-    "internal_cost_cents",
-    "provider_usage", "locked_by", "locked_at", "lease_expires_at", "heartbeat_at",
-}
 
 
 def test_alembic_upgrade_creates_core_tables(tmp_path):
@@ -50,150 +42,6 @@ def test_alembic_upgrade_creates_core_tables(tmp_path):
 
     assert_core_schema(inspector)
     assert_alembic_head(engine)
-
-
-def assert_core_schema(inspector) -> None:
-    assert inspector.has_table("users")
-    assert inspector.has_table("providers")
-    assert inspector.has_table("sellable_models")
-    assert inspector.has_table("image_jobs")
-    assert inspector.has_table("image_job_items")
-    assert inspector.has_table("image_job_reference_assets")
-    assert inspector.has_table("character_library_entries")
-    assert inspector.has_table("anonymous_sessions")
-    assert inspector.has_table("site_settings")
-    assert_site_settings_schema(inspector)
-    assert_sellable_model_schema(inspector)
-    assert_llm_feature_settings_schema(inspector)
-    assert_image_job_schema(inspector)
-    assert_image_job_item_schema(inspector)
-    assert_asset_schema(inspector)
-    assert_owner_schema(inspector)
-    assert_reference_asset_schema(inspector)
-    assert_character_library_schema(inspector)
-    assert_comic_schema(inspector)
-
-
-def assert_site_settings_schema(inspector) -> None:
-    site_settings_columns = {column["name"] for column in inspector.get_columns("site_settings")}
-    assert "client_provider_url_pool" in site_settings_columns
-
-
-def assert_sellable_model_schema(inspector) -> None:
-    sellable_model_columns = {column["name"] for column in inspector.get_columns("sellable_models")}
-    assert "status" in sellable_model_columns
-    assert "member_price_cents" not in sellable_model_columns
-    assert "anonymous_price_cents" not in sellable_model_columns
-    assert not inspector.has_table("model_variants")
-    sellable_model_indexes = {index["name"] for index in inspector.get_indexes("sellable_models")}
-    assert "ix_sellable_models_status" in sellable_model_indexes
-
-
-def assert_llm_feature_settings_schema(inspector) -> None:
-    assert inspector.has_table("llm_feature_model_settings")
-    columns = {column["name"] for column in inspector.get_columns("llm_feature_model_settings")}
-    assert {"id", "feature_key", "model_code", "updated_at"} <= columns
-
-
-def assert_image_job_schema(inspector) -> None:
-    image_job_columns = {column["name"] for column in inspector.get_columns("image_jobs")}
-    assert {
-        "provider_id",
-        "provider_model",
-        "client_access_id",
-        "client_provider_config",
-        "anonymous_session_id",
-        "storage_subdir",
-        "conversation_messages",
-        "title",
-        "visibility",
-        *IMAGE_JOB_PROVIDER_USAGE_COLUMNS,
-    } <= image_job_columns
-    assert "charge_cents" not in image_job_columns
-    assert "reservation_id" not in image_job_columns
-    image_job_indexes = {index["name"] for index in inspector.get_indexes("image_jobs")}
-    required_indexes = {"ix_image_jobs_queue_pick", "ix_image_jobs_running_started_at", "ix_image_jobs_running_lease", "ix_image_jobs_locked_by"}
-    assert required_indexes <= image_job_indexes
-    assert not inspector.has_table("wallets")
-    assert not inspector.has_table("wallet_ledger")
-    assert not inspector.has_table("wallet_reservations")
-    assert not inspector.has_table("activation_code_batches")
-    assert not inspector.has_table("activation_codes")
-
-
-def assert_image_job_item_schema(inspector) -> None:
-    item_columns = {column["name"] for column in inspector.get_columns("image_job_items")}
-    assert {
-        "id",
-        "job_id",
-        "result_index",
-        "status",
-        "attempt_count",
-        "max_attempts",
-        "available_at",
-        "asset_id",
-        "lease_expires_at",
-        "priority",
-        "dead_letter_at",
-        "last_error_code",
-        "last_error_message",
-        "manual_retry_count",
-    } <= item_columns
-    item_indexes = {index["name"] for index in inspector.get_indexes("image_job_items")}
-    assert {
-        "ix_image_job_items_priority_queue_pick",
-        "ix_image_job_items_dead_letter_at",
-        "ix_image_job_items_job_status",
-        "ix_image_job_items_job_result",
-        "ix_image_job_items_running_lease",
-    } <= item_indexes
-    result_constraints = {constraint["name"] for constraint in inspector.get_unique_constraints("image_job_results")}
-    assert "uq_image_job_results_job_result" in result_constraints
-
-
-def assert_asset_schema(inspector) -> None:
-    asset_columns = {column["name"] for column in inspector.get_columns("assets")}
-    assert {"owner_user_id", "owner_anonymous_session_id", "visibility", "published_at"} <= asset_columns
-    asset_indexes = {index["name"] for index in inspector.get_indexes("assets")}
-    assert "ix_assets_visibility" in asset_indexes
-
-
-def assert_owner_schema(inspector) -> None:
-    anonymous_session_columns = {column["name"] for column in inspector.get_columns("anonymous_sessions")}
-    assert {"id", "token_hash", "created_at", "revoked_at", "rotated_from_id"} <= anonymous_session_columns
-
-
-def assert_reference_asset_schema(inspector) -> None:
-    reference_columns = {column["name"] for column in inspector.get_columns("image_job_reference_assets")}
-    assert {"id", "job_id", "asset_id", "sequence", "created_at"} <= reference_columns
-    reference_indexes = {index["name"] for index in inspector.get_indexes("image_job_reference_assets")}
-    assert {"ix_image_job_reference_assets_job_id", "ix_image_job_reference_assets_asset_id"} <= reference_indexes
-
-
-def assert_character_library_schema(inspector) -> None:
-    character_columns = {column["name"] for column in inspector.get_columns("character_library_entries")}
-    assert {"id", "name", "asset_id", "visibility", "owner_user_id", "created_by_admin_user_id"} <= character_columns
-    character_indexes = {index["name"] for index in inspector.get_indexes("character_library_entries")}
-    assert "ix_character_library_entries_visibility" in character_indexes
-
-
-def assert_comic_schema(inspector) -> None:
-    comic_task_columns = {column["name"] for column in inspector.get_columns("comic_tasks")}
-    assert {
-        "stage",
-        "progress_percent",
-        "user_id",
-        "anonymous_session_id",
-        "client_access_id",
-        "client_provider_config",
-        "request_ip_hash",
-    } <= comic_task_columns
-    comic_project_columns = {column["name"] for column in inspector.get_columns("comic_projects")}
-    assert {"owner_user_id", "owner_anonymous_session_id"} <= comic_project_columns
-    assert inspector.has_table("comic_story_analyses")
-    assert inspector.has_table("comic_character_cards")
-    assert inspector.has_table("comic_storyboards")
-    assert inspector.has_table("comic_panel_prompts")
 
 
 def assert_alembic_head(engine) -> None:

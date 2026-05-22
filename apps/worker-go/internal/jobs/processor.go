@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/yantianqi1/image-studio/apps/image-runtime-go/pkg/observability"
@@ -13,7 +14,7 @@ import (
 	"github.com/yantianqi1/image-studio/apps/image-runtime-go/pkg/storage"
 )
 
-const simulatedFailureMessage = "Go worker simulation failed by GO_WORKER_FAIL_SIMULATION=true"
+const simulatedFailureMessage = "Go worker simulate mode does not render image output"
 
 const (
 	ModeSimulate = "simulate"
@@ -31,53 +32,59 @@ type Store interface {
 }
 
 type ProcessorConfig struct {
-	Store                        Store
-	Mode                         string
-	WorkerName                   string
-	Concurrency                  int
-	ProviderConcurrencyDefault   int
-	ProviderConcurrencyOverrides map[string]int
-	OwnerConcurrency             int
-	ModelConcurrencyDefault      int
-	PollInterval                 time.Duration
-	LeaseSeconds                 int
-	HeartbeatInterval            time.Duration
-	SimulateDuration             time.Duration
-	RenderTimeout                time.Duration
-	RetryBaseSeconds             int
-	RetryMaxSeconds              int
-	FailSimulation               bool
-	RendererFactory              provider.RendererFactory
-	AssetStorage                 storage.AssetStorage
-	Metrics                      *observability.Metrics
-	Logger                       *slog.Logger
+	Store                           Store
+	Mode                            string
+	WorkerName                      string
+	Concurrency                     int
+	ProviderConcurrencyDefault      int
+	ProviderConcurrencyOverrides    map[string]int
+	OwnerConcurrency                int
+	AnonymousOwnerConcurrency       int
+	ModelConcurrencyDefault         int
+	PollInterval                    time.Duration
+	LeaseSeconds                    int
+	HeartbeatInterval               time.Duration
+	SimulateDuration                time.Duration
+	RenderTimeout                   time.Duration
+	RetryBaseSeconds                int
+	RetryMaxSeconds                 int
+	ProviderCircuitFailureThreshold int
+	ProviderCircuitOpenSeconds      int
+	RendererFactory                 provider.RendererFactory
+	AssetStorage                    storage.AssetStorage
+	Metrics                         *observability.Metrics
+	ControlSource                   ControlSource
+	Logger                          *slog.Logger
 }
 
 type Processor struct {
-	store                        Store
-	mode                         string
-	workerName                   string
-	concurrency                  int
-	providerConcurrencyDefault   int
-	providerConcurrencyOverrides map[string]int
-	ownerConcurrency             int
-	modelConcurrencyDefault      int
-	pollInterval                 time.Duration
-	leaseSeconds                 int
-	heartbeatInterval            time.Duration
-	simulateDuration             time.Duration
-	renderTimeout                time.Duration
-	retryBaseSeconds             int
-	retryMaxSeconds              int
-	failSimulation               bool
-	rendererFactory              provider.RendererFactory
-	assetStorage                 storage.AssetStorage
-	metrics                      *observability.Metrics
-	logger                       *slog.Logger
-	semaphore                    chan struct{}
-	providerLimiter              *limiterPool
-	modelLimiter                 *limiterPool
-	wg                           sync.WaitGroup
+	store                           Store
+	mode                            string
+	workerName                      string
+	concurrency                     int
+	providerConcurrencyDefault      int
+	providerConcurrencyOverrides    map[string]int
+	ownerConcurrency                int
+	anonymousOwnerConcurrency       int
+	modelConcurrencyDefault         int
+	pollInterval                    time.Duration
+	leaseSeconds                    int
+	heartbeatInterval               time.Duration
+	simulateDuration                time.Duration
+	renderTimeout                   time.Duration
+	retryBaseSeconds                int
+	retryMaxSeconds                 int
+	providerCircuitFailureThreshold int
+	providerCircuitOpenSeconds      int
+	rendererFactory                 provider.RendererFactory
+	assetStorage                    storage.AssetStorage
+	metrics                         *observability.Metrics
+	control                         ControlSource
+	logger                          *slog.Logger
+	runningItems                    atomic.Int64
+	providerLimiter                 *limiterPool
+	modelLimiter                    *limiterPool
+	wg                              sync.WaitGroup
 }
 
 func NewProcessor(cfg ProcessorConfig) (*Processor, error) {
@@ -93,29 +100,31 @@ func NewProcessor(cfg ProcessorConfig) (*Processor, error) {
 		metrics = observability.NewMetrics()
 	}
 	return &Processor{
-		store:                        cfg.Store,
-		mode:                         normalizeMode(cfg.Mode),
-		workerName:                   cfg.WorkerName,
-		concurrency:                  cfg.Concurrency,
-		providerConcurrencyDefault:   cfg.ProviderConcurrencyDefault,
-		providerConcurrencyOverrides: cloneLimiterOverrides(cfg.ProviderConcurrencyOverrides),
-		ownerConcurrency:             cfg.OwnerConcurrency,
-		modelConcurrencyDefault:      cfg.ModelConcurrencyDefault,
-		pollInterval:                 cfg.PollInterval,
-		leaseSeconds:                 cfg.LeaseSeconds,
-		heartbeatInterval:            cfg.HeartbeatInterval,
-		simulateDuration:             cfg.SimulateDuration,
-		renderTimeout:                cfg.RenderTimeout,
-		retryBaseSeconds:             cfg.RetryBaseSeconds,
-		retryMaxSeconds:              cfg.RetryMaxSeconds,
-		failSimulation:               cfg.FailSimulation,
-		rendererFactory:              cfg.RendererFactory,
-		assetStorage:                 cfg.AssetStorage,
-		metrics:                      metrics,
-		logger:                       logger,
-		semaphore:                    make(chan struct{}, cfg.Concurrency),
-		providerLimiter:              newLimiterPool(),
-		modelLimiter:                 newLimiterPool(),
+		store:                           cfg.Store,
+		mode:                            normalizeMode(cfg.Mode),
+		workerName:                      cfg.WorkerName,
+		concurrency:                     cfg.Concurrency,
+		providerConcurrencyDefault:      cfg.ProviderConcurrencyDefault,
+		providerConcurrencyOverrides:    cloneLimiterOverrides(cfg.ProviderConcurrencyOverrides),
+		ownerConcurrency:                cfg.OwnerConcurrency,
+		anonymousOwnerConcurrency:       cfg.AnonymousOwnerConcurrency,
+		modelConcurrencyDefault:         cfg.ModelConcurrencyDefault,
+		pollInterval:                    cfg.PollInterval,
+		leaseSeconds:                    cfg.LeaseSeconds,
+		heartbeatInterval:               cfg.HeartbeatInterval,
+		simulateDuration:                cfg.SimulateDuration,
+		renderTimeout:                   cfg.RenderTimeout,
+		retryBaseSeconds:                cfg.RetryBaseSeconds,
+		retryMaxSeconds:                 cfg.RetryMaxSeconds,
+		providerCircuitFailureThreshold: cfg.ProviderCircuitFailureThreshold,
+		providerCircuitOpenSeconds:      cfg.ProviderCircuitOpenSeconds,
+		rendererFactory:                 cfg.RendererFactory,
+		assetStorage:                    cfg.AssetStorage,
+		metrics:                         metrics,
+		control:                         cfg.ControlSource,
+		logger:                          logger,
+		providerLimiter:                 newLimiterPool(),
+		modelLimiter:                    newLimiterPool(),
 	}, nil
 }
 
@@ -124,8 +133,6 @@ func (p *Processor) Metrics() *observability.Metrics {
 }
 
 func (p *Processor) Run(ctx context.Context) error {
-	ticker := time.NewTicker(p.pollInterval)
-	defer ticker.Stop()
 	p.logger.Info("go image worker started", "worker", p.workerName, "mode", p.mode, "concurrency", p.concurrency)
 	for {
 		if err := p.claimAndStart(ctx); err != nil {
@@ -135,24 +142,27 @@ func (p *Processor) Run(ctx context.Context) error {
 			}
 			return err
 		}
-		select {
-		case <-ctx.Done():
+		if !p.waitNextPoll(ctx) {
 			p.logger.Info("go image worker shutting down", "worker", p.workerName)
 			p.wg.Wait()
 			return nil
-		case <-ticker.C:
 		}
 	}
 }
 
 func (p *Processor) claimAndStart(ctx context.Context) error {
-	available := cap(p.semaphore) - len(p.semaphore)
+	snapshot := p.controlSnapshot()
+	if snapshot.Drain {
+		return nil
+	}
+	available := snapshot.Concurrency - int(p.runningItems.Load())
 	if available < 1 {
 		return nil
 	}
 	request := ClaimRequest{
 		Limit: available, WorkerName: p.workerName,
 		LeaseSeconds: p.leaseSeconds, OwnerConcurrency: p.ownerConcurrency,
+		AnonymousOwnerConcurrency: p.anonymousOwnerConcurrency,
 	}
 	if p.mode == ModeRender {
 		request.SupportedProviderTypes = provider.SupportedRenderProviderTypes()
@@ -173,7 +183,7 @@ func (p *Processor) claimAndStart(ctx context.Context) error {
 }
 
 func (p *Processor) startJob(ctx context.Context, itemID int64) {
-	p.semaphore <- struct{}{}
+	p.runningItems.Add(1)
 	p.wg.Add(1)
 	go p.processJob(ctx, itemID)
 }
@@ -182,7 +192,7 @@ func (p *Processor) processJob(ctx context.Context, itemID int64) {
 	p.metrics.AddRunningItems(1)
 	defer func() {
 		p.metrics.AddRunningItems(-1)
-		<-p.semaphore
+		p.runningItems.Add(-1)
 		p.wg.Done()
 	}()
 	if p.mode == ModeRender {
@@ -210,7 +220,9 @@ func validateProcessorConfig(cfg ProcessorConfig) error {
 	if cfg.Concurrency < 1 || cfg.PollInterval <= 0 || cfg.LeaseSeconds < 1 {
 		return fmt.Errorf("worker concurrency, poll interval, and lease seconds must be positive")
 	}
-	if cfg.ProviderConcurrencyDefault < 1 || cfg.OwnerConcurrency < 1 || cfg.ModelConcurrencyDefault < 1 {
+	if cfg.ProviderConcurrencyDefault < 1 || cfg.OwnerConcurrency < 1 ||
+		cfg.AnonymousOwnerConcurrency < 1 || cfg.ModelConcurrencyDefault < 1 ||
+		cfg.ProviderCircuitFailureThreshold < 1 || cfg.ProviderCircuitOpenSeconds < 1 {
 		return fmt.Errorf("worker limiter concurrency values must be positive")
 	}
 	if cfg.HeartbeatInterval <= 0 || cfg.SimulateDuration <= 0 {

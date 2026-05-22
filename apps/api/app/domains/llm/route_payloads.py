@@ -2,7 +2,7 @@ from apps.api.app.domains.llm.feature_settings import LLMFeatureDefinition
 from apps.api.app.domains.llm.models import Provider, SellableModel
 
 
-def provider_payload(provider: Provider) -> dict[str, object]:
+def provider_payload(provider: Provider, runtime_state: object | None = None) -> dict[str, object]:
     return {
         "id": provider.id,
         "name": provider.name,
@@ -11,7 +11,25 @@ def provider_payload(provider: Provider) -> dict[str, object]:
         "api_key_env": provider.api_key_env,
         "default_model": provider.default_model,
         "status": provider.status,
+        "runtime_state": provider_runtime_payload(runtime_state),
     }
+
+
+def provider_runtime_payload(runtime_state: object | None) -> dict[str, object] | None:
+    if runtime_state is None:
+        return None
+    return {
+        "provider_id": getattr(runtime_state, "provider_id"),
+        "status": getattr(runtime_state, "status"),
+        "failure_count": getattr(runtime_state, "failure_count"),
+        "last_failure_at": iso_or_none(getattr(runtime_state, "last_failure_at")),
+        "circuit_open_until": iso_or_none(getattr(runtime_state, "circuit_open_until")),
+        "updated_at": iso_or_none(getattr(runtime_state, "updated_at")),
+    }
+
+
+def iso_or_none(value: object | None) -> str | None:
+    return value.isoformat() if value is not None and hasattr(value, "isoformat") else None
 
 
 def sellable_model_payload(model: SellableModel) -> dict[str, object]:

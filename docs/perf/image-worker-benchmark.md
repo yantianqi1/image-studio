@@ -18,11 +18,11 @@ http://127.0.0.1:17900/v1
 
 ## Seed Jobs
 
-Create 100 single-item jobs:
+Create 100 single-item jobs for the mock render provider:
 
 ```bash
 APP_ENV=benchmark DATABASE_URL=postgresql://user:pass@127.0.0.1:5432/image_studio \
-python3 scripts/bench-image-jobs.py seed --jobs 100 --items-per-job 1 --owner-count 25 --provider-id 1 --model-code gpt-image-2 --mode simulate
+python3 scripts/bench-image-jobs.py seed --jobs 100 --items-per-job 1 --owner-count 25 --provider-id 1 --model-code gpt-image-2 --mode render-mock
 ```
 
 Create 100 jobs with 4 items each:

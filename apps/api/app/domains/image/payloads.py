@@ -83,6 +83,24 @@ def result_payload(result, *, asset=None, storage=None) -> dict[str, object]:
     return payload
 
 
+def item_payload(item) -> dict[str, object]:
+    return {
+        "id": item.id,
+        "job_id": item.job_id,
+        "result_index": item.result_index,
+        "status": item.status,
+        "asset_id": item.asset_id,
+        "error_code": item.error_code,
+        "error_message": item.error_message,
+        "manual_retry_count": item.manual_retry_count,
+        "created_at": item.created_at.isoformat(),
+        "available_at": item.available_at.isoformat(),
+        "started_at": item.started_at.isoformat() if item.started_at else None,
+        "finished_at": item.finished_at.isoformat() if item.finished_at else None,
+        "cancelled_at": item.cancelled_at.isoformat() if item.cancelled_at else None,
+    }
+
+
 def admin_result_payload(result) -> dict[str, object]:
     payload = result_payload(result)
     payload["asset_url"] = f"/api/admin/image/assets/{result.asset_id}"

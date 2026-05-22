@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from apps.api.app.core.errors import AppError
 from apps.api.app.domains.image.asset_deletion import delete_asset_objects
+from apps.api.app.domains.image.events import record_image_job_item_event, record_image_job_status_event
 from apps.api.app.domains.image.job_failure import NON_RETRYABLE_ERROR_CODES
 from apps.api.app.domains.image.job_recovery import IMAGE_JOB_RETRY_ERROR_CODE
 from apps.api.app.domains.image.models import Asset, ImageJob, ImageJobItem, ImageJobResult
@@ -24,6 +25,7 @@ class ItemStatusCounts:
     running: int
     succeeded: int
     failed: int
+    cancelled: int
     max_attempt_count: int
 
 
@@ -83,6 +85,7 @@ def mark_item_succeeded(session: Session, *, item: ImageJobItem, asset_id: int) 
     item.error_code = None
     item.error_message = None
     clear_item_lock(item)
+    record_image_job_item_event(session, item=item, event_type="image_job_item.succeeded")
     aggregate_parent_job_status(session, job_id=item.job_id)
 
 
@@ -107,6 +110,7 @@ def handle_item_failure(
     item.available_at = retry_at
     item.finished_at = None
     clear_item_lock(item)
+    record_image_job_item_event(session, item=item, event_type="image_job_item.retry_scheduled")
     aggregate_parent_job_status(session, job_id=item.job_id)
 
 
@@ -126,6 +130,7 @@ def mark_item_failed(session: Session, *, item: ImageJobItem, error_message: str
     item.available_at = finished_at
     item.finished_at = finished_at
     clear_item_lock(item)
+    record_image_job_item_event(session, item=item, event_type="image_job_item.dead_lettered")
     aggregate_parent_job_status(session, job_id=item.job_id)
 
 
@@ -134,6 +139,7 @@ def aggregate_parent_job_status(session: Session, *, job_id: int) -> None:
     job = session.get(ImageJob, job_id)
     if job is None:
         return
+    previous_status = job.status
     counts = load_item_status_counts(session, job_id=job_id)
     if counts.total == 0:
         return
@@ -144,8 +150,11 @@ def aggregate_parent_job_status(session: Session, *, job_id: int) -> None:
         mark_parent_succeeded(job)
     elif counts.failed > 0 and counts.succeeded + counts.failed == counts.total:
         mark_parent_failed(session, job=job)
+    elif counts.cancelled > 0 and counts.succeeded + counts.cancelled == counts.total:
+        mark_parent_cancelled(job)
     else:
         mark_parent_queued(session, job=job)
+    record_image_job_status_event(session, job=job, previous_status=previous_status)
     session.flush()
 
 
@@ -155,12 +164,20 @@ def load_item_status_counts(session: Session, *, job_id: int) -> ItemStatusCount
         .where(ImageJobItem.job_id == job_id)
         .group_by(ImageJobItem.status)
     )
-    counts = {"queued": 0, "running": 0, "succeeded": 0, "failed": 0}
+    counts = {"queued": 0, "running": 0, "succeeded": 0, "failed": 0, "cancelled": 0}
     max_attempt = 0
     for status, count, attempt_count in session.execute(statement):
         counts[str(status)] = int(count)
         max_attempt = max(max_attempt, int(attempt_count or 0))
-    return ItemStatusCounts(sum(counts.values()), counts["queued"], counts["running"], counts["succeeded"], counts["failed"], max_attempt)
+    return ItemStatusCounts(
+        sum(counts.values()),
+        counts["queued"],
+        counts["running"],
+        counts["succeeded"],
+        counts["failed"],
+        counts["cancelled"],
+        max_attempt,
+    )
 
 
 def mark_parent_running(job: ImageJob) -> None:
@@ -186,6 +203,15 @@ def mark_parent_failed(session: Session, *, job: ImageJob) -> None:
     job.status = "failed"
     job.error_code = IMAGE_JOB_ITEM_FAILED_ERROR_CODE
     job.error_message = load_failed_item_message(session, job_id=job.id)
+    job.available_at = now
+    job.finished_at = now
+
+
+def mark_parent_cancelled(job: ImageJob) -> None:
+    now = datetime.utcnow()
+    job.status = "cancelled"
+    job.error_code = None
+    job.error_message = None
     job.available_at = now
     job.finished_at = now
 

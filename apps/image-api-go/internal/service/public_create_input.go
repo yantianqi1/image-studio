@@ -142,9 +142,20 @@ func insertPublicJob(ctx context.Context, tx pgx.Tx, input publicCreateInput) (i
 	}); err != nil {
 		return 0, err
 	}
-	return jobID, insertPublicReferences(ctx, tx, insertPublicReferencesOptions{
+	if err := insertPublicReferences(ctx, tx, insertPublicReferencesOptions{
 		JobID:    jobID,
 		AssetIDs: input.ReferenceAssetIDs,
+	}); err != nil {
+		return 0, err
+	}
+	return jobID, recordCreatedEvent(ctx, tx, jobID)
+}
+
+func recordCreatedEvent(ctx context.Context, tx pgx.Tx, jobID int64) error {
+	return recordImageJobEventTx(ctx, tx, imageJobEventRecord{
+		JobID:     jobID,
+		EventType: "image_job.created",
+		Payload:   map[string]any{"id": jobID, "status": "queued"},
 	})
 }
 

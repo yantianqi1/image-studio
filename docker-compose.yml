@@ -60,7 +60,6 @@ services:
       GENERATED_ASSETS_DIR: /app/generated-assets
       WORKER_ENABLE_COMIC_TASK: ${WORKER_ENABLE_COMIC_TASK:-true}
       WORKER_ENABLE_COMIC_ORCHESTRATION: ${WORKER_ENABLE_COMIC_ORCHESTRATION:-true}
-      WORKER_ENABLE_IMAGE_JOBS: ${WORKER_ENABLE_IMAGE_JOBS:-false}
     volumes:
       - generated_assets_data:/app/generated-assets
       - ${GCS_CREDENTIALS_FILE:-/dev/null}:/app/gcs-credentials.json:ro
@@ -88,7 +87,6 @@ services:
       GO_WORKER_LEASE_SECONDS: ${GO_WORKER_LEASE_SECONDS:-600}
       GO_WORKER_HEARTBEAT_SECONDS: ${GO_WORKER_HEARTBEAT_SECONDS:-15}
       GO_WORKER_SIMULATE_SECONDS: ${GO_WORKER_SIMULATE_SECONDS:-3}
-      GO_WORKER_FAIL_SIMULATION: ${GO_WORKER_FAIL_SIMULATION:-false}
       GO_WORKER_RENDER_TIMEOUT_SECONDS: ${GO_WORKER_RENDER_TIMEOUT_SECONDS:-300}
       GO_WORKER_ENABLE_HTTP: ${GO_WORKER_ENABLE_HTTP:-true}
       GO_WORKER_HTTP_ADDR: ${GO_WORKER_HTTP_ADDR:-:7900}
@@ -116,6 +114,9 @@ services:
       - .env
     environment:
       ASSET_STORAGE_BACKEND: ${ASSET_STORAGE_BACKEND:-local}
+      ASSET_STORAGE_GCS_BUCKET: ${ASSET_STORAGE_GCS_BUCKET:-}
+      ASSET_STORAGE_GCS_PREFIX: ${ASSET_STORAGE_GCS_PREFIX:-generated-assets}
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
       DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}
       GENERATED_ASSETS_DIR: /app/generated-assets
       GO_IMAGE_API_HTTP_ADDR: ${GO_IMAGE_API_HTTP_ADDR:-:7810}
@@ -132,6 +133,7 @@ services:
       - "7810"
     volumes:
       - generated_assets_data:/app/generated-assets
+      - ${GCS_CREDENTIALS_FILE:-/dev/null}:/app/gcs-credentials.json:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:7810/readyz >/dev/null"]
       interval: 10s
@@ -181,6 +183,10 @@ services:
       - "${ADMIN_HTTP_PORT:-7701}:81"
     environment:
       GO_IMAGE_API_READS_ENABLED: ${GO_IMAGE_API_READS_ENABLED:-false}
+      GO_IMAGE_API_ASSETS_ENABLED: ${GO_IMAGE_API_ASSETS_ENABLED:-false}
+      GO_IMAGE_API_SSE_ENABLED: ${GO_IMAGE_API_SSE_ENABLED:-false}
+      GO_IMAGE_API_GALLERY_ENABLED: ${GO_IMAGE_API_GALLERY_ENABLED:-false}
+      GO_IMAGE_API_DELETE_ENABLED: ${GO_IMAGE_API_DELETE_ENABLED:-false}
       GO_IMAGE_API_CREATE_ENABLED: ${GO_IMAGE_API_CREATE_ENABLED:-false}
     volumes:
       - ./infra/nginx/nginx.prod.conf:/etc/nginx/templates/default.conf.template:ro

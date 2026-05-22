@@ -38,6 +38,15 @@ func TestCheckTablesUsesLimitZeroProbe(t *testing.T) {
 	}
 }
 
+func TestRequiredImageJobTablesIncludesEventTables(t *testing.T) {
+	required := strings.Join(RequiredImageJobTables, ",")
+	for _, table := range []string{"image_job_events", "image_provider_usage_events", "outbox_events"} {
+		if !strings.Contains(required, table) {
+			t.Fatalf("required image job tables missing %s: %v", table, RequiredImageJobTables)
+		}
+	}
+}
+
 type recordingExecer struct {
 	failOn  string
 	queries []string

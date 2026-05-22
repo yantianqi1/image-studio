@@ -7,6 +7,8 @@ from apps.api.app.infra.storage.local_asset_storage import validate_storage_key
 
 
 class GcsAssetStorage:
+    backend_name = "gcs"
+
     def __init__(self, *, bucket_name: str, prefix: str, client=None) -> None:
         if not bucket_name:
             raise ValueError("asset storage gcs bucket is required")

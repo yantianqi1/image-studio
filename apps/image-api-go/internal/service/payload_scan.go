@@ -44,6 +44,20 @@ type jobDBRow struct {
 	FinishedAt            sql.NullTime
 }
 
+type resultDBRow struct {
+	ID                int64
+	JobID             int64
+	ResultIndex       int
+	AssetID           int64
+	AssetURL          string
+	ThumbnailURL      string
+	Visibility        string
+	PublishedAt       sql.NullTime
+	CreatedAt         time.Time
+	RevisedPrompt     sql.NullString
+	ProviderRequestID sql.NullString
+}
+
 func scanJob(row pgx.Row) (*JobPayload, error) {
 	dbRow, err := scanJobDBRow(row)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -92,13 +106,31 @@ func jobPayloadFromDBRow(row jobDBRow) *JobPayload {
 }
 
 func scanResult(rows pgx.Rows) (ResultPayload, error) {
-	var result ResultPayload
-	err := rows.Scan(&result.ResultIndex, &result.AssetID, &result.AssetURL)
+	dbRow, err := scanResultDBRow(rows)
 	if err != nil {
-		return result, fmt.Errorf("scan image job result: %w", err)
+		return ResultPayload{}, fmt.Errorf("scan image job result: %w", err)
 	}
-	result.ThumbnailURL = fmt.Sprintf("/api/public/image/assets/%d/thumbnail", result.AssetID)
-	return result, nil
+	return resultPayloadFromDBRow(dbRow), nil
+}
+
+func scanResultDBRow(rows pgx.Rows) (resultDBRow, error) {
+	var dbRow resultDBRow
+	err := rows.Scan(
+		&dbRow.ID, &dbRow.JobID, &dbRow.ResultIndex, &dbRow.AssetID, &dbRow.AssetURL,
+		&dbRow.ThumbnailURL, &dbRow.Visibility, &dbRow.PublishedAt, &dbRow.CreatedAt,
+		&dbRow.RevisedPrompt, &dbRow.ProviderRequestID,
+	)
+	return dbRow, err
+}
+
+func resultPayloadFromDBRow(row resultDBRow) ResultPayload {
+	return ResultPayload{
+		ID: row.ID, JobID: row.JobID, ResultIndex: row.ResultIndex, AssetID: row.AssetID,
+		AssetURL: row.AssetURL, ThumbnailURL: row.ThumbnailURL, Visibility: row.Visibility,
+		PublishedAt: nullTime(row.PublishedAt), CreatedAt: formatTime(row.CreatedAt),
+		RevisedPrompt:     nullStringValue(row.RevisedPrompt),
+		ProviderRequestID: nullStringValue(row.ProviderRequestID),
+	}
 }
 
 func resolvedTitle(value sql.NullString) *string {

@@ -8,7 +8,11 @@ import (
 const ListAssetStoragePathsSQL = `
 SELECT storage_path
 FROM assets
-WHERE storage_path <> ''`
+WHERE storage_path <> '' AND deleted_at IS NULL
+UNION
+SELECT thumbnail_storage_path
+FROM assets
+WHERE thumbnail_storage_path IS NOT NULL AND thumbnail_storage_path <> '' AND deleted_at IS NULL`
 
 func (s *PostgresStore) ListAssetStoragePaths(ctx context.Context) (map[string]struct{}, error) {
 	rows, err := s.pool.Query(ctx, ListAssetStoragePathsSQL)

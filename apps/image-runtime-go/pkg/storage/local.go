@@ -48,6 +48,10 @@ type LocalAssetStorage struct {
 	root string
 }
 
+type BackendNamer interface {
+	Backend() string
+}
+
 func BuildAssetStorage(cfg Config) (AssetStorage, error) {
 	backend := normalizeDefault(cfg.Backend, BackendLocal)
 	switch strings.ToLower(backend) {
@@ -62,6 +66,17 @@ func BuildAssetStorage(cfg Config) (AssetStorage, error) {
 
 func NewLocalAssetStorage(root string) *LocalAssetStorage {
 	return &LocalAssetStorage{root: root}
+}
+
+func BackendName(store AssetStorage) string {
+	if named, ok := store.(BackendNamer); ok {
+		return normalizeDefault(named.Backend(), BackendLocal)
+	}
+	return BackendLocal
+}
+
+func (s *LocalAssetStorage) Backend() string {
+	return BackendLocal
 }
 
 func (s *LocalAssetStorage) WriteBytes(key string, content []byte, mimeType string) error {

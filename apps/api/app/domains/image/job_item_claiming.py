@@ -12,6 +12,7 @@ from apps.api.app.domains.image.job_claiming import (
 )
 from apps.api.app.domains.image.job_items import aggregate_parent_job_status, clear_item_lock
 from apps.api.app.domains.image.job_recovery import IMAGE_JOB_RETRY_ERROR_CODE
+from apps.api.app.domains.image.events import record_image_job_item_event
 from apps.api.app.domains.image.models import ImageJob, ImageJobItem
 
 POSTGRES_CLAIM_ITEM_IDS_SQL = (
@@ -20,8 +21,10 @@ POSTGRES_CLAIM_ITEM_IDS_SQL = (
     "JOIN image_jobs j ON j.id = i.job_id "
     "WHERE i.status = 'queued' AND i.available_at <= :current_time "
     "AND i.dead_letter_at IS NULL "
+    "AND i.cancelled_at IS NULL "
     "AND j.status IN ('queued', 'running') "
-    "ORDER BY i.priority DESC, i.available_at ASC, i.id ASC FOR UPDATE SKIP LOCKED LIMIT :limit "
+    "ORDER BY i.priority DESC, i.scheduler_score DESC, i.available_at ASC, i.id ASC "
+    "FOR UPDATE SKIP LOCKED LIMIT :limit "
     ") UPDATE image_job_items SET status = 'running', attempt_count = attempt_count + 1, "
     "started_at = :current_time, locked_by = :worker_name, locked_at = :current_time, "
     "heartbeat_at = :current_time, lease_expires_at = :lease_expires_at, "
@@ -47,6 +50,7 @@ def claim_next_item_ids(
         item_ids = claim_item_ids_with_postgres(session, limit, worker_name, current_time, lease_expires_at)
     else:
         item_ids = claim_item_ids_with_conditional_update(session, limit, worker_name, current_time, lease_expires_at)
+    record_claimed_item_events(session, item_ids=item_ids)
     aggregate_parent_jobs_for_items(session, item_ids=item_ids)
     return item_ids
 
@@ -90,9 +94,15 @@ def select_available_item_ids(session: Session, *, limit: int, current_time: dat
             ImageJobItem.status == "queued",
             ImageJobItem.available_at <= current_time,
             ImageJobItem.dead_letter_at.is_(None),
+            ImageJobItem.cancelled_at.is_(None),
             ImageJob.status.in_(("queued", "running")),
         )
-        .order_by(ImageJobItem.priority.desc(), ImageJobItem.available_at.asc(), ImageJobItem.id.asc())
+        .order_by(
+            ImageJobItem.priority.desc(),
+            ImageJobItem.scheduler_score.desc(),
+            ImageJobItem.available_at.asc(),
+            ImageJobItem.id.asc(),
+        )
         .limit(limit)
     )
     return list(session.execute(statement).scalars())
@@ -107,7 +117,12 @@ def claim_item(
 ) -> bool:
     statement = (
         update(ImageJobItem)
-        .where(ImageJobItem.id == item_id, ImageJobItem.status == "queued")
+        .where(
+            ImageJobItem.id == item_id,
+            ImageJobItem.status == "queued",
+            ImageJobItem.dead_letter_at.is_(None),
+            ImageJobItem.cancelled_at.is_(None),
+        )
         .values(
             status="running",
             attempt_count=ImageJobItem.attempt_count + 1,
@@ -138,6 +153,7 @@ def recover_stale_running_items(session: Session, *, stale_timeout_seconds: int)
         item.available_at = now
         item.finished_at = None
         clear_item_lock(item)
+        record_image_job_item_event(session, item=item, event_type="image_job_item.retry_scheduled")
     for job_id in job_ids:
         aggregate_parent_job_status(session, job_id=job_id)
 
@@ -173,3 +189,11 @@ def aggregate_parent_jobs_for_items(session: Session, *, item_ids: list[int]) ->
 def load_job_ids_for_items(session: Session, *, item_ids: list[int]) -> set[int]:
     statement = select(ImageJobItem.job_id).where(ImageJobItem.id.in_(item_ids))
     return set(session.execute(statement).scalars())
+
+
+def record_claimed_item_events(session: Session, *, item_ids: list[int]) -> None:
+    if not item_ids:
+        return
+    statement = select(ImageJobItem).where(ImageJobItem.id.in_(item_ids)).order_by(ImageJobItem.id.asc())
+    for item in session.execute(statement).scalars():
+        record_image_job_item_event(session, item=item, event_type="image_job_item.started")

@@ -47,5 +47,9 @@ func writeData(w http.ResponseWriter, data any) {
 func writeDataWithStatus(w http.ResponseWriter, data any, status int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]any{"data": data})
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"data":  data,
+		"meta":  map[string]any{},
+		"error": nil,
+	})
 }

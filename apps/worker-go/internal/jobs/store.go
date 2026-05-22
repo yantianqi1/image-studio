@@ -18,6 +18,7 @@ WHERE id = $1
   AND status = 'running'`
 
 const MarkSucceededSQL = `
+WITH updated AS (
 UPDATE image_job_items
 SET status='succeeded',
     finished_at=now(),
@@ -30,9 +31,28 @@ SET status='succeeded',
     heartbeat_at=NULL,
     lease_expires_at=NULL
 WHERE id=$1 AND locked_by=$2
-RETURNING job_id`
+RETURNING id, job_id
+),
+events AS (
+  INSERT INTO image_job_events (job_id, item_id, event_type, payload, created_at)
+  SELECT job_id, id, 'image_job_item.succeeded',
+    jsonb_build_object('id', job_id, 'status', 'succeeded', 'item_id', id),
+    now()
+  FROM updated
+  RETURNING job_id, event_type, payload
+),
+outbox AS (
+  INSERT INTO outbox_events (
+    aggregate_type, aggregate_id, event_type, payload, status, attempts, available_at, created_at
+  )
+  SELECT 'image_job', job_id::text, event_type, payload, 'pending', 0, now(), now()
+  FROM events
+  RETURNING id
+)
+SELECT job_id FROM updated`
 
 const MarkFailedSQL = `
+WITH updated AS (
 UPDATE image_job_items
 SET status='failed',
     finished_at=now(),
@@ -47,9 +67,28 @@ SET status='failed',
     heartbeat_at=NULL,
     lease_expires_at=NULL
 WHERE id=$1 AND locked_by=$2
-RETURNING job_id`
+RETURNING id, job_id
+),
+events AS (
+  INSERT INTO image_job_events (job_id, item_id, event_type, payload, created_at)
+  SELECT job_id, id, 'image_job_item.dead_lettered',
+    jsonb_build_object('id', job_id, 'status', 'failed', 'item_id', id, 'error_message', $3),
+    now()
+  FROM updated
+  RETURNING job_id, event_type, payload
+),
+outbox AS (
+  INSERT INTO outbox_events (
+    aggregate_type, aggregate_id, event_type, payload, status, attempts, available_at, created_at
+  )
+  SELECT 'image_job', job_id::text, event_type, payload, 'pending', 0, now(), now()
+  FROM events
+  RETURNING id
+)
+SELECT job_id FROM updated`
 
 const MarkRetryableFailureSQL = `
+WITH updated AS (
 UPDATE image_job_items
 SET status='queued',
     finished_at=NULL,
@@ -64,9 +103,28 @@ SET status='queued',
     heartbeat_at=NULL,
     lease_expires_at=NULL
 WHERE id=$1 AND locked_by=$2 AND status='running'
-RETURNING job_id`
+RETURNING id, job_id
+),
+events AS (
+  INSERT INTO image_job_events (job_id, item_id, event_type, payload, created_at)
+  SELECT job_id, id, 'image_job_item.retry_scheduled',
+    jsonb_build_object('id', job_id, 'status', 'queued', 'item_id', id, 'error_code', $3, 'error_message', $5),
+    now()
+  FROM updated
+  RETURNING job_id, event_type, payload
+),
+outbox AS (
+  INSERT INTO outbox_events (
+    aggregate_type, aggregate_id, event_type, payload, status, attempts, available_at, created_at
+  )
+  SELECT 'image_job', job_id::text, event_type, payload, 'pending', 0, now(), now()
+  FROM events
+  RETURNING id
+)
+SELECT job_id FROM updated`
 
 const MarkTerminalFailureSQL = `
+WITH updated AS (
 UPDATE image_job_items
 SET status='failed',
     finished_at=now(),
@@ -81,18 +139,37 @@ SET status='failed',
     heartbeat_at=NULL,
     lease_expires_at=NULL
 WHERE id=$1 AND locked_by=$2 AND status='running'
-RETURNING job_id`
+RETURNING id, job_id
+),
+events AS (
+  INSERT INTO image_job_events (job_id, item_id, event_type, payload, created_at)
+  SELECT job_id, id, 'image_job_item.dead_lettered',
+    jsonb_build_object('id', job_id, 'status', 'failed', 'item_id', id, 'error_code', $3, 'error_message', $4),
+    now()
+  FROM updated
+  RETURNING job_id, event_type, payload
+),
+outbox AS (
+  INSERT INTO outbox_events (
+    aggregate_type, aggregate_id, event_type, payload, status, attempts, available_at, created_at
+  )
+  SELECT 'image_job', job_id::text, event_type, payload, 'pending', 0, now(), now()
+  FROM events
+  RETURNING id
+)
+SELECT job_id FROM updated`
 
 type PostgresStore struct {
 	pool *pgxpool.Pool
 }
 
 type ClaimRequest struct {
-	Limit                  int
-	WorkerName             string
-	LeaseSeconds           int
-	OwnerConcurrency       int
-	SupportedProviderTypes []string
+	Limit                     int
+	WorkerName                string
+	LeaseSeconds              int
+	OwnerConcurrency          int
+	AnonymousOwnerConcurrency int
+	SupportedProviderTypes    []string
 }
 
 type JobLock struct {
@@ -119,11 +196,18 @@ type RenderFailureRequest struct {
 	Error            error
 	RetryBaseSeconds int
 	RetryMaxSeconds  int
+	ProviderCircuit  *ProviderCircuitRequest
 }
 
 type RenderFailureResult struct {
 	Updated bool
 	Retried bool
+}
+
+type ProviderCircuitRequest struct {
+	ProviderID       int64
+	FailureThreshold int
+	OpenSeconds      int
 }
 
 func NewPostgresStore(pool *pgxpool.Pool) *PostgresStore {
@@ -155,10 +239,15 @@ func (s *PostgresStore) queryClaimQueued(ctx context.Context, request ClaimReque
 		return s.pool.Query(
 			ctx, ClaimQueuedRenderSQL,
 			request.Limit, request.WorkerName, request.LeaseSeconds,
-			request.OwnerConcurrency, request.SupportedProviderTypes,
+			request.OwnerConcurrency, request.AnonymousOwnerConcurrency,
+			request.SupportedProviderTypes,
 		)
 	}
-	return s.pool.Query(ctx, ClaimQueuedSQL, request.Limit, request.WorkerName, request.LeaseSeconds, request.OwnerConcurrency)
+	return s.pool.Query(
+		ctx, ClaimQueuedSQL,
+		request.Limit, request.WorkerName, request.LeaseSeconds,
+		request.OwnerConcurrency, request.AnonymousOwnerConcurrency,
+	)
 }
 
 func (s *PostgresStore) Heartbeat(ctx context.Context, request LeaseRequest) (bool, error) {

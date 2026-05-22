@@ -34,15 +34,12 @@ func validateStartupConfig(cfg config.Config, lookup config.LookupFunc, logger *
 	return fmt.Errorf("GO_WORKER_MODE=render does not support ASSET_STORAGE_BACKEND=%s", cfg.AssetStorageBackend)
 }
 
-func validateRenderConcurrency(cfg config.Config, lookup config.LookupFunc, logger *slog.Logger) error {
+func validateRenderConcurrency(cfg config.Config, _ config.LookupFunc, logger *slog.Logger) error {
 	if len(provider.SupportedRenderProviderTypes()) == 0 {
 		return fmt.Errorf("GO_WORKER_MODE=render requires at least one supported provider type")
 	}
 	if cfg.Concurrency > highWorkerConcurrencyWarning {
-		logger.Warn("GO_WORKER_CONCURRENCY is high", "concurrency", cfg.Concurrency)
-	}
-	if enabled, ok := lookup("WORKER_ENABLE_IMAGE_JOBS"); ok && strings.EqualFold(enabled, "true") {
-		logger.Warn("python worker image_jobs branch is enabled while go worker render mode is active")
+		logger.Warn("GO_WORKER_GLOBAL_CONCURRENCY is high", "concurrency", cfg.Concurrency)
 	}
 	return nil
 }

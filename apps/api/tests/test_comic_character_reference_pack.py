@@ -4,11 +4,23 @@ import json
 from io import BytesIO
 from zipfile import ZipFile
 
+from PIL import Image
+
 from apps.api.app.domains.comic.models import ComicCharacterCard, ComicTask
 from apps.api.app.domains.image.models import Asset
 from apps.api.app.infra.db.session import session_scope
 from apps.api.app.infra.storage.factory import build_asset_storage
 from apps.api.tests.test_comic_pipeline import create_comic_client, create_task
+
+
+def build_png_bytes(color: tuple[int, int, int]) -> bytes:
+    output = BytesIO()
+    Image.new("RGB", (1, 1), color=color).save(output, format="PNG")
+    return output.getvalue()
+
+
+NEW_HERO_BYTES = build_png_bytes((31, 41, 55))
+NEW_MENTOR_BYTES = build_png_bytes((16, 185, 129))
 
 
 def test_export_character_reference_pack_contains_manifest_and_named_images() -> None:
@@ -68,8 +80,8 @@ def test_import_character_reference_pack_binds_uploaded_images_to_cards() -> Non
     task = create_task(client)
     seed_reference_cards(task_id=task["id"], ready=False)
     archive = build_pack_archive([
-        {"character_code": "hero", "name": "林安", "image_file": "images/hero.png", "content": b"new-hero"},
-        {"character_code": "mentor", "name": "林安", "image_file": "images/mentor.png", "content": b"new-mentor"},
+        {"character_code": "hero", "name": "林安", "image_file": "images/hero.png", "content": NEW_HERO_BYTES},
+        {"character_code": "mentor", "name": "林安", "image_file": "images/mentor.png", "content": NEW_MENTOR_BYTES},
     ])
 
     response = client.post(
@@ -90,8 +102,8 @@ def test_imported_character_reference_pack_skips_reference_job_creation() -> Non
     mark_task_completed(task_id=task["id"])
     seed_reference_cards(task_id=task["id"], ready=False)
     archive = build_pack_archive([
-        {"character_code": "hero", "name": "林安", "image_file": "images/hero.png", "content": b"new-hero"},
-        {"character_code": "mentor", "name": "林安", "image_file": "images/mentor.png", "content": b"new-mentor"},
+        {"character_code": "hero", "name": "林安", "image_file": "images/hero.png", "content": NEW_HERO_BYTES},
+        {"character_code": "mentor", "name": "林安", "image_file": "images/mentor.png", "content": NEW_MENTOR_BYTES},
     ])
     import_response = client.post(
         f"/api/public/comic/tasks/{task['id']}/character-references/import",
@@ -161,7 +173,7 @@ def test_import_character_reference_pack_rejects_unmatched_character() -> None:
     task = create_task(client)
     seed_reference_cards(task_id=task["id"], ready=False)
     archive = build_pack_archive([
-        {"character_code": "villain", "name": "陌生人", "image_file": "images/villain.png", "content": b"villain"},
+        {"character_code": "villain", "name": "陌生人", "image_file": "images/villain.png", "content": NEW_HERO_BYTES},
     ])
 
     response = client.post(
@@ -276,4 +288,4 @@ def assert_imported_card_contents(*, task_id: str) -> None:
         cards = session.query(ComicCharacterCard).filter_by(task_id=task_id).order_by(ComicCharacterCard.character_code).all()
         storage = build_asset_storage()
         contents = [storage.read_bytes(session.get(Asset, card.reference_asset_id).storage_path) for card in cards]
-    assert contents == [b"new-hero", b"new-mentor"]
+    assert contents == [NEW_HERO_BYTES, NEW_MENTOR_BYTES]
