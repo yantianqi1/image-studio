@@ -15,8 +15,8 @@ read `provider_type`, `base_url`, `api_key`, and optional `model` /
 user API keys are used directly and are not read from environment variables.
 
 In render mode the claim query is intentionally limited to Go-supported provider
-types, so unsupported provider types stay available for the Python worker legacy
-fallback.
+types. Unsupported provider types require an explicit manual legacy repair path;
+they must not be routed through the Python worker as production fallback.
 
 Concurrency controls:
 

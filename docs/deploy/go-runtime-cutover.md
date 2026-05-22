@@ -11,6 +11,10 @@ Go image runtime has three separately gated parts:
 - `image-api-go`: may take read and create routes when flags are enabled.
 - Go Core API: may own future billing or quota preflight when flags exist.
 
+The production GHCR workflow publishes the `image-studio-image-api-go` image,
+and `docker-compose.yml` pulls that image when the `image-api-go` profile is
+enabled.
+
 Local wallet billing was removed. Do not recreate wallet, reservation, redeem,
 or pricing tables to satisfy this cutover.
 

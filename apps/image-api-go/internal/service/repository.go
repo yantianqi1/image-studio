@@ -62,6 +62,26 @@ func (r *Repository) GetPublicResults(ctx context.Context, jobID int64, owner Ow
 	return results, rows.Err()
 }
 
+func (r *Repository) GetPublicItems(ctx context.Context, jobID int64, owner Owner) ([]ItemPayload, error) {
+	if _, err := r.GetPublicJob(ctx, jobID, owner); err != nil {
+		return nil, err
+	}
+	rows, err := r.pool.Query(ctx, publicItemsSQL, jobID)
+	if err != nil {
+		return nil, fmt.Errorf("query image job items: %w", err)
+	}
+	defer rows.Close()
+	items := []ItemPayload{}
+	for rows.Next() {
+		item, err := scanItem(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
 func (r *Repository) GetAdminDebug(ctx context.Context, jobID int64) (*DebugPayload, error) {
 	job, err := scanJob(r.pool.QueryRow(ctx, adminJobSQL, jobID))
 	if err != nil {

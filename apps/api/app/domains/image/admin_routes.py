@@ -5,6 +5,7 @@ from apps.api.app.core.cache import app_cache
 from apps.api.app.core.deps import get_db_session
 from apps.api.app.core.response import api_ok
 from apps.api.app.domains.auth.service import require_admin
+from apps.api.app.domains.audit.service import record_admin_ops_action
 from apps.api.app.domains.image.admin_service import (
     cancel_image_job,
     cancel_image_job_item,
@@ -84,48 +85,68 @@ def get_dead_letter_items(request: Request, session: Session = Depends(get_db_se
 
 @admin_router.post("/image/items/{item_id}/retry")
 def retry_image_job_item(item_id: int, request: Request, session: Session = Depends(get_db_session)):
-    require_admin(request, session)
+    admin = require_admin(request, session)
     item = retry_dead_letter_item(session, item_id=item_id)
+    record_image_admin_action(session, admin_id=admin.id, action="image.item.retry", item=item)
     session.commit()
     return api_ok({"item_id": item.id, "job_id": item.job_id, "status": item.status})
 
 
 @admin_router.post("/image/items/{item_id}/cancel")
 def cancel_image_item(item_id: int, request: Request, session: Session = Depends(get_db_session)):
-    require_admin(request, session)
+    admin = require_admin(request, session)
     item = cancel_image_job_item(session, item_id=item_id)
+    record_image_admin_action(session, admin_id=admin.id, action="image.item.cancel", item=item)
     session.commit()
     return api_ok({"item_id": item.id, "job_id": item.job_id, "status": item.status})
 
 
 @admin_router.post("/image/jobs/{job_id}/retry")
 def retry_admin_image_job(job_id: int, request: Request, session: Session = Depends(get_db_session)):
-    require_admin(request, session)
+    admin = require_admin(request, session)
     result = retry_image_job(session, job_id=job_id)
+    record_admin_ops_action(
+        session,
+        admin_user_id=admin.id,
+        action="image.job.retry",
+        target_type="image_job",
+        target_id=job_id,
+        metadata=result,
+    )
     session.commit()
     return api_ok(result)
 
 
 @admin_router.post("/image/jobs/{job_id}/cancel")
 def cancel_admin_image_job(job_id: int, request: Request, session: Session = Depends(get_db_session)):
-    require_admin(request, session)
+    admin = require_admin(request, session)
     result = cancel_image_job(session, job_id=job_id)
+    record_admin_ops_action(
+        session,
+        admin_user_id=admin.id,
+        action="image.job.cancel",
+        target_type="image_job",
+        target_id=job_id,
+        metadata=result,
+    )
     session.commit()
     return api_ok(result)
 
 
 @admin_router.post("/image/providers/{provider_id}/pause")
 def pause_image_provider(provider_id: int, request: Request, session: Session = Depends(get_db_session)):
-    require_admin(request, session)
+    admin = require_admin(request, session)
     state = pause_provider_runtime(session, provider_id=provider_id)
+    record_provider_admin_action(session, admin_id=admin.id, action="image.provider.pause", state=state)
     session.commit()
     return api_ok(provider_runtime_payload(state))
 
 
 @admin_router.post("/image/providers/{provider_id}/resume")
 def resume_image_provider(provider_id: int, request: Request, session: Session = Depends(get_db_session)):
-    require_admin(request, session)
+    admin = require_admin(request, session)
     state = resume_provider_runtime(session, provider_id=provider_id)
+    record_provider_admin_action(session, admin_id=admin.id, action="image.provider.resume", state=state)
     session.commit()
     return api_ok(provider_runtime_payload(state))
 
@@ -137,8 +158,16 @@ def set_image_job_priority(
     request: Request,
     session: Session = Depends(get_db_session),
 ):
-    require_admin(request, session)
+    admin = require_admin(request, session)
     result = update_job_priority(session, job_id=job_id, priority=payload.priority)
+    record_admin_ops_action(
+        session,
+        admin_user_id=admin.id,
+        action="image.job.priority.update",
+        target_type="image_job",
+        target_id=job_id,
+        metadata=result,
+    )
     session.commit()
     return api_ok(result)
 
@@ -212,10 +241,18 @@ def admin_update_asset_visibility(
     request: Request,
     session: Session = Depends(get_db_session),
 ):
-    require_admin(request, session)
+    admin = require_admin(request, session)
     asset = get_asset(session, asset_id)
     set_asset_visibility(asset, payload.visibility)
     session.flush()
+    record_admin_ops_action(
+        session,
+        admin_user_id=admin.id,
+        action="image.asset.visibility.update",
+        target_type="image_asset",
+        target_id=asset_id,
+        metadata={"visibility": asset.visibility},
+    )
     session.commit()
     return api_ok(asset_payload(asset, storage=build_asset_storage()))
 
@@ -226,7 +263,37 @@ def admin_delete_asset(
     request: Request,
     session: Session = Depends(get_db_session),
 ):
-    require_admin(request, session)
+    admin = require_admin(request, session)
     delete_asset_by_admin(session, asset_id=asset_id)
+    record_admin_ops_action(
+        session,
+        admin_user_id=admin.id,
+        action="image.asset.delete",
+        target_type="image_asset",
+        target_id=asset_id,
+        metadata={"deleted": True},
+    )
     session.commit()
     return api_ok({"deleted": True, "asset_id": asset_id})
+
+
+def record_image_admin_action(session: Session, *, admin_id: int, action: str, item) -> None:
+    record_admin_ops_action(
+        session,
+        admin_user_id=admin_id,
+        action=action,
+        target_type="image_job_item",
+        target_id=item.id,
+        metadata={"job_id": item.job_id, "result_index": item.result_index, "status_to": item.status},
+    )
+
+
+def record_provider_admin_action(session: Session, *, admin_id: int, action: str, state) -> None:
+    record_admin_ops_action(
+        session,
+        admin_user_id=admin_id,
+        action=action,
+        target_type="provider",
+        target_id=state.provider_id,
+        metadata={"status_to": state.status},
+    )

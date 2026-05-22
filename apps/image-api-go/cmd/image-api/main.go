@@ -51,6 +51,8 @@ func run(logger *slog.Logger) error {
 	})
 	handler := httpapi.NewHandler(repository, httpapi.Config{
 		InternalDebugToken:            cfg.InternalDebugToken,
+		InternalServiceToken:          cfg.InternalServiceToken,
+		InternalServiceTokenNext:      cfg.InternalServiceTokenNext,
 		EnableInternalCreate:          cfg.EnableInternalCreate,
 		EnablePublicCreate:            cfg.EnablePublicCreate,
 		EnableDebugOwnerHeaders:       cfg.EnableDebugOwnerHeaders,

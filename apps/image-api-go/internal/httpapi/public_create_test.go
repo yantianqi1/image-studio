@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -108,15 +109,15 @@ func TestPublicCreateDefaultsRequestedCount(t *testing.T) {
 	}
 }
 
-func TestPublicCreateReturnsFastAPICompatibleJobFields(t *testing.T) {
+func TestPublicCreateReturnsQueuedContractPayload(t *testing.T) {
 	reader := &fakeReader{
-		publicCreated: &service.PublicCreateJobResult{Job: &service.JobPayload{ID: 102, Status: "queued"}},
+		publicCreated: &service.PublicCreateJobResult{Job: queuedPublicCreateJob(3)},
 	}
 	handler := NewHandler(reader, Config{EnablePublicCreate: true})
 	request := httptest.NewRequest(
 		http.MethodPost,
 		"/api/public/image/jobs",
-		strings.NewReader(`{"prompt":"hello","model_code":"gpt-image-2"}`),
+		strings.NewReader(`{"prompt":"hello","model_code":"gpt-image-2","requested_count":3}`),
 	)
 	response := httptest.NewRecorder()
 
@@ -125,22 +126,67 @@ func TestPublicCreateReturnsFastAPICompatibleJobFields(t *testing.T) {
 	if response.Code != http.StatusCreated {
 		t.Fatalf("status = %d body=%s", response.Code, response.Body.String())
 	}
-	assertResponseHasKeys(
-		t,
-		response.Body.Bytes(),
-		"source",
-		"title",
-		"source_asset_id",
-		"provider_id",
-		"provider_model",
-		"client_provider_base_url",
-		"attempt_count",
-		"max_attempts",
-		"created_at",
-		"available_at",
-		"started_at",
-		"finished_at",
+	if reader.publicRequest == nil || reader.publicRequest.RequestedCount != 3 {
+		t.Fatalf("requested_count = %#v, want 3", reader.publicRequest)
+	}
+	payload := decodeObject(t, response.Body.Bytes())
+	data, ok := payload["data"].(map[string]any)
+	if !ok {
+		t.Fatalf("data is not object: %#v", payload["data"])
+	}
+	if data["status"] != "queued" {
+		t.Fatalf("status = %q, want queued", data["status"])
+	}
+	assertObjectKeys(t, data, contractJobFields)
+}
+
+func TestPublicCreateInvalidModelUsesCompatibleErrorStatus(t *testing.T) {
+	reader := &fakeReader{publicErr: fmt.Errorf("%w: invalid model", service.ErrInvalidInput)}
+	handler := NewHandler(reader, Config{EnablePublicCreate: true})
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/public/image/jobs",
+		strings.NewReader(`{"prompt":"hello","model_code":"missing-model","requested_count":1}`),
 	)
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d body=%s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), "invalid model") {
+		t.Fatalf("body does not expose invalid model: %q", response.Body.String())
+	}
+}
+
+func TestPublicCreateQuotaExceededUsesForbiddenStatus(t *testing.T) {
+	reader := &fakeReader{publicErr: fmt.Errorf("%w: public quota exhausted", service.ErrForbidden)}
+	handler := NewHandler(reader, Config{EnablePublicCreate: true})
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/public/image/jobs",
+		strings.NewReader(`{"prompt":"hello","model_code":"gpt-image-2","requested_count":1}`),
+	)
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("status = %d body=%s", response.Code, response.Body.String())
+	}
+	if strings.TrimSpace(response.Body.String()) != "forbidden" {
+		t.Fatalf("body = %q, want forbidden", response.Body.String())
+	}
+}
+
+func queuedPublicCreateJob(requestedCount int) *service.JobPayload {
+	return &service.JobPayload{
+		ID: 102, Source: "member", Mode: "generate", Prompt: "hello",
+		ModelCode: "gpt-image-2", Visibility: "private", Status: "queued",
+		RequestedCount: requestedCount, CreatedAt: "2026-05-21T12:00:00",
+		AvailableAt: "2026-05-21T12:00:00",
+	}
 }
 
 func setCookieValue(cookies []*http.Cookie, name string) string {
@@ -161,19 +207,5 @@ func assertCreatedJobPayload(t *testing.T, body []byte) {
 	data := payload["data"].(map[string]any)
 	if data["id"] != float64(99) || data["status"] != "queued" {
 		t.Fatalf("unexpected create payload: %#v", payload)
-	}
-}
-
-func assertResponseHasKeys(t *testing.T, body []byte, keys ...string) {
-	t.Helper()
-	var payload map[string]any
-	if err := json.Unmarshal(body, &payload); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	data := payload["data"].(map[string]any)
-	for _, key := range keys {
-		if _, ok := data[key]; !ok {
-			t.Fatalf("missing key %q in response data: %#v", key, data)
-		}
 	}
 }

@@ -11,6 +11,8 @@ from apps.api.app.core.errors import AppError
 from apps.api.app.domains.audit.models import AdminActionLog
 from apps.api.app.domains.audit.schemas import AdminActionLogListOptions
 
+ADMIN_OPS_AUDIT_REASON = "admin ops mutation"
+
 
 @dataclass(frozen=True)
 class AdminActionLogListResult:
@@ -44,6 +46,26 @@ def record_admin_action(
     session.add(log)
     session.flush()
     return log
+
+
+def record_admin_ops_action(
+    session: Session,
+    *,
+    admin_user_id: int,
+    action: str,
+    target_type: str,
+    target_id: int | str,
+    metadata: dict[str, Any] | None = None,
+) -> AdminActionLog:
+    return record_admin_action(
+        session,
+        admin_user_id=admin_user_id,
+        action=action,
+        target_type=target_type,
+        target_id=target_id,
+        reason=ADMIN_OPS_AUDIT_REASON,
+        metadata=metadata,
+    )
 
 
 def list_admin_action_logs(session: Session, options: AdminActionLogListOptions) -> AdminActionLogListResult:

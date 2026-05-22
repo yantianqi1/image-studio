@@ -28,6 +28,11 @@ var contractGalleryItemFields = []string{
 	"job_id", "result_index", "prompt", "revised_prompt",
 }
 
+var contractItemFields = []string{
+	"id", "job_id", "result_index", "status", "asset_id", "error_code", "error_message",
+	"manual_retry_count", "created_at", "available_at", "started_at", "finished_at", "cancelled_at",
+}
+
 var contractDeleteJobFields = []string{"deleted", "id"}
 
 func TestContractPublicJobSuccessEnvelope(t *testing.T) {
@@ -76,6 +81,26 @@ func TestContractPublicJobResultsPayloadFields(t *testing.T) {
 		t.Fatalf("result item is not object: %#v", items[0])
 	}
 	assertObjectKeys(t, data, contractResultFields)
+}
+
+func TestContractPublicJobItemsPayloadFields(t *testing.T) {
+	handler := NewHandler(&fakeReader{items: []service.ItemPayload{fullContractItem()}}, Config{})
+	request := httptest.NewRequest(http.MethodGet, "/api/public/image/jobs/12/items", nil)
+	request.AddCookie(&http.Cookie{Name: "studio_user_session", Value: "user-token"})
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	payload := decodeObject(t, response.Body.Bytes())
+	items, ok := payload["data"].([]any)
+	if !ok || len(items) != 1 {
+		t.Fatalf("data is not a single item list: %#v", payload["data"])
+	}
+	data, ok := items[0].(map[string]any)
+	if !ok {
+		t.Fatalf("job item is not object: %#v", items[0])
+	}
+	assertObjectKeys(t, data, contractItemFields)
 }
 
 func TestContractPublicGalleryPayloadFields(t *testing.T) {
@@ -127,6 +152,13 @@ func fullContractGalleryItem() service.GalleryItemPayload {
 		ThumbnailURL: "/api/public/image/assets/3/thumbnail",
 		Visibility:   "public", CreatedAt: "2026-05-21T12:00:00",
 		JobID: 12, ResultIndex: 1, Prompt: "Draw a city",
+	}
+}
+
+func fullContractItem() service.ItemPayload {
+	return service.ItemPayload{
+		ID: 33, JobID: 12, ResultIndex: 1, Status: "queued", ManualRetryCount: 0,
+		CreatedAt: "2026-05-21T12:00:00", AvailableAt: "2026-05-21T12:00:00",
 	}
 }
 

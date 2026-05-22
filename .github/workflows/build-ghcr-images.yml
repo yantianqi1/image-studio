@@ -36,6 +36,9 @@ jobs:
           - image: image-studio-worker-go
             dockerfile: docker/worker-go.Dockerfile
             build_args: ""
+          - image: image-studio-image-api-go
+            dockerfile: docker/image-api-go.Dockerfile
+            build_args: ""
           - image: image-studio-public-web
             dockerfile: docker/web.Dockerfile
             build_args: |

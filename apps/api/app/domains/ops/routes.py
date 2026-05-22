@@ -5,6 +5,7 @@ from apps.api.app.core.cache import app_cache
 from apps.api.app.core.deps import get_db_session
 from apps.api.app.core.response import api_ok
 from apps.api.app.domains.auth.service import require_admin
+from apps.api.app.domains.audit.service import record_admin_ops_action
 from apps.api.app.domains.ops.service import (
     build_image_queue_summary,
     build_worker_summary,
@@ -50,13 +51,37 @@ def get_running_image_items(request: Request, session: Session = Depends(get_db_
 
 @admin_router.post("/workers/{worker_id}/drain")
 def drain_worker(worker_id: str, request: Request, session: Session = Depends(get_db_session)):
-    require_admin(request, session)
+    admin = require_admin(request, session)
     app_cache.invalidate("admin:worker_summary")
-    return api_ok(drain_worker_node(session, worker_id=worker_id))
+    result = drain_worker_node(session, worker_id=worker_id)
+    record_worker_admin_action(session, admin_id=admin.id, action="worker.drain", worker_id=worker_id, result=result)
+    session.commit()
+    return api_ok(result)
 
 
 @admin_router.post("/workers/{worker_id}/resume")
 def resume_worker(worker_id: str, request: Request, session: Session = Depends(get_db_session)):
-    require_admin(request, session)
+    admin = require_admin(request, session)
     app_cache.invalidate("admin:worker_summary")
-    return api_ok(resume_worker_node(session, worker_id=worker_id))
+    result = resume_worker_node(session, worker_id=worker_id)
+    record_worker_admin_action(session, admin_id=admin.id, action="worker.resume", worker_id=worker_id, result=result)
+    session.commit()
+    return api_ok(result)
+
+
+def record_worker_admin_action(
+    session: Session,
+    *,
+    admin_id: int,
+    action: str,
+    worker_id: str,
+    result: dict[str, object],
+) -> None:
+    record_admin_ops_action(
+        session,
+        admin_user_id=admin_id,
+        action=action,
+        target_type="worker_node",
+        target_id=worker_id,
+        metadata={"status_to": result["status"]},
+    )

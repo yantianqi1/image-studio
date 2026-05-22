@@ -18,6 +18,8 @@ type Config struct {
 	StorageGCSBucket              string
 	StorageGCSPrefix              string
 	InternalDebugToken            string
+	InternalServiceToken          string
+	InternalServiceTokenNext      string
 	EnableInternalCreate          bool
 	EnablePublicCreate            bool
 	EnableDebugOwnerHeaders       bool
@@ -48,6 +50,10 @@ func Load() (Config, error) {
 		StorageGCSBucket:     os.Getenv("ASSET_STORAGE_GCS_BUCKET"),
 		StorageGCSPrefix:     stringDefault("ASSET_STORAGE_GCS_PREFIX", "generated-assets"),
 		InternalDebugToken:   os.Getenv("GO_IMAGE_API_INTERNAL_DEBUG_TOKEN"),
+		InternalServiceToken: os.Getenv("INTERNAL_SERVICE_TOKEN"),
+		InternalServiceTokenNext: os.Getenv(
+			"INTERNAL_SERVICE_TOKEN_NEXT",
+		),
 		EnableInternalCreate: os.Getenv("GO_IMAGE_API_ENABLE_INTERNAL_CREATE") == "true",
 		EnablePublicCreate:   os.Getenv("GO_IMAGE_API_CREATE_ENABLED") == "true",
 		EnableDebugOwnerHeaders: os.Getenv(

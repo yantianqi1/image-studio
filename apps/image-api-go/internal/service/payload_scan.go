@@ -58,6 +58,22 @@ type resultDBRow struct {
 	ProviderRequestID sql.NullString
 }
 
+type itemDBRow struct {
+	ID               int64
+	JobID            int64
+	ResultIndex      int
+	Status           string
+	AssetID          sql.NullInt64
+	ErrorCode        sql.NullString
+	ErrorMessage     sql.NullString
+	ManualRetryCount int
+	CreatedAt        time.Time
+	AvailableAt      time.Time
+	StartedAt        sql.NullTime
+	FinishedAt       sql.NullTime
+	CancelledAt      sql.NullTime
+}
+
 func scanJob(row pgx.Row) (*JobPayload, error) {
 	dbRow, err := scanJobDBRow(row)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -130,6 +146,36 @@ func resultPayloadFromDBRow(row resultDBRow) ResultPayload {
 		PublishedAt: nullTime(row.PublishedAt), CreatedAt: formatTime(row.CreatedAt),
 		RevisedPrompt:     nullStringValue(row.RevisedPrompt),
 		ProviderRequestID: nullStringValue(row.ProviderRequestID),
+	}
+}
+
+func scanItem(rows pgx.Rows) (ItemPayload, error) {
+	dbRow, err := scanItemDBRow(rows)
+	if err != nil {
+		return ItemPayload{}, fmt.Errorf("scan image job item: %w", err)
+	}
+	return itemPayloadFromDBRow(dbRow), nil
+}
+
+func scanItemDBRow(rows pgx.Rows) (itemDBRow, error) {
+	var dbRow itemDBRow
+	err := rows.Scan(
+		&dbRow.ID, &dbRow.JobID, &dbRow.ResultIndex, &dbRow.Status, &dbRow.AssetID,
+		&dbRow.ErrorCode, &dbRow.ErrorMessage, &dbRow.ManualRetryCount,
+		&dbRow.CreatedAt, &dbRow.AvailableAt, &dbRow.StartedAt,
+		&dbRow.FinishedAt, &dbRow.CancelledAt,
+	)
+	return dbRow, err
+}
+
+func itemPayloadFromDBRow(row itemDBRow) ItemPayload {
+	return ItemPayload{
+		ID: row.ID, JobID: row.JobID, ResultIndex: row.ResultIndex, Status: row.Status,
+		AssetID: nullInt64(row.AssetID), ErrorCode: nullStringValue(row.ErrorCode),
+		ErrorMessage: nullStringValue(row.ErrorMessage), ManualRetryCount: row.ManualRetryCount,
+		CreatedAt: formatTime(row.CreatedAt), AvailableAt: formatTime(row.AvailableAt),
+		StartedAt: nullTime(row.StartedAt), FinishedAt: nullTime(row.FinishedAt),
+		CancelledAt: nullTime(row.CancelledAt),
 	}
 }
 

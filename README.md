@@ -204,7 +204,7 @@ source .venv/bin/activate
 python -m apps.worker.worker.main
 ```
 
-Python worker 默认只处理 comic-task 和 comic-orchestration。image_job_items 推荐由 Go worker 执行：
+Python worker 默认只处理 comic-task 和 comic-orchestration。image_job_items 由 Go worker 执行：
 
 ```bash
 cd apps/worker-go
@@ -255,7 +255,7 @@ docker compose down -v
 
 ## 生产镜像部署
 
-仓库推送到 `main` 或 `v*.*.*` tag 后，`.github/workflows/build-ghcr-images.yml` 会构建并推送 `api`、`worker`、`public-web`、`admin-web` 四个 GHCR 镜像。
+仓库推送到 `main` 或 `v*.*.*` tag 后，`.github/workflows/build-ghcr-images.yml` 会构建并推送 `api`、`worker`、`worker-go`、`image-api-go`、`public-web`、`admin-web` 六个 GHCR 镜像。
 
 服务器首次部署：
 

@@ -23,6 +23,13 @@ JOIN assets a ON a.id = r.asset_id
 WHERE r.job_id=$1
 ORDER BY r.result_index ASC`
 
+const publicItemsSQL = `
+SELECT id, job_id, result_index, status, asset_id, error_code, error_message,
+  manual_retry_count, created_at, available_at, started_at, finished_at, cancelled_at
+FROM image_job_items
+WHERE job_id=$1
+ORDER BY result_index ASC`
+
 const publicGalleryBaseSQL = `
 SELECT a.id AS asset_id,
   concat('/api/public/image/assets/', a.id) AS asset_url,

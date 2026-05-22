@@ -95,6 +95,10 @@ GitHub Actions 会在推送 `main` 或 `v*.*.*` tag 后构建并推送：
 - `ghcr.io/yantianqi1/image-studio-worker`
 - `ghcr.io/yantianqi1/image-studio-public-web`
 - `ghcr.io/yantianqi1/image-studio-admin-web`
+- `ghcr.io/yantianqi1/image-studio-worker-go`
+- `ghcr.io/yantianqi1/image-studio-image-api-go`
+
+`image-api-go` 和 `worker-go` 与其他服务一样由 `.github/workflows/build-ghcr-images.yml` 统一构建并推送，`docker-compose.yml` 直接按镜像名拉取。
 
 服务器启动：
 

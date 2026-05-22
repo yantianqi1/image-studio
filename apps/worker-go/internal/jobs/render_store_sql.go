@@ -87,15 +87,15 @@ const insertAssetCreatedOutboxSQL = `
 INSERT INTO outbox_events (
   aggregate_type, aggregate_id, event_type, payload, status, attempts, available_at, created_at
 ) VALUES (
-  'asset', $1::text, 'asset.created',
+  'asset', $1::bigint::text, 'asset.created',
   jsonb_build_object(
-    'asset_id', $1,
-    'storage_path', $2,
-    'size_bytes', $3,
-    'sha256', $4,
-    'width', $5,
-    'height', $6,
-    'storage_backend', $7
+    'asset_id', $1::bigint,
+    'storage_path', $2::text,
+    'size_bytes', $3::bigint,
+    'sha256', $4::text,
+    'width', $5::int,
+    'height', $6::int,
+    'storage_backend', $7::text
   ),
   'pending', 0, now(), now()
 )`

@@ -39,11 +39,15 @@ def test_python_image_execution_is_documented_as_legacy_only() -> None:
     readme = read_repo_file("README.md")
     worker_main = read_repo_file("apps/worker/worker/main.py")
     direct_rendering = read_repo_file("apps/api/app/domains/image/direct_rendering.py")
+    worker_go_readme = read_repo_file("apps/worker-go/README.md")
 
     assert "Production image execution is owned by apps/worker-go" in legacy_doc
     assert "manual/test helper" in legacy_doc
     assert "FastAPI public image routes remain" in legacy_doc
     assert "Python worker 不再调度生产 image jobs" in readme
+    assert "image_job_items 由 Go worker 执行" in readme
+    assert "legacy fallback" not in worker_go_readme
+    assert "manual legacy repair" in worker_go_readme
     assert "Deprecated development/test-only synchronous image rendering path" in direct_rendering
     assert "image-jobs" not in worker_main
     assert "WORKER_ENABLE_IMAGE_JOBS" not in worker_main

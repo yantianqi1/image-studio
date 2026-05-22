@@ -43,8 +43,8 @@ item_events AS (
 ),
 job_events AS (
   INSERT INTO image_job_events (job_id, item_id, event_type, payload, created_at)
-  SELECT id, NULL, 'image_job.started',
-    jsonb_build_object('id', id, 'status', 'running'),
+  SELECT parents.id, NULL, 'image_job.started',
+    jsonb_build_object('id', parents.id, 'status', 'running'),
     now()
   FROM parents
   JOIN previous_parents ON previous_parents.id = parents.id

@@ -65,6 +65,22 @@ type ResultPayload struct {
 	ProviderRequestID *string `json:"provider_request_id"`
 }
 
+type ItemPayload struct {
+	ID               int64   `json:"id"`
+	JobID            int64   `json:"job_id"`
+	ResultIndex      int     `json:"result_index"`
+	Status           string  `json:"status"`
+	AssetID          *int64  `json:"asset_id"`
+	ErrorCode        *string `json:"error_code"`
+	ErrorMessage     *string `json:"error_message"`
+	ManualRetryCount int     `json:"manual_retry_count"`
+	CreatedAt        string  `json:"created_at"`
+	AvailableAt      string  `json:"available_at"`
+	StartedAt        *string `json:"started_at"`
+	FinishedAt       *string `json:"finished_at"`
+	CancelledAt      *string `json:"cancelled_at"`
+}
+
 type GalleryItemPayload struct {
 	AssetID       int64   `json:"asset_id"`
 	AssetURL      string  `json:"asset_url"`

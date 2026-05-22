@@ -168,60 +168,21 @@ func TestAdminDebugRequiresInternalToken(t *testing.T) {
 	}
 }
 
-func TestInternalCreateRequiresFlag(t *testing.T) {
-	handler := NewHandler(&fakeReader{}, Config{EnableInternalCreate: false})
-	request := httptest.NewRequest(
-		http.MethodPost,
-		"/internal/image/jobs",
-		strings.NewReader(`{"prompt":"x","model_code":"gpt-image-2","requested_count":1}`),
-	)
-	request.Header.Set("X-Debug-Owner-User-ID", "7")
-	response := httptest.NewRecorder()
-
-	handler.ServeHTTP(response, request)
-
-	if response.Code != http.StatusForbidden {
-		t.Fatalf("status = %d, want 403", response.Code)
-	}
-}
-
-func TestInternalCreateReturnsQueuedPayload(t *testing.T) {
-	handler := NewHandler(&fakeReader{created: &service.JobPayload{ID: 99, Status: "queued"}}, Config{EnableInternalCreate: true})
-	request := httptest.NewRequest(
-		http.MethodPost,
-		"/internal/image/jobs",
-		strings.NewReader(`{"prompt":"x","model_code":"gpt-image-2","requested_count":4}`),
-	)
-	request.Header.Set("X-Debug-Owner-User-ID", "7")
-	response := httptest.NewRecorder()
-
-	handler.ServeHTTP(response, request)
-
-	if response.Code != http.StatusCreated {
-		t.Fatalf("status = %d body=%s", response.Code, response.Body.String())
-	}
-	var payload map[string]any
-	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	data := payload["data"].(map[string]any)
-	if data["id"] != float64(99) || data["status"] != "queued" {
-		t.Fatalf("unexpected create payload: %#v", payload)
-	}
-}
-
 type fakeReader struct {
-	job           *service.JobPayload
-	events        []service.JobEventPayload
-	created       *service.JobPayload
-	publicCreated *service.PublicCreateJobResult
-	publicRequest *service.PublicCreateJobRequest
-	asset         *service.AssetContent
-	gallery       []service.GalleryItemPayload
-	deleted       *service.DeleteJobPayload
-	owner         service.Owner
-	requireOwner  bool
-	eventsAfterID int64
+	job             *service.JobPayload
+	events          []service.JobEventPayload
+	created         *service.JobPayload
+	internalRequest *service.CreateJobRequest
+	publicCreated   *service.PublicCreateJobResult
+	publicRequest   *service.PublicCreateJobRequest
+	publicErr       error
+	asset           *service.AssetContent
+	items           []service.ItemPayload
+	gallery         []service.GalleryItemPayload
+	deleted         *service.DeleteJobPayload
+	owner           service.Owner
+	requireOwner    bool
+	eventsAfterID   int64
 }
 
 func (r fakeReader) ResolveOwner(_ context.Context, tokens service.OwnerTokens) (service.Owner, error) {
@@ -253,6 +214,10 @@ func (r fakeReader) GetPublicResults(context.Context, int64, service.Owner) ([]s
 	}}, nil
 }
 
+func (r fakeReader) GetPublicItems(context.Context, int64, service.Owner) ([]service.ItemPayload, error) {
+	return r.items, nil
+}
+
 func (r *fakeReader) GetPublicEvents(
 	_ context.Context,
 	_ int64,
@@ -268,7 +233,8 @@ func (r fakeReader) GetAdminDebug(context.Context, int64) (*service.DebugPayload
 	return &service.DebugPayload{JobID: 12}, nil
 }
 
-func (r fakeReader) CreateInternalJob(context.Context, service.CreateJobRequest) (*service.JobPayload, error) {
+func (r *fakeReader) CreateInternalJob(_ context.Context, request service.CreateJobRequest) (*service.JobPayload, error) {
+	r.internalRequest = &request
 	if r.created == nil {
 		return nil, service.ErrNotFound
 	}
@@ -280,6 +246,9 @@ func (r *fakeReader) CreatePublicJob(
 	request service.PublicCreateJobRequest,
 ) (*service.PublicCreateJobResult, error) {
 	r.publicRequest = &request
+	if r.publicErr != nil {
+		return nil, r.publicErr
+	}
 	if r.publicCreated == nil {
 		return nil, service.ErrNotFound
 	}

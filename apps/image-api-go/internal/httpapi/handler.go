@@ -24,6 +24,7 @@ type Reader interface {
 	GetPublicJob(context.Context, int64, service.Owner) (*service.JobPayload, error)
 	GetPublicEvents(context.Context, int64, service.Owner, int64, int) ([]service.JobEventPayload, error)
 	GetPublicResults(context.Context, int64, service.Owner) ([]service.ResultPayload, error)
+	GetPublicItems(context.Context, int64, service.Owner) ([]service.ItemPayload, error)
 	GetPublicAsset(context.Context, int64, service.Owner) (*service.AssetContent, error)
 	GetPublicAssetThumbnail(context.Context, int64, service.Owner) (*service.AssetContent, error)
 	GetPublicGallery(context.Context, service.Owner, string) ([]service.GalleryItemPayload, error)
@@ -35,6 +36,8 @@ type Reader interface {
 
 type Config struct {
 	InternalDebugToken            string
+	InternalServiceToken          string
+	InternalServiceTokenNext      string
 	Ready                         func(context.Context) error
 	EnableInternalCreate          bool
 	EnablePublicCreate            bool

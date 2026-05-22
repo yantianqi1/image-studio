@@ -27,6 +27,10 @@ func (h Handler) handlePublicJob(w http.ResponseWriter, r *http.Request, path st
 		h.writePublicEvents(w, r, jobID, owner)
 		return
 	}
+	if suffix == "items" {
+		h.writePublicItems(w, r, jobID, owner)
+		return
+	}
 	job, err := h.reader.GetPublicJob(r.Context(), jobID, owner)
 	writeServiceResult(w, job, err)
 }
@@ -34,6 +38,11 @@ func (h Handler) handlePublicJob(w http.ResponseWriter, r *http.Request, path st
 func (h Handler) writePublicResults(w http.ResponseWriter, r *http.Request, jobID int64, owner service.Owner) {
 	results, err := h.reader.GetPublicResults(r.Context(), jobID, owner)
 	writeServiceResult(w, results, err)
+}
+
+func (h Handler) writePublicItems(w http.ResponseWriter, r *http.Request, jobID int64, owner service.Owner) {
+	items, err := h.reader.GetPublicItems(r.Context(), jobID, owner)
+	writeServiceResult(w, items, err)
 }
 
 func parsePublicJobPath(path string) (int64, string, bool) {
@@ -46,7 +55,7 @@ func parsePublicJobPath(path string) (int64, string, bool) {
 		return 0, "", false
 	}
 	if len(parts) == 6 {
-		return id, parts[5], parts[5] == "results" || parts[5] == "events"
+		return id, parts[5], parts[5] == "results" || parts[5] == "events" || parts[5] == "items"
 	}
 	return id, "", true
 }

@@ -17,6 +17,9 @@ func (h Handler) handleInternalCreate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal create disabled", http.StatusForbidden)
 		return
 	}
+	if !h.requireInternalServiceToken(w, r) {
+		return
+	}
 	owner, err := h.ownerFromInternalCreateRequest(r)
 	if err != nil {
 		writeServiceResult(w, nil, err)

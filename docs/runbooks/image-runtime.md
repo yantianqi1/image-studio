@@ -2,8 +2,10 @@
 
 This runbook covers the production image runtime: FastAPI public/admin image
 APIs, `image-api-go`, `worker-go`, Postgres image tables, and generated asset
-storage. Production image execution belongs to Go worker. Python image
-execution is deprecated and must not be used as a silent production fallback.
+storage. The `image-api-go` container image is built and pushed by
+`.github/workflows/build-ghcr-images.yml`, then pulled by `docker-compose.yml`.
+Production image execution belongs to Go worker. Python image execution is
+deprecated and must not be used as a silent production fallback.
 
 ## First Checks
 
