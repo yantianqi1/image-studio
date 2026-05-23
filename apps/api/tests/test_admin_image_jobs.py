@@ -9,7 +9,7 @@ from sqlalchemy import select
 from apps.api.app.domains.auth.service import create_admin_account
 from apps.api.app.domains.image import stats_service
 from apps.api.app.domains.image import service as image_service
-from apps.api.app.domains.image.models import ImageJob, ImageJobItem, ImageJobResult, ProviderRuntimeState
+from apps.api.app.domains.image.models import ImageJob, ImageJobItem, ImageJobResult, OutboxEvent, ProviderRuntimeState
 from apps.api.app.domains.llm.models import Provider
 from apps.api.app.domains.llm.service import RenderedImage
 from apps.api.app.infra.db.session import initialize_database, session_scope
@@ -184,6 +184,30 @@ def test_admin_image_stats_returns_duration_without_sqlite_julianday():
     client = build_client()
     seed_admin()
     now = datetime.utcnow()
+    seed_admin_stats_fixture(now)
+    admin_login(client)
+
+    response = client.get("/api/admin/image/stats")
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["performance"]["avg_duration_seconds"] == 12.0
+    assert data["performance"]["queue_wait_seconds"]["p50"] == 6.0
+    assert data["performance"]["queue_wait_seconds"]["p95"] == 7.8
+    assert data["performance"]["render_duration_seconds"]["p50"] == 15.0
+    assert data["performance"]["render_duration_seconds"]["p95"] == 19.5
+    assert data["queue"]["queued"] == 1
+    assert data["queue"]["dead_letter"] == 1
+    assert data["operations"]["outbox_pending_count"] == 1
+    assert data["operations"]["outbox_pending_oldest_age_seconds"] >= 75
+    assert data["provider_health"]["circuit_open"] == 1
+    assert data["provider_health"]["failure_count"] == 3
+    assert data["costs"]["total_cents"] == 250
+    assert "revenue" not in data
+    assert "julianday" not in inspect.getsource(stats_service._avg_duration)
+
+
+def seed_admin_stats_fixture(now: datetime) -> None:
     with session_scope() as session:
         provider = Provider(name="stats-provider", type="openai-compatible", status="active")
         session.add(provider)
@@ -202,56 +226,51 @@ def test_admin_image_stats_returns_duration_without_sqlite_julianday():
         )
         session.add(job)
         session.flush()
-        session.add_all([
-            ImageJobItem(
-                job_id=job.id,
-                result_index=1,
-                status="queued",
-                created_at=now,
-                available_at=now,
-            ),
-            ImageJobItem(
-                job_id=job.id,
-                result_index=2,
-                status="succeeded",
-                created_at=now,
-                available_at=now,
-                started_at=now + timedelta(seconds=4),
-                finished_at=now + timedelta(seconds=14),
-            ),
-            ImageJobItem(
-                job_id=job.id,
-                result_index=3,
-                status="failed",
-                created_at=now,
-                available_at=now,
-                started_at=now + timedelta(seconds=8),
-                finished_at=now + timedelta(seconds=28),
-                dead_letter_at=now + timedelta(seconds=28),
-            ),
-            ProviderRuntimeState(
-                provider_id=provider.id,
-                status="circuit_open",
-                failure_count=3,
-                last_failure_at=now,
-                circuit_open_until=now + timedelta(minutes=5),
-            ),
-        ])
-    admin_login(client)
+        session.add_all(stats_fixture_rows(job_id=job.id, provider_id=provider.id, now=now))
 
-    response = client.get("/api/admin/image/stats")
 
-    assert response.status_code == 200
-    data = response.json()["data"]
-    assert data["performance"]["avg_duration_seconds"] == 12.0
-    assert data["performance"]["queue_wait_seconds"]["p50"] == 6.0
-    assert data["performance"]["queue_wait_seconds"]["p95"] == 7.8
-    assert data["performance"]["render_duration_seconds"]["p50"] == 15.0
-    assert data["performance"]["render_duration_seconds"]["p95"] == 19.5
-    assert data["queue"]["queued"] == 1
-    assert data["queue"]["dead_letter"] == 1
-    assert data["provider_health"]["circuit_open"] == 1
-    assert data["provider_health"]["failure_count"] == 3
-    assert data["costs"]["total_cents"] == 250
-    assert "revenue" not in data
-    assert "julianday" not in inspect.getsource(stats_service._avg_duration)
+def stats_fixture_rows(*, job_id: int, provider_id: int, now: datetime) -> list:
+    return [
+        ImageJobItem(
+            job_id=job_id,
+            result_index=1,
+            status="queued",
+            created_at=now,
+            available_at=now,
+        ),
+        ImageJobItem(
+            job_id=job_id,
+            result_index=2,
+            status="succeeded",
+            created_at=now,
+            available_at=now,
+            started_at=now + timedelta(seconds=4),
+            finished_at=now + timedelta(seconds=14),
+        ),
+        ImageJobItem(
+            job_id=job_id,
+            result_index=3,
+            status="failed",
+            created_at=now,
+            available_at=now,
+            started_at=now + timedelta(seconds=8),
+            finished_at=now + timedelta(seconds=28),
+            dead_letter_at=now + timedelta(seconds=28),
+        ),
+        ProviderRuntimeState(
+            provider_id=provider_id,
+            status="circuit_open",
+            failure_count=3,
+            last_failure_at=now,
+            circuit_open_until=now + timedelta(minutes=5),
+        ),
+        OutboxEvent(
+            aggregate_type="image_job",
+            aggregate_id=str(job_id),
+            event_type="image_job.created",
+            payload={"job_id": job_id},
+            status="pending",
+            available_at=now - timedelta(seconds=75),
+            created_at=now - timedelta(seconds=75),
+        ),
+    ]

@@ -80,6 +80,9 @@ go run ./cmd/image-worker cleanup-orphan-assets --execute
 ```
 
 The shared asset operations CLI lives in `../image-runtime-go/cmd/assetctl`.
+The production `worker-go` image also includes it at `/app/assetctl`, so
+cutover evidence collection runs asset verification inside the same container
+environment and mounted asset storage used by the renderer.
 Run these from `apps/image-runtime-go`:
 
 ```bash

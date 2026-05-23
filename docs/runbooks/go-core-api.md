@@ -20,14 +20,17 @@ the design against the current schema first.
 
 ## Gray Release Flags
 
-Keep flags explicit:
+Keep Go Core flags explicit:
 
 ```bash
 GO_CORE_API_BILLING_ENABLED=false
 GO_CORE_API_QUOTA_ENABLED=false
-GO_IMAGE_API_READS_ENABLED=false
-GO_IMAGE_API_CREATE_ENABLED=false
 ```
+
+Do not set `GO_IMAGE_API_READS_ENABLED=false` or
+`GO_IMAGE_API_CREATE_ENABLED=false` as part of a Go Core rollout. Those flags
+belong to the Go image API cutover/rollback path and remain false until the
+image API 24h cutover gate passes.
 
 Only enable Go Core billing or quota after:
 

@@ -27,6 +27,101 @@ Confirm:
 - Assets are written to local storage or GCS according to
   `ASSET_STORAGE_BACKEND`.
 
+## Go Image API Cutover Path
+
+Go image API can become the production primary path for public image
+create/read/results/assets/events after the 24h cutover gate passes. FastAPI
+stays the default route owner before that gate, and remains the explicit
+rollback fallback after cutover.
+
+Use `docs/runbooks/go-image-api-cutover.md` for the full-traffic cutover gate,
+SLO thresholds, known metric gaps, and 15 minute / 24 hour smoke checks.
+
+Pre-cutover defaults:
+
+```env
+GO_IMAGE_API_READS_ENABLED=false
+GO_IMAGE_API_ASSETS_ENABLED=false
+GO_IMAGE_API_SSE_ENABLED=false
+GO_IMAGE_API_CREATE_ENABLED=false
+GO_IMAGE_API_GALLERY_ENABLED=false
+GO_IMAGE_API_DELETE_ENABLED=false
+```
+
+`image-api-go` and `worker-go` must both be running before these flags route
+traffic to Go. `GO_IMAGE_API_GALLERY_ENABLED` and
+`GO_IMAGE_API_DELETE_ENABLED` stay disabled by default because gallery and
+delete are not part of the create/read production primary path yet.
+
+### Enable Go read/create
+
+1. Deploy the current `api`, `image-api-go`, `worker-go`, and `nginx` images.
+2. Confirm `image-api-go` readiness:
+
+```bash
+docker compose exec image-api-go wget -qO- http://127.0.0.1:7810/readyz
+```
+
+3. After the 24h gate passes, set the route flags explicitly:
+
+```env
+GO_IMAGE_API_READS_ENABLED=true
+GO_IMAGE_API_ASSETS_ENABLED=true
+GO_IMAGE_API_SSE_ENABLED=true
+GO_IMAGE_API_CREATE_ENABLED=true
+```
+
+4. Reload nginx:
+
+```bash
+docker compose exec nginx nginx -s reload
+```
+
+### Smoke checklist
+
+- public create returns queued.
+- item count matches requested_count.
+- worker consumes item.
+- result asset readable.
+- events include job/item transitions.
+- outbox has asset/job event.
+
+Use a small request with `requested_count=2`, then check:
+
+```bash
+docker compose logs --tail=200 image-api-go worker-go api
+docker compose exec worker-go wget -qO- http://127.0.0.1:7900/metrics
+```
+
+Query the database for `image_jobs`, `image_job_items`,
+`image_job_results`, `assets`, `image_job_events`, and `outbox_events`.
+Failures must stay visible in logs or rows; do not add silent fallback behavior.
+
+### FastAPI fallback rollback
+
+Rollback create first if only submission is affected:
+
+```env
+GO_IMAGE_API_CREATE_ENABLED=false
+```
+
+Rollback reads/assets/events if returned payloads or streaming are affected:
+
+```env
+GO_IMAGE_API_READS_ENABLED=false
+GO_IMAGE_API_ASSETS_ENABLED=false
+GO_IMAGE_API_SSE_ENABLED=false
+```
+
+Reload nginx after changing flags:
+
+```bash
+docker compose exec nginx nginx -s reload
+```
+
+After rollback, confirm matching public image requests are served by FastAPI
+and leave `worker-go` running unless execution itself is the faulty layer.
+
 ## Alerts
 
 Page an operator when any threshold stays true for two consecutive checks:

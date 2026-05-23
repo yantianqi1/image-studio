@@ -32,6 +32,15 @@ def test_variable_proxy_pass_preserves_request_uri() -> None:
     assert source.count("proxy_pass $upstream_admin_web;") == ADMIN_WEB_PROXY_COUNT
 
 
+def test_nginx_access_log_records_public_api_upstream_for_cutover_evidence() -> None:
+    source = NGINX_CONFIG.read_text()
+
+    assert "log_format commercial_studio_upstream" in source
+    assert 'route_upstream="$public_api_upstream"' in source
+    assert 'upstream_addr="$upstream_addr"' in source
+    assert "access_log /var/log/nginx/access.log commercial_studio_upstream;" in source
+
+
 def test_go_image_api_reads_are_disabled_by_default_and_scoped_to_get_routes() -> None:
     source = NGINX_CONFIG.read_text()
 

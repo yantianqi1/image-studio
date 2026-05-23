@@ -14,6 +14,10 @@ const dataHookSource = readFileSync(
   new URL("../src/lib/use-admin-data.ts", import.meta.url),
   "utf8",
 );
+const statsSource = readFileSync(
+  new URL("../src/features/jobs/image-job-stats.tsx", import.meta.url),
+  "utf8",
+);
 const imageJobTypesSource = readFileSync(
   new URL("../src/lib/admin-image-job-types.ts", import.meta.url),
   "utf8",
@@ -86,4 +90,11 @@ test("image jobs page exposes worker summary and real drain controls", () => {
   assert.match(adminWorkerApiSource, /runningItems/);
   assert.match(adminWorkerApiSource, /drainWorker/);
   assert.match(adminWorkerApiSource, /resumeWorker/);
+});
+
+test("image job stats exposes cutover operations metrics", () => {
+  assert.match(imageJobTypesSource, /operations: \{/);
+  assert.match(imageJobTypesSource, /outbox_pending_oldest_age_seconds: number \| null/);
+  assert.match(statsSource, /事件积压/);
+  assert.match(statsSource, /stats\.operations\.outbox_pending_oldest_age_seconds/);
 });

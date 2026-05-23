@@ -64,6 +64,10 @@ export type ImageJobStats = Readonly<{
     cancelled: number;
     dead_letter: number;
   };
+  operations: {
+    outbox_pending_count: number;
+    outbox_pending_oldest_age_seconds: number | null;
+  };
   provider_health: {
     healthy: number;
     degraded: number;

@@ -4,6 +4,9 @@ Production image execution is owned by apps/worker-go. The Python image
 execution code remains only for explicit manual/test helper use and for reading
 or repairing legacy rows.
 
+The final shutdown boundary is tracked in
+`docs/architecture/fastapi-image-legacy-sunset.md`.
+
 ## Still Kept
 
 - FastAPI public image routes remain. They validate requests, create

@@ -11,7 +11,7 @@ GO_WORKER_MODE=render
 GO_WORKER_CONCURRENCY=2
 GO_WORKER_PROVIDER_CONCURRENCY_DEFAULT=2
 ASSET_STORAGE_BACKEND=local
-docker compose --profile worker-go up -d worker worker-go
+docker compose up -d worker worker-go
 ```
 
 Check:
@@ -30,7 +30,7 @@ GO_WORKER_CONCURRENCY=8
 GO_WORKER_PROVIDER_CONCURRENCY_DEFAULT=2
 GO_WORKER_PROVIDER_CONCURRENCY_OVERRIDES=openrouter=2,openai-official=2
 ASSET_STORAGE_BACKEND=local
-docker compose --profile worker-go up -d worker worker-go
+docker compose up -d worker worker-go
 ```
 
 Startup validation fails fast when:
@@ -48,7 +48,7 @@ It logs warnings when `GO_WORKER_CONCURRENCY > 32`.
 Stop the Go worker:
 
 ```bash
-docker compose --profile worker-go stop worker-go
+docker compose stop worker-go
 ```
 
 Do not roll production image execution back to the Python worker. If Go worker

@@ -23,12 +23,13 @@
 - `7700`：`/api/public/*`、`/health`、`/` 分别转发到 API 与 `public-web`
 - `7701`：`/api/admin/*`、`/health`、`/` 分别转发到 API 与 `admin-web`
 - 两个入口都显式配置 `client_max_body_size 50m`，避免 Nginx 默认 `1MB` 上传限制在到达 API 前返回 HTML 413。超过该限制时返回统一 JSON envelope；如需关闭代理层限制，可改为 `client_max_body_size 0` 并重载 Nginx。
-- 默认 `GO_IMAGE_API_READS_ENABLED=false`、`GO_IMAGE_API_ASSETS_ENABLED=false`、`GO_IMAGE_API_SSE_ENABLED=false`、`GO_IMAGE_API_GALLERY_ENABLED=false`、`GO_IMAGE_API_DELETE_ENABLED=false`、`GO_IMAGE_API_CREATE_ENABLED=false`，用户端 image API 仍转发 FastAPI。
-- 设置 `GO_IMAGE_API_READS_ENABLED=true` 且启动 `image-api-go` profile 后，Nginx 只把 `GET /api/public/image/jobs/{id}` 和 `/results` 转给 Go image API。
+- Go image API route takeover 必须显式开启；默认 `GO_IMAGE_API_READS_ENABLED=false`、`GO_IMAGE_API_ASSETS_ENABLED=false`、`GO_IMAGE_API_SSE_ENABLED=false`、`GO_IMAGE_API_CREATE_ENABLED=false`，用户端 image create/read/results/assets/events 继续走 FastAPI。
+- FastAPI fallback 保留：把对应 `GO_IMAGE_API_*_ENABLED=false` 后重载 Nginx，匹配的 public image API 会回到 FastAPI。
+- `GO_IMAGE_API_READS_ENABLED=true` 时，Nginx 只把 `GET /api/public/image/jobs/{id}` 和 `/results` 转给 Go image API。
 - `GO_IMAGE_API_ASSETS_ENABLED=true` 只切 `GET /api/public/image/assets/{id}` 与 `/thumbnail`；`/download` 仍走 FastAPI。
 - `GO_IMAGE_API_SSE_ENABLED=true` 只切 `GET /api/public/image/jobs/{id}/events`。
-- `GO_IMAGE_API_GALLERY_ENABLED=true` 只切 `GET /api/public/image/gallery`。
-- `GO_IMAGE_API_DELETE_ENABLED=true` 只切 `DELETE /api/public/image/jobs/{id}`。
+- `GO_IMAGE_API_GALLERY_ENABLED=true` 只切 `GET /api/public/image/gallery`；默认仍为 `false`，继续走 FastAPI fallback。
+- `GO_IMAGE_API_DELETE_ENABLED=true` 只切 `DELETE /api/public/image/jobs/{id}`；默认仍为 `false`，继续走 FastAPI fallback。
 - `GO_IMAGE_API_CREATE_ENABLED=true` 只切 `POST /api/public/image/jobs`；uploads、visibility、asset delete 等其他 public API 仍走 FastAPI。
 
 ## 生产域名建议

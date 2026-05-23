@@ -33,6 +33,7 @@ export function ImageJobStatsPanel() {
 
 function MetricCards({ stats }: { stats: ImageJobStats }) {
   const avgDuration = stats.performance.avg_duration_seconds;
+  const outboxOldestAge = stats.operations.outbox_pending_oldest_age_seconds;
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       <MetricCard label="总任务数" value={String(stats.overview.total)} />
@@ -43,6 +44,8 @@ function MetricCards({ stats }: { stats: ImageJobStats }) {
       <MetricCard label="渲染 p95" value={formatSeconds(stats.performance.render_duration_seconds.p95)} />
       <MetricCard label="死信单元" value={String(stats.queue.dead_letter)} tone={stats.queue.dead_letter > 0 ? "danger" : undefined} />
       <MetricCard label="供应商熔断" value={String(stats.provider_health.circuit_open)} tone={stats.provider_health.circuit_open > 0 ? "danger" : undefined} />
+      <MetricCard label="事件积压" value={formatSeconds(outboxOldestAge)} tone={outboxOldestAge != null && outboxOldestAge > 60 ? "danger" : undefined} />
+      <MetricCard label="待发事件" value={String(stats.operations.outbox_pending_count)} tone={stats.operations.outbox_pending_count > 0 ? "danger" : undefined} />
     </div>
   );
 }

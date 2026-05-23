@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
-from apps.api.app.domains.image.models import ImageJob, ImageJobItem, ProviderRuntimeState
+from apps.api.app.domains.image.models import ImageJob, ImageJobItem, OutboxEvent, ProviderRuntimeState
 
 QUEUE_STATUSES = ("queued", "running", "succeeded", "failed", "cancelled", "dead_letter")
 
@@ -27,6 +27,7 @@ def get_image_job_stats(session: Session) -> dict:
             "render_duration_seconds": item_stats["render_duration_seconds"],
         },
         "queue": item_stats["queue"],
+        "operations": _operations_stats(session, now=now),
         "provider_health": _provider_health(session),
         "distribution": {
             "model": _group_count(session, ImageJob.model_code),
@@ -149,6 +150,24 @@ def _provider_health(session: Session) -> dict[str, int]:
             counts[row.status] += 1
         counts["failure_count"] += row.failure_count
     return counts
+
+
+def _operations_stats(session: Session, *, now: datetime) -> dict[str, float | int]:
+    row = session.execute(
+        select(func.count(OutboxEvent.id), func.min(OutboxEvent.available_at)).where(
+            OutboxEvent.status == "pending",
+            OutboxEvent.available_at <= now,
+        )
+    ).one()
+    pending_count = int(row[0])
+    oldest_available_at = row[1]
+    oldest_age_seconds = 0.0
+    if oldest_available_at is not None:
+        oldest_age_seconds = round((now - oldest_available_at).total_seconds(), 1)
+    return {
+        "outbox_pending_count": pending_count,
+        "outbox_pending_oldest_age_seconds": oldest_age_seconds,
+    }
 
 
 def _group_count(session: Session, column) -> list[dict]:

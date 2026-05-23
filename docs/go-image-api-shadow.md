@@ -1,6 +1,11 @@
 # Go Image API Shadow Service
 
-`apps/image-api-go` is an opt-in Go image API service for shadow validation and controlled route takeover. It is not a default production public entrypoint, and nginx routes to FastAPI unless explicit flags are enabled.
+`apps/image-api-go` started as a shadow validation service. In the current
+production compose it runs by default, but public image create/read/results,
+assets, and events stay on FastAPI until `GO_IMAGE_API_*_ENABLED=true` flags are
+set after the cutover gate. This document keeps the shadow-specific debug and
+validation notes; use `docs/runbooks/go-image-api-cutover.md` for the
+full-traffic production gate.
 
 ## Endpoints
 
@@ -54,10 +59,11 @@ GO_IMAGE_API_ENABLE_INTERNAL_CREATE=false
 
 When enabled, `POST /internal/image/jobs` creates `image_jobs` plus `image_job_items` with `source="go-shadow"` and `status="queued"`. It does not render, consume quota, or perform billing.
 
-Public create is also disabled by default:
+Public create is disabled by default in production compose and must be enabled
+explicitly after the cutover gate:
 
 ```bash
-GO_IMAGE_API_CREATE_ENABLED=false
+GO_IMAGE_API_CREATE_ENABLED=true
 ```
 
 When enabled, `POST /api/public/image/jobs` resolves the same user and anonymous session cookies as FastAPI. If no owner cookie exists, it creates an anonymous session and sets `studio_anonymous_session` with the same HTTP-only, `SameSite=Lax`, path `/` shape. The Go path validates public model/provider state, settings gates (`allow_anonymous_image`, `uploads_enabled`), source/reference asset access, character-library references, client-provider headers, and public quota. It creates queued `image_jobs`, `image_job_items`, and reference rows only; rendering remains the worker's responsibility.
@@ -66,22 +72,24 @@ Local wallet billing is intentionally not implemented in Go create because the r
 
 The SSE endpoint sends `job_snapshot` first, then status events such as `item_started`, `item_succeeded`, `item_failed`, `item_cancelled`, `item_retry_scheduled`, `job_succeeded`, `job_failed`, and `heartbeat`. The public web client tries EventSource first and falls back to existing polling on SSE error.
 
-## Optional Read Routing
+## Read Routing Flags
 
-Nginx keeps routing public image reads to FastAPI by default. Each route family has its own flag:
+Nginx routes public image reads, assets, and events to Go only when the route
+flags are enabled. Each route family has its own rollback flag:
 
 ```bash
-GO_IMAGE_API_READS_ENABLED=false
-GO_IMAGE_API_ASSETS_ENABLED=false
-GO_IMAGE_API_SSE_ENABLED=false
+GO_IMAGE_API_READS_ENABLED=true
+GO_IMAGE_API_ASSETS_ENABLED=true
+GO_IMAGE_API_SSE_ENABLED=true
 GO_IMAGE_API_GALLERY_ENABLED=false
 GO_IMAGE_API_DELETE_ENABLED=false
 ```
 
-To route only job and result read endpoints to Go, start the Go API profile and render the nginx template with:
+To route only job and result read endpoints to FastAPI during rollback, set:
 
 ```bash
-GO_IMAGE_API_READS_ENABLED=true docker compose --profile image-api-go up -d image-api-go nginx
+GO_IMAGE_API_READS_ENABLED=false
+docker compose exec nginx nginx -s reload
 ```
 
 Only these GET routes are switched by `GO_IMAGE_API_READS_ENABLED`:
@@ -100,18 +108,19 @@ These flags switch additional route families independently:
 
 `GET /api/public/image/assets/{asset_id}/download`, uploads, visibility updates, and asset deletion still route to FastAPI. Rollback is setting the affected `GO_IMAGE_API_*_ENABLED=false` flag and recreating/reloading nginx.
 
-## Optional Create Routing
+## Create Routing
 
-Nginx keeps public image creation on FastAPI by default:
+Nginx routes public image creation to Go only when the create flag is enabled:
+
+```bash
+GO_IMAGE_API_CREATE_ENABLED=true
+```
+
+To route job creation back to FastAPI during rollback:
 
 ```bash
 GO_IMAGE_API_CREATE_ENABLED=false
-```
-
-To route only job creation to Go, start the Go API profile and render the nginx template with:
-
-```bash
-GO_IMAGE_API_CREATE_ENABLED=true docker compose --profile image-api-go up -d image-api-go nginx
+docker compose exec nginx nginx -s reload
 ```
 
 Only this exact route is switched:
@@ -123,7 +132,7 @@ Rollback is setting `GO_IMAGE_API_CREATE_ENABLED=false` and recreating/reloading
 ## Run
 
 ```bash
-docker compose --profile image-api-go up -d image-api-go
+docker compose up -d image-api-go
 ```
 
 Local:
@@ -137,6 +146,6 @@ go run ./cmd/image-api
 
 ## Limits
 
-- no nginx default route takeover
 - no local wallet reservation creation
 - no direct rendering inside the API request
+- no gallery/delete default route takeover yet

@@ -107,8 +107,6 @@ services:
   image-api-go:
     image: ${GHCR_REGISTRY:-ghcr.io}/${GHCR_OWNER:-yantianqi1}/image-studio-image-api-go:${IMAGE_TAG:-latest}
     container_name: commercial-studio-image-api-go
-    profiles:
-      - image-api-go
     restart: unless-stopped
     env_file:
       - .env
@@ -203,6 +201,8 @@ services:
       api:
         condition: service_healthy
       worker-go:
+        condition: service_healthy
+      image-api-go:
         condition: service_healthy
 
 volumes:
