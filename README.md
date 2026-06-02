@@ -272,6 +272,12 @@ docker compose up -d
 ./scripts/deploy-prod.sh
 ```
 
+部署脚本会拉取最新镜像，重启 `api`、`worker`、`worker-go`、
+`image-api-go`、`public-web`、`admin-web` 和 `nginx`，随后运行
+`scripts/server-real-test-smoke.sh`，确认 `api`、`worker-go`、
+`image-api-go`、`nginx`、前后台页面、静态资源和公开 image model 都可用；
+该检查通过后，服务器可以直接开始真实生图测试。
+
 默认访问：
 
 - 用户端：`http://服务器IP:7700/`
@@ -284,10 +290,10 @@ docker compose up -d
 
 ## 最小自检
 
-API 健康检查：
+服务器真实测试前 smoke gate：
 
 ```bash
-curl http://localhost:7800/health
+bash scripts/server-real-test-smoke.sh
 ```
 
 管理员登录：
@@ -301,8 +307,8 @@ curl -i -X POST http://localhost:7800/api/admin/auth/login \
 worker 单次消费：
 
 ```bash
-source .venv/bin/activate
-python -m apps.worker.worker.main --once
+docker compose exec worker-go wget -qO- http://127.0.0.1:7900/readyz
+docker compose exec worker-go wget -qO- http://127.0.0.1:7900/metrics
 ```
 
 如需本地验证 image_job_items，使用 `apps/worker-go`；Python worker 不再调度生产 image jobs。
