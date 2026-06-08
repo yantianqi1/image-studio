@@ -223,7 +223,6 @@ provider usage events and external billing records.
 
 ```bash
 python3 scripts/reconcile-image-billing.py --dry-run
-python3 scripts/reconcile-image-billing.py --execute
 ```
 
 Treat any non-zero exit as `billing_reconcile_failed`. Do not recreate local
