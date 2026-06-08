@@ -1,0 +1,455 @@
+你在 GitHub 仓库 yantianqi1/image-studio 中工作。请从仓库根目录开始。
+
+目标：
+把 apps/worker-go 中散落的 image job、provider、storage、DB 类型抽成可复用 Go runtime 包，为后续 Go image API service 和 Go worker 共享同一套核心逻辑做准备。
+
+背景：
+当前 Go worker 已经负责 image_job_items 的 claim/render/heartbeat/complete。第三轮要避免未来 Go API 和 Go worker 各写一套 DB/model/provider/storage 逻辑。
+
+请执行：
+1. 新建共享目录：
+   apps/image-runtime-go/
+     go.mod
+     internal 或 pkg/
+       config/
+       db/
+       imagejob/
+       provider/
+       storage/
+       billing/
+       observability/
+
+2. 从 apps/worker-go 迁移可复用代码：
+   - provider 抽象
+   - storage 抽象
+   - image job / item DB 查询结构
+   - error code 分类
+   - retry / terminal failure 判断
+   - metrics 基础类型
+   不要一次移动 main worker 主循环；先抽纯业务组件。
+
+3. 修改 apps/worker-go
+   - go.mod 使用 replace 或 Go workspace 引用 apps/image-runtime-go。
+   - worker-go 继续编译通过。
+   - 原有包路径清理为：
+     apps/worker-go/cmd/image-worker
+     apps/worker-go/internal/worker
+     apps/image-runtime-go/pkg/...
+
+4. 建立 Go workspace
+   - 根目录新增 go.work，包含：
+     ./apps/worker-go
+     ./apps/image-runtime-go
+   - CI / Dockerfile 要能继续构建 worker-go。
+
+5. 测试
+   - runtime 包单元测试独立运行。
+   - worker-go 测试继续通过。
+   - go test ./... 在 worker-go 和 image-runtime-go 中都通过。
+
+限制：
+- 不要改 Python API 行为。
+- 不要改 DB schema。
+- 不要改前端。
+- 不要重命名数据库表。
+- 不要破坏 worker-go Docker build。
+
+验收标准：
+- Go provider/storage/job 核心逻辑可被 worker 和未来 API 共享。
+- worker-go 仍能运行。
+- Go package 边界清晰。
+- 最后总结迁移了哪些包、哪些仍留在 worker-go、测试结果。
+
+你在 GitHub 仓库 yantianqi1/image-studio 中工作。请从仓库根目录开始。
+
+目标：
+新增 Go image API shadow service。第一版只提供只读接口，不接管生产写流量，用于验证 Go runtime 是否能正确读取 image_jobs、image_job_items、image_job_results、assets。
+
+新增服务：
+apps/image-api-go/
+  go.mod
+  cmd/image-api/main.go
+  internal/http/
+  internal/config/
+  internal/service/
+
+接口：
+1. GET /healthz
+2. GET /readyz
+3. GET /api/public/image/jobs/{job_id}
+4. GET /api/public/image/jobs/{job_id}/results
+5. GET /api/admin/image/jobs/{job_id}/debug
+
+要求：
+1. 使用 apps/image-runtime-go 的 DB/model/storage 逻辑。
+2. 返回 payload 要尽量与 FastAPI 当前 public image job payload 兼容。
+3. 鉴权第一版可以只做 shadow 内网验证：
+   - public endpoint 可以通过 X-Debug-Owner-User-ID 或 X-Debug-Anonymous-Session-ID 模拟 owner。
+   - admin debug endpoint 可以要求 X-Internal-Debug-Token。
+   - 不要直接暴露到公网。
+4. docker-compose 新增 image-api-go 服务，但放在 profile: image-api-go。
+5. nginx 不默认转发到 Go image API。
+6. README 或 docs/go-image-api-shadow.md 写明它是 shadow service，不是生产入口。
+
+测试：
+- job payload 与 Python payload 字段基本一致。
+- owner 不匹配时返回 404。
+- results 能返回 asset_url / thumbnail_url。
+- readyz 能检查 DB 和 storage。
+- go test ./... 通过。
+
+限制：
+- 不要替换 FastAPI 路由。
+- 不要接管 POST /image/jobs。
+- 不要实现真实登录鉴权。
+- 不要改前端请求路径。
+- 不要公开发布 image-api-go 到默认 nginx 入口。
+
+验收标准：
+- Go image API shadow service 能只读查询任务和结果。
+- 与 Python public payload 兼容。
+- docker-compose 可选启动。
+- 最后总结接口、限制和测试结果。
+
+你在 GitHub 仓库 yantianqi1/image-studio 中工作。请从仓库根目录开始。
+
+目标：
+让 apps/image-api-go 支持创建 image job 的内部 shadow 写接口，但暂不接管公网生产流量。用于验证 Go 创建 image_jobs + image_job_items 的完整链路。
+
+接口：
+POST /internal/image/jobs
+
+请求字段参考 FastAPI CreateImageJobRequest：
+- prompt
+- model_code
+- requested_count
+- mode
+- source_asset_id
+- reference_asset_ids
+- conversation_messages
+- visibility
+- size
+- quality
+- client_provider_config 可选
+
+执行逻辑：
+1. 读取 owner debug header：
+   - X-Debug-Owner-User-ID
+   - X-Debug-Anonymous-Session-ID
+2. 校验 model/provider：
+   - 从 sellable_models 和 providers 读取。
+   - 校验 public_enabled/status/provider active。
+3. 创建 image_jobs 父任务。
+4. 创建 image_job_items 子任务。
+5. 创建 reference asset rows。
+6. 返回与 Python create job 类似的 payload，status 应为 queued。
+7. 不直接 render。
+8. 不消费 quota，不处理钱包扣费。第三阶段只做内部 shadow，不做正式商业写流量。
+
+必须做：
+- 加 FEATURE flag：
+  GO_IMAGE_API_ENABLE_INTERNAL_CREATE=false 默认。
+  未开启时 POST /internal/image/jobs 返回 404 或 403。
+- 文档明确禁止生产公网暴露该接口。
+- 给 created_by 标识或 source 标识，例如 source="go-shadow"，避免混淆。
+
+测试：
+- flag 关闭时不能创建。
+- flag 开启时能创建 job 和 N 个 items。
+- requested_count=4 创建 4 个 image_job_items。
+- invalid model 返回明确错误。
+- owner 缺失返回 401/422。
+- 不触发 render。
+
+限制：
+- 不要替换 FastAPI POST /api/public/image/jobs。
+- 不要接入正式用户 session。
+- 不要扣费。
+- 不要消费 public quota。
+- 不要修改前端。
+
+验收标准：
+- Go image API 能内部创建任务。
+- Go worker 能消费这些任务。
+- 不影响生产 API。
+- go test ./... 通过。
+- 最后总结内部接口、flag、安全限制和测试结果。
+
+你在 GitHub 仓库 yantianqi1/image-studio 中工作。请从仓库根目录开始。
+
+目标：
+新增任务状态 Server-Sent Events 通道，减少前端轮询造成的 API 压力。优先在 FastAPI 中提供 SSE，也可以在 Go image-api shadow service 中提供 SSE；推荐先实现 Go SSE shadow endpoint。
+
+接口：
+GET /api/public/image/jobs/{job_id}/events
+
+事件类型：
+- job_snapshot
+- item_started
+- item_succeeded
+- item_failed
+- job_succeeded
+- job_failed
+- heartbeat 或 keepalive
+
+实现建议：
+1. 第一版不要引入 Redis。
+2. 使用 DB polling + SSE：
+   - 每 1s 查询 job、items、results 更新时间。
+   - 有变化时推送事件。
+   - 每 15s 推送 keepalive。
+3. 支持 Last-Event-ID 或 since 参数可选。
+4. 客户端断开时立即释放 goroutine。
+5. 每连接设置最大生命周期，例如 10 分钟。
+6. 连接数限制：
+   - GO_IMAGE_API_SSE_MAX_CONNECTIONS 默认 500。
+   - 超限返回 429。
+
+前端改动：
+- 在 apps/public-web 中找到 image job 状态轮询逻辑。
+- 增加 SSE 优先策略：
+  - 浏览器支持 EventSource 时使用 SSE。
+  - SSE 失败时 fallback 到现有轮询。
+- UI 行为保持不变。
+
+测试：
+- SSE 首次返回 job_snapshot。
+- job 状态变化后推送事件。
+- keepalive 生效。
+- 断开连接释放资源。
+- 前端 fallback 不破坏原逻辑。
+
+限制：
+- 不要要求 Redis/Kafka。
+- 不要移除现有轮询。
+- 不要在 SSE 中输出敏感字段。
+- 不要一次引入 WebSocket，SSE 足够。
+
+验收标准：
+- 前端优先通过 SSE 获取任务状态。
+- 轮询作为 fallback。
+- 高频任务状态查看不再持续打 GET job/results。
+- 最后总结 SSE endpoint、前端 fallback 和测试结果。
+
+你在 GitHub 仓库 yantianqi1/image-studio 中工作。请从仓库根目录开始。
+
+目标：
+给 image_job_items 增加生产级调度能力：priority、dead-letter、manual retry。解决任务堆积、失败重试不透明、管理员无法干预的问题。
+
+DB schema：
+1. image_job_items 新增：
+   - priority integer default 0 not null
+   - dead_letter_at timestamp nullable
+   - last_error_code varchar nullable
+   - last_error_message text nullable
+   - manual_retry_count integer default 0 not null
+2. image_jobs 可选新增：
+   - priority integer default 0 not null
+
+索引：
+- image_job_items(status, priority desc, available_at, id)
+- image_job_items(dead_letter_at)
+- image_job_items(job_id, status)
+
+调度逻辑：
+1. Go worker claim ORDER BY priority DESC, available_at ASC, id ASC。
+2. terminal failure 时：
+   - item.status = failed
+   - dead_letter_at = now()
+   - last_error_code/message 写入
+3. retryable failure 时：
+   - status queued
+   - available_at = now + backoff
+   - last_error_code/message 写入
+4. 支持 exponential backoff：
+   - base 5s
+   - max 300s
+   - 根据 attempt_count 计算
+   - 配置 GO_WORKER_RETRY_BASE_SECONDS / GO_WORKER_RETRY_MAX_SECONDS
+
+Admin API：
+新增或修改 FastAPI admin endpoint：
+- GET /api/admin/image/dead-letter-items
+- POST /api/admin/image/items/{item_id}/retry
+- POST /api/admin/image/jobs/{job_id}/priority
+
+要求：
+- manual retry 清空 dead_letter_at，status 变 queued，available_at=now。
+- manual_retry_count +1。
+- 只能 admin 调用。
+
+测试：
+- priority 高的 item 先被 claim。
+- retryable failure 使用 backoff。
+- terminal failure 进入 dead letter。
+- admin retry 能重新排队。
+- dead-letter list 返回失败 item。
+
+限制：
+- 不要让 public 用户直接改 priority。
+- 不要删除已有失败语义。
+- 不要让 dead letter item 被自动 claim。
+- 不要改前端用户页面，管理端可简单补接口。
+
+验收标准：
+- 高优先级任务优先执行。
+- 最终失败可被管理员查看并手动重试。
+- Go worker retry 更可控。
+- 最后总结 schema、claim 顺序、admin 操作和测试结果。
+
+你在 GitHub 仓库 yantianqi1/image-studio 中工作。请从仓库根目录开始。
+
+目标：
+把 image job 完成时的 billing reservation commit/release 做成 Go worker 事务闭环，避免 Python API 创建 reservation 后，Go worker 完成任务但钱包状态不一致。
+
+背景：
+FastAPI 创建 image job 时可能创建 wallet reservation。Go worker 完成 image_job_items 后聚合父 job 状态。第三轮要确保：
+- 所有 item succeeded 后 commit reservation。
+- job failed 后 release reservation。
+- partial/retry 状态不提前处理 reservation。
+- 操作幂等。
+
+请执行：
+1. 研究 Python billing 逻辑：
+   - apps/api/app/domains/billing/models.py
+   - apps/api/app/domains/billing/service.py
+   - image repository complete_job / mark_job_failed 相关逻辑
+2. 在 Go runtime 增加 billing repository：
+   - CommitReservation(ctx, tx, userID, reservationID)
+   - ReleaseReservation(ctx, tx, userID, reservationID)
+   - 幂等处理：已 committed/released 不重复扣款/释放。
+3. 修改 parent aggregation：
+   - aggregateParentJob 时，如果父 job 所有 items succeeded：
+     a. job.status=succeeded
+     b. commit reservation
+   - 如果所有 items finished 且至少一个 terminal failed：
+     a. job.status=failed
+     b. release reservation
+   - 如果仍有 queued/running/retry，不处理 reservation。
+4. 事务要求：
+   - item completion/result insert/parent aggregation/reservation commit 必须在同一个 DB transaction 内。
+   - 不要在 provider 调用期间持有 transaction。
+5. 测试：
+   - 全部 item 成功后 reservation committed。
+   - 任一最终失败且无 pending item 后 reservation released。
+   - retry 中不处理 reservation。
+   - 重复 aggregation 不重复扣款。
+   - 匿名用户或 reservation_id null 时跳过 billing。
+6. 文档：
+   - docs/architecture/image-billing-flow.md
+   - 说明 reservation 生命周期和 Go worker 责任。
+
+限制：
+- 不要改钱包表结构，除非确有必要。
+- 不要改变价格计算逻辑。
+- 不要在 Go worker 创建 reservation；创建仍由 API 负责。
+- 不要破坏 Python admin 钱包页面。
+
+验收标准：
+- Go worker 完成父 job 时，钱包 reservation 状态正确。
+- billing 操作幂等。
+- go test ./... 通过。
+- 最后总结 billing 状态机和测试结果。
+
+你在 GitHub 仓库 yantianqi1/image-studio 中工作。请从仓库根目录开始。
+
+目标：
+让 Go image API 正式接管部分只读 public image endpoints，但保留 FastAPI fallback。先接管读接口，不接管创建任务。
+
+接管接口：
+- GET /api/public/image/jobs/{job_id}
+- GET /api/public/image/jobs/{job_id}/results
+- GET /api/public/image/assets/{asset_id}
+- GET /api/public/image/assets/{asset_id}/thumbnail
+
+要求：
+1. Go image API 必须实现真实 owner/session 校验。
+   - 复用现有 user session / anonymous session cookie 规则。
+   - 读取 session 表并校验 token hash。
+   - 行为与 FastAPI resolve_request_owner 兼容。
+2. nginx 增加可选路由：
+   - GO_IMAGE_API_READS_ENABLED=true 时，把上述 GET 路由转发到 image-api-go。
+   - 默认仍走 FastAPI。
+3. Go assets endpoint：
+   - 支持 local storage。
+   - 支持 Cache-Control 与 FastAPI 当前策略兼容。
+   - 不允许越权读取 private asset。
+4. 回滚：
+   - 环境变量关闭后，nginx 回到 FastAPI。
+   - 文档写清楚。
+5. 测试：
+   - 登录用户可读自己的 job/result/asset。
+   - 匿名 session 可读自己的 job/result/asset。
+   - 非 owner 返回 404。
+   - public visibility asset 可读。
+   - cache headers 与 FastAPI 兼容。
+   - nginx config test 通过。
+
+限制：
+- 不要接管 POST /image/jobs。
+- 不要删除 FastAPI routes。
+- 不要改变 cookie 名称和 token hash 算法。
+- 不要默认开启 Go read routing。
+
+验收标准：
+- Go image API 可安全服务只读 image 请求。
+- 可以通过配置灰度开启/关闭。
+- FastAPI fallback 保留。
+- 最后总结接管路由、鉴权兼容性和回滚方式。
+
+你在 GitHub 仓库 yantianqi1/image-studio 中工作。请从仓库根目录开始。
+
+目标：
+在 Go image API 已接管只读接口后，正式接管 POST /api/public/image/jobs。要求行为与 FastAPI 兼容：鉴权、匿名 session、quota、uploads 设置、model/provider、billing reservation、job/items 创建。
+
+请执行：
+1. 对齐 FastAPI create_image_job 流程
+   研究：
+   - apps/api/app/domains/image/routes.py create_image_job
+   - auth ownership
+   - settings require_anonymous_image_enabled / require_uploads_enabled
+   - public_quota consume_public_quota
+   - billing reservation
+   - model/variant resolution
+   - reference asset validation
+   - character library reference bundle，如当前前端使用则必须支持
+2. Go 实现 POST /api/public/image/jobs
+   - 请求/响应 schema 与 FastAPI 兼容。
+   - 创建 image_jobs。
+   - 创建 image_job_items。
+   - 创建 reference rows。
+   - 创建 reservation。
+   - 消费 public quota。
+   - 不直接 render。
+3. Feature flag
+   - GO_IMAGE_API_CREATE_ENABLED=false 默认。
+   - nginx 只有开启时才把 POST 转给 Go。
+4. 双写/影子验证可选
+   - 不建议生产双写。
+   - 可以新增 internal validate endpoint 对比 Go/Python payload。
+5. 测试
+   - 匿名用户创建任务。
+   - 会员创建任务并创建 reservation。
+   - quota 不足返回错误。
+   - uploads disabled 时 edit/reference 失败。
+   - invalid model 失败。
+   - client_provider_config 创建 0 费用 job。
+   - requested_count 创建多个 items。
+   - 不直接 render。
+6. 回滚文档
+   - 关闭 GO_IMAGE_API_CREATE_ENABLED。
+   - nginx reload。
+   - 已创建 queued items 继续由 Go worker 消费。
+
+限制：
+- 不要删除 FastAPI create route。
+- 不要改变 public request schema。
+- 不要绕过 billing/quota。
+- 不要默认开启。
+- 不要让失败创建留下半截 reservation 或 job。
+
+验收标准：
+- Go image API 能完整创建生产 image job。
+- 行为与 FastAPI 兼容。
+- 可配置灰度和回滚。
+- 最后总结兼容项、未覆盖项、测试结果。

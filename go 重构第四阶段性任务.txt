@@ -1,0 +1,865 @@
+# 第四阶段 Go 重构计划方案
+
+第四阶段建议不要继续做“把更多代码翻译成 Go”。前三阶段如果已经完成，系统应该已经达到：
+
+```txt
+FastAPI 仍负责主业务
+Go image API 开始接管 image 读写
+Go worker 负责 image_job_items 执行
+image_jobs / image_job_items 成为核心任务模型
+```
+
+第四阶段的目标应升级为：
+
+```txt
+把 Go image runtime 做成稳定的生产平台层
+```
+
+也就是：**调度、资产、成本、事件、监控、容灾、灰度、清理 Python image 依赖**。
+
+---
+
+## 当前已知基础
+
+你仓库里已经有 `apps/worker-go`，Go 版本为 1.23，并使用 `pgx/v5` 连接 Postgres。
+Go worker 已经有 `simulate` / `render` 模式，并在 render 模式下构建 provider factory 和 asset storage。
+任务执行层已经从旧的 `image_jobs` 单任务模型推进到 `image_job_items` 执行单元，Go worker 使用 `FOR UPDATE SKIP LOCKED` 领取 item。
+数据库模型中也已经存在 `ImageJobItem`，并带有 queue pick、job result、running lease 相关索引。
+
+这些说明：第四阶段不应该再围绕“能不能 Go 执行图片任务”，而应该围绕“Go image 平台能不能长期稳定运行”。
+
+---
+
+# 第四阶段总目标
+
+```txt
+1. Go image API / worker 成为 image 业务主路径
+2. Python image execution 只保留兼容或完全下线
+3. 任务调度具备优先级、限流、熔断、死信、重试治理
+4. 资产存储具备一致性、清理、迁移、CDN 友好能力
+5. 成本、钱包、provider usage 具备可审计闭环
+6. 系统支持灰度、回滚、压测、告警、故障恢复
+```
+
+---
+
+# 第四阶段 1：Go image runtime 契约冻结
+
+## 目标
+
+冻结 Go image API、Go worker、FastAPI、前端之间的接口契约，避免后续继续开发时字段和状态乱掉。
+
+## 要做
+
+### 1. 定义 image job 状态机文档
+
+新增：
+
+```txt
+docs/architecture/image-job-state-machine.md
+```
+
+明确：
+
+```txt
+image_jobs.status:
+queued
+running
+succeeded
+failed
+cancelled
+partial_failed 可选
+
+image_job_items.status:
+queued
+running
+succeeded
+failed
+cancelled
+dead_letter
+```
+
+同时明确状态流转：
+
+```txt
+queued -> running -> succeeded
+queued -> running -> queued    retry
+queued -> running -> failed    terminal failure
+queued/running -> cancelled
+failed -> queued               manual retry
+```
+
+### 2. 固化 API response schema
+
+新增：
+
+```txt
+docs/contracts/image-api.md
+```
+
+覆盖：
+
+```txt
+POST /api/public/image/jobs
+GET  /api/public/image/jobs/{id}
+GET  /api/public/image/jobs/{id}/results
+GET  /api/public/image/jobs/{id}/events
+GET  /api/public/image/assets/{id}
+```
+
+### 3. 建 contract tests
+
+新增 Go + Python 对比测试：
+
+```txt
+tests/contracts/image_job_payload_test.py
+apps/image-api-go/internal/http/contract_test.go
+```
+
+检查 Go 和 FastAPI 返回字段一致。
+
+## 验收标准
+
+```txt
+- 所有 image job / item 状态有文档
+- Go / Python payload 字段一致
+- 新字段必须先更新 contract docs
+- 前端不依赖未文档化字段
+```
+
+---
+
+# 第四阶段 2：调度系统 v2
+
+## 目标
+
+把当前“按 available_at + id 领取任务”升级为生产调度器。
+
+当前 Go worker 已经用 `FOR UPDATE SKIP LOCKED` 领取 `image_job_items`。
+第四阶段要在此基础上加入优先级、熔断、公平性和动态退避。
+
+## 新增字段
+
+给 `image_job_items` 增加：
+
+```sql
+priority integer not null default 0;
+scheduler_score integer not null default 0;
+dead_letter_at timestamp null;
+last_error_code varchar(64) null;
+last_error_message text null;
+manual_retry_count integer not null default 0;
+cancelled_at timestamp null;
+cancel_reason text null;
+```
+
+给 `providers` 或新增 `provider_runtime_state` 表：
+
+```sql
+provider_id integer primary key;
+status varchar(32); -- healthy, degraded, paused, circuit_open
+failure_count integer;
+last_failure_at timestamp;
+circuit_open_until timestamp;
+updated_at timestamp;
+```
+
+## 调度规则
+
+claim 顺序改为：
+
+```sql
+ORDER BY
+  priority DESC,
+  scheduler_score DESC,
+  available_at ASC,
+  id ASC
+```
+
+## 并发治理
+
+配置：
+
+```env
+GO_WORKER_GLOBAL_CONCURRENCY=16
+GO_WORKER_PROVIDER_CONCURRENCY_DEFAULT=4
+GO_WORKER_MODEL_CONCURRENCY_DEFAULT=2
+GO_WORKER_OWNER_CONCURRENCY=1
+GO_WORKER_ANONYMOUS_OWNER_CONCURRENCY=1
+```
+
+## Provider 熔断
+
+规则：
+
+```txt
+连续 N 次 provider_request_failed
+=> provider circuit_open
+=> 一段时间内不再 claim 该 provider 的任务
+=> 到期后半开探测
+=> 成功则恢复 healthy
+```
+
+## 验收标准
+
+```txt
+- 高优先级任务先执行
+- 单用户无法占满所有 worker
+- 单 provider 不会被打爆
+- provider 故障时自动熔断
+- 熔断 provider 的任务不会被无限 claim/run/fail 循环
+```
+
+---
+
+# 第四阶段 3：Dead Letter Queue 与后台运营
+
+## 目标
+
+让失败任务可见、可诊断、可手动恢复。
+
+## Admin API
+
+新增：
+
+```txt
+GET  /api/admin/image/dead-letter-items
+POST /api/admin/image/items/{item_id}/retry
+POST /api/admin/image/items/{item_id}/cancel
+POST /api/admin/image/jobs/{job_id}/retry
+POST /api/admin/image/jobs/{job_id}/cancel
+POST /api/admin/image/providers/{provider_id}/pause
+POST /api/admin/image/providers/{provider_id}/resume
+```
+
+## 后台页面
+
+在 `apps/admin-web` 增加：
+
+```txt
+Image Queue 页面
+Provider Health 页面
+Dead Letter 页面
+```
+
+展示：
+
+```txt
+queued count
+running count
+failed count
+dead letter count
+p50/p95 queue wait
+p50/p95 render duration
+provider failure rate
+provider circuit state
+```
+
+## 验收标准
+
+```txt
+- 管理员能看到失败 item
+- 管理员能手动 retry / cancel
+- 管理员能暂停某个 provider
+- 暂停 provider 后 worker 不再领取该 provider 的任务
+```
+
+---
+
+# 第四阶段 4：事件系统 / Outbox
+
+## 目标
+
+把 SSE、任务状态变更、billing、通知、审计从“查询当前表状态”升级为“事件驱动”。
+
+## 新增表
+
+```sql
+image_job_events (
+  id bigserial primary key,
+  job_id bigint not null,
+  item_id bigint null,
+  event_type varchar(64) not null,
+  payload jsonb not null,
+  created_at timestamp not null default now()
+);
+
+outbox_events (
+  id bigserial primary key,
+  aggregate_type varchar(64) not null,
+  aggregate_id varchar(128) not null,
+  event_type varchar(64) not null,
+  payload jsonb not null,
+  status varchar(32) not null default 'pending',
+  attempts integer not null default 0,
+  available_at timestamp not null default now(),
+  created_at timestamp not null default now(),
+  processed_at timestamp null
+);
+```
+
+## 事件类型
+
+```txt
+image_job.created
+image_job.started
+image_job.succeeded
+image_job.failed
+image_job.cancelled
+
+image_job_item.started
+image_job_item.succeeded
+image_job_item.retry_scheduled
+image_job_item.failed
+image_job_item.dead_lettered
+
+asset.created
+billing.reservation_committed
+billing.reservation_released
+provider.circuit_opened
+provider.circuit_closed
+```
+
+## SSE 改造
+
+当前 SSE 如果仍是 DB polling，第四阶段改为读取 `image_job_events`：
+
+```txt
+GET /api/public/image/jobs/{job_id}/events
+```
+
+支持：
+
+```txt
+Last-Event-ID
+since_event_id
+keepalive
+断线重连
+```
+
+## 验收标准
+
+```txt
+- 每次状态变化都有事件
+- SSE 以事件表为来源
+- 前端断线重连不会丢状态
+- outbox event 失败可重试
+```
+
+---
+
+# 第四阶段 5：资产服务 v2
+
+## 目标
+
+把生成图片资产从“简单落盘”升级为可靠资产系统。
+
+## 能力
+
+```txt
+1. local / GCS 双后端统一
+2. staging write -> commit move
+3. orphan asset cleanup
+4. thumbnail worker
+5. CDN cache header
+6. signed URL 可选
+7. asset integrity hash
+```
+
+## DB 字段
+
+给 `assets` 增加：
+
+```sql
+size_bytes bigint null;
+sha256 varchar(64) null;
+width integer null;
+height integer null;
+storage_backend varchar(32) not null default 'local';
+thumbnail_storage_path varchar(255) null;
+deleted_at timestamp null;
+```
+
+## 写入流程
+
+```txt
+1. Go worker 收到 provider 图片
+2. 写入 staging
+3. 计算 sha256 / size / mime
+4. DB transaction 创建 asset + result
+5. commit 成功
+6. staging move 到 final path
+7. 生成 thumbnail
+8. 发布 asset.created event
+```
+
+## 清理工具
+
+新增：
+
+```txt
+apps/image-runtime-go/cmd/assetctl
+```
+
+命令：
+
+```bash
+assetctl scan-orphans --dry-run
+assetctl scan-orphans --execute
+assetctl verify-assets --limit 1000
+assetctl rebuild-thumbnails --missing-only
+```
+
+## 验收标准
+
+```txt
+- DB 失败不会留下正式 asset
+- 文件缺失可被检测
+- orphan 文件可 dry-run 扫描
+- thumbnail 可重建
+- local/GCS 行为一致
+```
+
+---
+
+# 第四阶段 6：成本与用量审计
+
+## 目标
+
+把 provider usage、钱包扣费、内部成本、用户余额变成可审计账本。
+
+## 新增表
+
+```sql
+image_provider_usage_events (
+  id bigserial primary key,
+  job_id bigint not null,
+  item_id bigint null,
+  provider_id bigint null,
+  provider_name varchar(128),
+  provider_model varchar(128),
+  input_tokens integer null,
+  output_tokens integer null,
+  total_tokens integer null,
+  raw_provider_cost_cents integer null,
+  internal_cost_cents integer null,
+  raw_payload jsonb null,
+  created_at timestamp not null default now()
+);
+```
+
+## 规则
+
+```txt
+- 每个 item render 完成后记录 usage event
+- 父 job succeeded 后聚合 usage 到 image_jobs
+- billing reservation commit 与 usage aggregation 同事务
+- 失败任务释放 reservation
+- client provider config 任务 charge_cents=0，但仍可记录 usage
+```
+
+## 对账脚本
+
+新增：
+
+```bash
+scripts/reconcile-image-billing.py
+```
+
+检查：
+
+```txt
+succeeded job 是否 reservation committed
+failed job 是否 reservation released
+job charge_cents 是否与 wallet ledger 一致
+usage events 是否与 image_jobs 聚合字段一致
+```
+
+## 验收标准
+
+```txt
+- 每次 provider 调用都有 usage 记录
+- 钱包扣费幂等
+- 可以按 job_id 对账
+- 可以按 provider/model 统计成本
+```
+
+---
+
+# 第四阶段 7：Go image API 正式主路径
+
+## 目标
+
+让 Go image API 成为 image 读写主路径，FastAPI 只保留 fallback 或管理辅助。
+
+## 接管顺序
+
+```txt
+1. GET job
+2. GET results
+3. GET assets
+4. SSE events
+5. POST create job
+6. DELETE / cancel job
+7. gallery list
+```
+
+## Nginx 灰度
+
+配置：
+
+```env
+GO_IMAGE_API_READS_ENABLED=true
+GO_IMAGE_API_CREATE_ENABLED=false
+GO_IMAGE_API_ASSETS_ENABLED=true
+GO_IMAGE_API_SSE_ENABLED=true
+```
+
+Nginx 路由：
+
+```txt
+GET  /api/public/image/jobs/*
+GET  /api/public/image/assets/*
+GET  /api/public/image/gallery
+POST /api/public/image/jobs
+```
+
+按 flag 转发到 Go 或 FastAPI。
+
+## 回滚
+
+```txt
+1. 关闭对应 GO_IMAGE_API_*_ENABLED
+2. reload nginx
+3. FastAPI fallback 接管
+4. Go worker 继续消费已创建 item
+```
+
+## 验收标准
+
+```txt
+- Go image API 可接管 image 主要读写路径
+- 每个路由都可独立灰度
+- FastAPI fallback 可用
+- 前端无感切换
+```
+
+---
+
+# 第四阶段 8：前端体验优化
+
+## 目标
+
+让“流畅性”真正体现在用户侧。
+
+## 改动
+
+### 1. 创建任务后立即进入 optimistic UI
+
+```txt
+提交后立即展示 queued card
+SSE 更新状态
+结果图逐张出现
+失败 item 可单张重试
+```
+
+### 2. 多图结果逐张完成
+
+因为现在有 `image_job_items`，不应等所有图完成才显示。
+
+UI 状态：
+
+```txt
+1/4 running
+2/4 succeeded
+1/4 retrying
+```
+
+### 3. 取消任务
+
+前端新增：
+
+```txt
+Cancel job
+Cancel individual image item
+Retry failed item
+```
+
+### 4. Gallery 增量刷新
+
+生成成功后通过事件把图片插入 gallery，不全量 refetch。
+
+## 验收标准
+
+```txt
+- 提交后无阻塞
+- 单张图完成就显示
+- SSE 失败 fallback polling
+- 用户能取消长时间 running 的任务
+```
+
+---
+
+# 第四阶段 9：Python image execution 下线
+
+## 目标
+
+清理旧路径，避免未来维护两套 image 执行逻辑。
+
+## 保留
+
+```txt
+FastAPI:
+- auth
+- admin
+- billing settings
+- provider/model admin
+- comic
+- non-image business APIs
+```
+
+## 下线
+
+```txt
+apps/worker/worker/tasks/image_jobs.py
+apps/api/app/domains/image/direct_rendering.py 生产路径
+Python provider render 生产路径
+```
+
+## 做法
+
+```txt
+1. 标注 deprecated
+2. 删除 compose 中 Python image_jobs 开关
+3. 删除 README 中 Python image worker 说明
+4. 保留测试 helper 或 dev-only direct render
+5. 所有生产文档指向 Go image API + Go worker
+```
+
+## 验收标准
+
+```txt
+- 生产 compose 不会启动 Python image execution
+- 文档不再推荐 Python image worker
+- 测试防止 public create route 恢复同步 render
+- Go image worker/API 是唯一推荐 image 主路径
+```
+
+---
+
+# 第四阶段 10：生产运维与灾备
+
+## 目标
+
+让你能放心长期运行，而不是只在开发环境跑通。
+
+## 必须有
+
+### 1. Runbook
+
+新增：
+
+```txt
+docs/runbooks/image-runtime.md
+```
+
+覆盖：
+
+```txt
+队列堆积怎么办
+provider 熔断怎么办
+大量 failed 怎么处理
+asset 文件缺失怎么办
+wallet 对账失败怎么办
+Go worker 回滚到 Python 怎么办
+DB migration 失败怎么办
+```
+
+### 2. 告警
+
+指标：
+
+```txt
+queue_wait_p95 > 120s
+failed_rate > 10%
+dead_letter_count > 0
+provider_circuit_open
+worker_heartbeat_failed
+asset_write_failed
+billing_reconcile_failed
+```
+
+### 3. 备份与恢复
+
+```txt
+Postgres backup
+generated-assets backup
+GCS bucket lifecycle
+asset verify
+billing reconcile
+```
+
+## 验收标准
+
+```txt
+- 有故障处理文档
+- 有可观测指标
+- 有压测基线
+- 有数据恢复流程
+```
+
+---
+
+# 第四阶段 PR 拆分建议
+
+## PR 1：契约冻结
+
+```txt
+docs/contracts/image-api.md
+docs/architecture/image-job-state-machine.md
+contract tests
+```
+
+## PR 2：调度系统 v2
+
+```txt
+priority
+scheduler_score
+provider runtime state
+claim SQL 改造
+provider circuit breaker
+```
+
+## PR 3：Dead Letter Queue
+
+```txt
+dead_letter fields
+admin APIs
+manual retry/cancel
+admin UI
+```
+
+## PR 4：事件系统
+
+```txt
+image_job_events
+outbox_events
+SSE 改为事件驱动
+```
+
+## PR 5：资产服务 v2
+
+```txt
+asset metadata
+staging write
+orphan cleanup
+thumbnail rebuild
+```
+
+## PR 6：成本审计
+
+```txt
+provider usage events
+billing reconciliation
+reservation idempotency
+```
+
+## PR 7：Go image API 主路径
+
+```txt
+nginx flag routing
+read/create route cutover
+fallback docs
+```
+
+## PR 8：前端体验
+
+```txt
+SSE-first UI
+逐张结果展示
+cancel/retry
+gallery 增量刷新
+```
+
+## PR 9：Python image execution 下线
+
+```txt
+deprecate/remove old worker path
+docs update
+tests prevent regression
+```
+
+## PR 10：运维与灾备
+
+```txt
+runbooks
+alerts
+benchmarks
+recovery tools
+```
+
+---
+
+# 推荐执行顺序
+
+```txt
+1. 契约冻结
+2. 调度系统 v2
+3. Dead Letter Queue
+4. 事件系统 / SSE v2
+5. 资产服务 v2
+6. 成本审计
+7. Go image API 主路径
+8. 前端体验优化
+9. Python image execution 下线
+10. 运维与灾备
+```
+
+---
+
+# 第四阶段完成后的目标架构
+
+```txt
+                 ┌────────────────────┐
+                 │ public-web/admin-web│
+                 └─────────┬──────────┘
+                           │
+                    nginx / route flags
+                           │
+        ┌──────────────────┴──────────────────┐
+        │                                     │
+┌───────▼────────┐                    ┌───────▼────────┐
+│ Go Image API   │                    │ FastAPI Core    │
+│ image jobs     │                    │ auth/admin/etc  │
+│ assets         │                    │ comic/settings  │
+│ SSE            │                    │ billing admin   │
+└───────┬────────┘                    └───────┬────────┘
+        │                                     │
+        └──────────────────┬──────────────────┘
+                           │
+                     PostgreSQL
+                           │
+        ┌──────────────────┴──────────────────┐
+        │                                     │
+┌───────▼────────┐                    ┌───────▼────────┐
+│ Go Image Worker│                    │ Asset Storage   │
+│ scheduler v2   │                    │ local / GCS     │
+│ provider render│                    │ thumbnails/CDN  │
+└────────────────┘                    └────────────────┘
+```
+
+---
+
+## 关键判断
+
+第四阶段不是继续“Go 化更多文件”，而是要把 Go image runtime 做成一个可运营的平台层。
+
+最重要的三件事：
+
+```txt
+1. 调度系统 v2：优先级、公平性、熔断、死信
+2. Go image API 主路径：读写 image 任务从 FastAPI 迁出
+3. 资产与 billing 一致性：避免商业化后出现坏账和坏文件
+```
+
+这轮做完后，`image-studio` 的 image 业务才算真正从 Python 单体业务里拆出来，后续继续扩展模型、provider、并发和商业化功能会顺很多。

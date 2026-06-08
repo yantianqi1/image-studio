@@ -1,0 +1,318 @@
+你在 GitHub 仓库 yantianqi1/image-studio 中工作。请从仓库根目录开始。
+
+目标：
+加强 Go worker 在“文件写入”和“数据库写入”之间的一致性，避免出现：
+- 文件已写入但 DB 事务失败造成孤儿文件
+- DB 已写 asset 但文件缺失
+- retry 时旧 result/asset 清理不完整
+- 同一 item 重复完成导致重复 asset/result
+
+请执行：
+1. 审查当前 Go completion 流程
+   - apps/worker-go/internal/jobs/render_store.go
+   - apps/worker-go/internal/storage/*
+   - image_job_results / assets 写入 SQL
+   找出当前清理 old files、rollback、commit 的边界。
+
+2. 引入 staged write 策略
+   推荐流程：
+   - 先把图片写到 staging path，例如 generated-assets/staging/{worker}/{uuid}.tmp
+   - DB transaction 内创建 asset row 和 result row。
+   - 根据 asset id 计算最终 storage_path。
+   - commit 成功后 rename/move staging 到最终 path。
+   - 如果 commit 失败，删除 staging。
+   - 如果 rename 失败，标记 item 失败或进入 repair 状态，不能静默 succeeded。
+
+   如果当前 storage 抽象不支持 rename，则增加接口：
+   - WriteTemp(ctx, content, ext) TempObject
+   - CommitTemp(ctx, temp, finalPath)
+   - Delete(ctx, path)
+
+3. 幂等处理
+   - CompleteRenderedJob 必须锁定 image_job_items 当前 item。
+   - 如果 item 已 succeeded，应不要重复写 result。
+   - 对 image_job_results 增加唯一约束或在代码中保证：
+     (job_id, result_index) 唯一。
+   - 如果没有 DB 唯一约束，新增 Alembic migration。
+   - retry 前清理同 result_index 的旧 result/asset。
+
+4. 孤儿文件清理
+   - 新增脚本或 Go 子命令：
+     image-worker cleanup-orphan-assets
+   - 扫描 local storage 中 asset-* 文件，对比 assets.storage_path。
+   - dry-run 默认，只打印数量。
+   - --execute 才删除。
+   - 不要删除 uploads/ 和 comics/ 目录，除非明确属于 generated asset。
+
+5. 测试
+   - DB commit 失败时 temp 文件被删除。
+   - storage final move 失败时 item 不应 succeeded。
+   - 重复 CompleteRenderedJob 不产生重复 result。
+   - retry 清理旧 result/asset。
+   - cleanup dry-run 不删除文件。
+
+限制：
+- 不要破坏 Python storage 约定。
+- 不要改变已有 storage_path 格式，除非有 migration。
+- 不要默认执行删除操作。
+- GCS 如果未支持，可以保持 unsupported，但接口要能扩展。
+
+验收标准：
+- 文件和 DB 状态更一致。
+- orphan asset 有 dry-run 清理工具。
+- result_index 不重复。
+- go test ./... 通过。
+- 最后总结一致性策略和失败处理。
+
+你在 GitHub 仓库 yantianqi1/image-studio 中工作。请从仓库根目录开始。
+
+目标：
+给 apps/worker-go 增加生产可观测性：health endpoint、metrics endpoint、结构化指标和队列延迟统计。
+
+请执行：
+1. 新增 HTTP 诊断服务
+   配置：
+   - GO_WORKER_HTTP_ADDR，默认 :7900
+   - GO_WORKER_ENABLE_HTTP，默认 true
+
+   endpoint：
+   - GET /healthz：进程活着返回 200。
+   - GET /readyz：DB ping 成功，返回 200；否则 503。
+   - GET /metrics：Prometheus 文本格式。
+
+2. 指标
+   使用 prometheus/client_golang，或手写基础文本格式。如果引入依赖，保持轻量。
+   至少包含：
+   - image_worker_claim_total
+   - image_worker_claim_empty_total
+   - image_worker_item_started_total
+   - image_worker_item_succeeded_total
+   - image_worker_item_failed_total
+   - image_worker_item_retried_total
+   - image_worker_render_duration_seconds histogram
+   - image_worker_queue_wait_seconds histogram
+   - image_worker_running_items gauge
+   - image_worker_provider_inflight gauge{provider=...}
+   - image_worker_heartbeat_failed_total
+
+3. 结构化日志
+   - 每个 item 开始、成功、失败、retry 都带：
+     item_id, job_id, provider_name, provider_type, model, worker_name, attempt_count
+   - 不记录 prompt 全文。可以记录 prompt_length。
+   - 不记录 API key、Authorization、base64 image。
+
+4. docker-compose
+   - worker-go 暴露内部端口 7900，不一定 publish 到宿主机。
+   - healthcheck 改成请求 /healthz 或 /readyz。
+   - 如果 profile worker-go 启用，compose 能监测 worker-go 健康。
+
+5. admin worker summary 可选
+   - 如果已有 /api/admin/ops/worker-summary，增加 Go worker 队列指标读取 DB 的信息。
+   - 不强制 API 去 scrape metrics。
+
+6. 测试
+   - /healthz 返回 200。
+   - /readyz 在 DB mock/ping fail 时返回 503。
+   - metrics 包含基础指标。
+   - 日志中不包含敏感字段。
+
+限制：
+- 不要让 metrics 暴露 secret。
+- 不要影响 worker 主循环。
+- HTTP 诊断服务必须随主 context 退出。
+- 不要引入庞大 observability 框架。
+
+验收标准：
+- worker-go 有 health/readiness/metrics。
+- compose healthcheck 使用 Go worker HTTP endpoint。
+- go test ./... 通过。
+- 最后总结 endpoint、指标名和使用方式。
+
+你在 GitHub 仓库 yantianqi1/image-studio 中工作。请从仓库根目录开始。
+
+目标：
+建立可重复的压测/基准工具，量化 Go worker 重构效果。不要只靠主观“流畅”。
+
+请新增：
+- scripts/bench-image-jobs.py 或 apps/worker-go/cmd/bench-image-jobs
+- 文档 docs/perf/image-worker-benchmark.md
+
+压测目标：
+1. 批量创建 image_jobs 和 image_job_items。
+2. 使用 simulate mode 测试队列吞吐。
+3. 使用 render mock server 测试 provider 延迟下的吞吐。
+4. 输出 queue wait、render duration、success/failure/retry、DB connection 使用情况。
+
+请执行：
+1. 数据准备工具
+   - 支持参数：
+     --jobs
+     --items-per-job
+     --owner-count
+     --provider-id
+     --model-code
+     --mode simulate/render-mock
+   - 直接写 DB 或通过 API 创建；优先通过 API，如果太慢，可提供 DB seed 模式。
+   - 不要污染生产，要求 APP_ENV != production 或必须显式 --allow-production。
+
+2. Mock provider
+   - 新增一个本地 HTTP mock provider。
+   - 支持：
+     --delay-ms
+     --fail-rate
+     --image-format png/svg
+   - 返回 Go worker 能解析的 openai-chat-compatible 响应格式。
+   - 不调用真实上游。
+
+3. 指标采集
+   - 从 DB 查询：
+     queued/running/succeeded/failed item 数量。
+     avg/p50/p95 queue wait。
+     avg/p50/p95 processing duration。
+   - 如果 metrics endpoint 存在，也拉取 /metrics 保存。
+
+4. 输出
+   - 控制台输出摘要。
+   - 可选写 JSON 文件到 perf-results/。
+   - 文档给出示例命令：
+     a. 100 jobs x 1 item
+     b. 100 jobs x 4 items
+     c. 1000 items with GO_WORKER_CONCURRENCY=8
+     d. provider delay 30s
+
+5. CI
+   - 不要把长压测加入默认 CI。
+   - 可以加轻量单元测试，确保脚本参数解析和 mock provider 可启动。
+
+限制：
+- 不要连接真实 provider。
+- 不要默认在 production DB 上写压测数据。
+- 不要要求本地必须安装复杂工具。
+- 不要把大文件结果提交仓库。
+
+验收标准：
+- 一条命令能创建压测任务。
+- 一条命令能启动 mock provider。
+- 可以量化 Go worker 吞吐和延迟。
+- 文档说明如何复现实验。
+- 最后总结压测工具路径、示例命令和输出指标。
+
+你在 GitHub 仓库 yantianqi1/image-studio 中工作。请从仓库根目录开始。
+
+目标：
+把 Go worker 从“可选 profile + simulate 默认”推进到可灰度生产接管 image_jobs。要求仍可快速回滚到 Python worker 或停用 Go render。
+
+当前 docker-compose 中 worker-go 有 profiles: worker-go，GO_WORKER_MODE 默认 simulate。Python worker 已默认 WORKER_ENABLE_IMAGE_JOBS=false。
+
+请执行：
+1. Compose 灰度配置
+   - 保留 worker-go profile，但新增清晰文档说明两种部署：
+     a. simulate 验证
+     b. render 接管
+   - 增加 docker-compose.override.example.yml 或 docs/deploy/go-worker-cutover.md。
+   - 示例必须包括：
+     WORKER_ENABLE_IMAGE_JOBS=false
+     GO_WORKER_MODE=render
+     GO_WORKER_CONCURRENCY=...
+     GO_WORKER_PROVIDER_CONCURRENCY_DEFAULT=...
+
+2. 快速回滚方案
+   文档写清楚：
+   - 停 Go worker：
+     docker compose --profile worker-go stop worker-go
+   - 临时恢复 Python image_jobs：
+     WORKER_ENABLE_IMAGE_JOBS=true
+     docker compose up -d worker
+   - 注意避免两个 worker 同时消费同一类任务。
+   - 如何处理 running lease 过期后的重试。
+
+3. 安全启动检查
+   在 Go worker 启动时增加 startup validation：
+   - GO_WORKER_MODE=render 时，ASSET_STORAGE_BACKEND 必须受支持。
+   - provider 支持列表非空。
+   - DATABASE_URL 必须是 postgres，不支持 sqlite。
+   - 如果 WORKER_ENABLE_IMAGE_JOBS=true 且能从环境看到，打印 warning。
+   - 如果 GO_WORKER_CONCURRENCY 过大，打印 warning，例如 >32。
+
+4. Readiness
+   - /readyz 要检查：
+     DB 可连接。
+     必要表存在：image_job_items、image_jobs、assets、image_job_results。
+     local storage 可写。
+   - render mode 下 provider env 不一定全部检查，但至少能发现常见缺失。
+
+5. 发布文档
+   - README 更新当前推荐部署方式。
+   - 标注 Go worker 是 image_jobs 推荐执行器。
+   - Python worker 仍负责 comic-task / comic-orchestration。
+
+限制：
+- 不要删除 Python worker。
+- 不要强制所有环境默认 render。
+- 不要破坏当前 compose 默认行为，除非文档明确。
+- 不要自动迁移生产配置。
+
+验收标准：
+- 有明确 simulate -> render -> rollback 的操作手册。
+- Go worker render mode 启动前能发现关键配置错误。
+- /readyz 能代表真实可运行状态。
+- go test ./... 通过。
+- 最后总结灰度步骤和回滚步骤。
+
+
+你在 GitHub 仓库 yantianqi1/image-studio 中工作。请从仓库根目录开始。
+
+目标：
+在 Go worker 已经稳定接管 image_jobs 后，清理 Python worker 中的 image_jobs 执行路径，收敛职责边界：
+- FastAPI 只负责创建任务、查询任务、管理后台、鉴权、计费、配置。
+- Python worker 只负责 comic-task 和 comic-orchestration。
+- Go worker 负责 image_job_items 渲染执行。
+
+请执行：
+1. 标记 Python image worker deprecated
+   - apps/worker/worker/tasks/image_jobs.py 中增加清晰注释。
+   - 如果仍保留 --once 调用，必须受 WORKER_ENABLE_IMAGE_JOBS 控制。
+   - 默认配置继续 WORKER_ENABLE_IMAGE_JOBS=false。
+
+2. 删除生产路径引用
+   - 检查 apps/worker/worker/main.py。
+   - 确保默认生产 compose 不会启动 Python image-jobs 分支。
+   - 如果 README 仍建议 python -m apps.worker.worker.main 处理 image job，更新为 Go worker。
+
+3. 保留 API 内部服务函数
+   - apps/api/app/domains/image/service.py 里创建、查询、job/item 初始化仍保留。
+   - Python direct_rendering.py 如仅测试用，标注 dev/test only。
+   - 不要删除会影响 API 或测试的函数。
+
+4. 文档职责边界
+   新增 docs/architecture/image-job-execution.md：
+   - image_jobs 父任务
+   - image_job_items 执行单元
+   - API 创建 item
+   - Go worker claim/render/heartbeat
+   - Python worker 不再消费 image jobs
+   - 状态聚合规则
+
+5. 测试更新
+   - Python worker 默认不处理 image jobs。
+   - Go worker 是 image item 的主要消费者。
+   - direct_rendering 若仍保留，测试明确是同步 dev path。
+   - 防止将来有人误把 render_job_immediately 放回 public create route。
+
+6. 可选保护
+   - 在 create_image_job route 的测试里明确断言不会调用 direct_rendering。
+   - 在 Python worker main 测试里明确默认 WORKER_ENABLE_IMAGE_JOBS=false 时没有 image-jobs branch。
+
+限制：
+- 不要删除 comic worker。
+- 不要删除 FastAPI image API。
+- 不要改前端路由。
+- 不要破坏测试辅助路径。
+- 不要把 Python provider 代码全部删掉，后台/测试可能仍引用。
+
+验收标准：
+- 生产职责边界清晰。
+- Python worker 不再是 image job 推荐执行器。
+- 文档和 compose 一致。
+- 测试防止同步渲染回归。
+- 最后总结清理范围、保留的兼容路径和测试结果。

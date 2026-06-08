@@ -1,0 +1,487 @@
+# 全面重构方案：从“Go image 主路径”推进到“FastAPI Legacy 化”
+
+你现在的状态已经很接近一个关键分水岭：
+
+```txt
+Go worker：已可作为 image execution 主路径
+Go image API read/create：开发侧已完成，可灰度
+第八阶段：代码侧完成，但 24h 生产/准生产证据缺失
+FastAPI：仍不能整体下线
+```
+
+之前审核报告也给过同样方向判断：Go worker 可以作为 image execution 主路径，Go image API read 可灰度，Go image API create 当时暂不建议全量切；现在你已经补完 create auth、contract、发布链路、灰度演练，剩下的关键门槛就是 **真实 24h evidence gate**。
+
+---
+
+# 当前阶段判断
+
+## 第八阶段状态
+
+```txt
+代码完成度：基本完成
+测试完成度：通过
+文档/collector/checker：通过
+阻塞项：缺少 24h 真实生产/准生产观察证据
+```
+
+所以现在不能把第八阶段标记为 complete，是正确的。这个 blocked 不是开发失败，而是生产切流流程里必要的证据缺口。
+
+你现在必须先跑：
+
+```bash
+DATABASE_URL="$DATABASE_URL" \
+RENDER_DURATION_P95_THRESHOLD_SECONDS=180 \
+scripts/collect-go-image-api-cutover-evidence.sh
+```
+
+拿到 24h 报告后，再决定是否：
+
+```txt
+GO_IMAGE_API_READS_ENABLED=true
+GO_IMAGE_API_CREATE_ENABLED=true
+```
+
+作为默认生产主路径。
+
+---
+
+# 后续总路线
+
+我建议从现在开始进入 **四个大阶段**：
+
+```txt
+第 9 阶段：Go image API 生产主路径确认
+第 10 阶段：FastAPI image fallback 收缩
+第 11 阶段：Go admin / ops / provider runtime 强化
+第 12 阶段：FastAPI 全局 Legacy 化评估
+```
+
+这不是继续堆新功能，而是把已经完成的 Go image runtime 转成长期可运营、可下线旧链路的生产系统。
+
+---
+
+# 第 9 阶段：Go Image API 生产主路径确认
+
+## 目标
+
+把第八阶段从 blocked 推进到 complete。
+
+## 前置条件
+
+必须有 24h 生产或准生产 evidence：
+
+```txt
+create 5xx rate
+render duration p95
+queue wait p95
+asset missing count
+dead letter count
+outbox pending age
+worker heartbeat failed
+provider failure rate
+```
+
+## 执行步骤
+
+### 9.1 运行证据采集
+
+在目标环境运行：
+
+```bash
+DATABASE_URL="$DATABASE_URL" \
+RENDER_DURATION_P95_THRESHOLD_SECONDS=180 \
+scripts/collect-go-image-api-cutover-evidence.sh
+```
+
+产出：
+
+```txt
+cutover evidence report
+nginx log 统计
+assetctl verify-assets 输出
+DB queue / outbox / dead-letter 状态
+worker metrics snapshot
+```
+
+### 9.2 checker 必须硬失败
+
+你已经把文档改成“缺少真实生产证据时 checker 必须失败”，这个方向对。下一步要确认：
+
+```txt
+- 没有 synthetic success
+- 没有 TODO pass
+- 没有空报告 pass
+- 没有缺 nginx log 仍 pass
+- 没有 asset verify 缺失仍 pass
+```
+
+### 9.3 切流结论
+
+根据 evidence 分三种：
+
+| 结果         | 动作                                               |
+| ---------- | ------------------------------------------------ |
+| 全部 gate 通过 | 第八阶段标记 complete，Go image API create/read 进入默认主路径 |
+| 小问题但可控     | Go read 默认，Go create 继续灰度                        |
+| P0/P1 问题   | create 回滚到 FastAPI，Go worker 保持 image execution  |
+
+## 验收标准
+
+```txt
+- 24h evidence 存档
+- checker 通过
+- runbook 更新
+- rollback 仍可执行
+- 第八阶段 goal complete
+```
+
+---
+
+# 第 10 阶段：FastAPI Image Fallback 收缩
+
+第九阶段通过后，才进入第十阶段。
+
+## 目标
+
+FastAPI 不再是 image 默认路径，只保留短期 fallback。
+
+## 要做
+
+### 10.1 Nginx 路由默认切 Go
+
+生产推荐默认：
+
+```env
+GO_IMAGE_API_READS_ENABLED=true
+GO_IMAGE_API_CREATE_ENABLED=true
+GO_IMAGE_API_ASSETS_ENABLED=true
+GO_IMAGE_API_SSE_ENABLED=true
+```
+
+保留：
+
+```env
+GO_IMAGE_API_FALLBACK_ENABLED=true
+```
+
+### 10.2 FastAPI image route 标记 fallback-only
+
+文档和代码注释里明确：
+
+```txt
+FastAPI image routes:
+- fallback only
+- no new feature development
+- no production execution logic
+```
+
+### 10.3 禁止 FastAPI image 新能力扩展
+
+新增防回归测试或文档规则：
+
+```txt
+- 不允许 public create route 恢复 direct render
+- 不允许 Python worker 默认消费 image_job_items
+- 不允许新增 Python provider render 生产路径
+- 不允许 README 推荐 Python image execution
+```
+
+### 10.4 设定 fallback 窗口
+
+建议：
+
+```txt
+fallback 保留 1-2 个 release
+或保留 7-14 天生产稳定期
+```
+
+通过后再删除或硬禁 FastAPI image write path。
+
+## 验收标准
+
+```txt
+- Go image API 是默认 read/create 主路径
+- FastAPI image 只作为 fallback
+- Python image execution 不再是生产选项
+- 文档、compose、nginx、tests 一致
+```
+
+---
+
+# 第 11 阶段：Go Runtime 运营强化
+
+这一阶段不是迁 FastAPI，而是补齐 Go 主路径长期运营能力。
+
+## 11.1 Worker runtime config UI
+
+你现在已经有 worker control plane 相关能力，但下一步要确认它能从后台操作：
+
+```txt
+- 查看 worker_nodes
+- drain worker
+- resume worker
+- 修改 runtime config
+- 查看 last heartbeat
+- 查看 running item
+```
+
+Admin 页面需要能操作：
+
+```txt
+GO worker concurrency
+provider concurrency
+poll interval
+drain mode
+provider pause/resume
+```
+
+## 11.2 Provider runtime 管控
+
+必须支持：
+
+```txt
+provider pause
+provider resume
+provider circuit open
+provider circuit half-open
+provider health check
+provider failure rate
+```
+
+Worker claim 必须尊重 provider runtime state：
+
+```txt
+paused provider 不 claim
+circuit_open provider 不 claim
+degraded provider 降低并发
+```
+
+## 11.3 Dead Letter 运营闭环
+
+Admin 必须能：
+
+```txt
+查看 dead letter item
+查看 error_code / error_message
+查看 attempt_count
+manual retry
+cancel
+批量 retry
+按 provider/model 筛选
+```
+
+## 11.4 Outbox 可靠性
+
+补齐：
+
+```txt
+outbox pending oldest age
+outbox retry attempts
+outbox failed event
+outbox replay
+outbox cleanup
+```
+
+## 11.5 Asset 维护
+
+补齐：
+
+```txt
+assetctl verify-assets
+assetctl scan-orphans
+assetctl rebuild-thumbnails
+admin ops 入口
+定期 runbook
+```
+
+## 验收标准
+
+```txt
+- 运营能在 admin 中看到和处理 Go runtime 问题
+- provider 故障不会拖垮全局队列
+- dead letter 不会静默堆积
+- asset 缺失可以发现和修复
+```
+
+---
+
+# 第 12 阶段：FastAPI 全局 Legacy 化评估
+
+到这里再问：“是否彻底把 FastAPI 重构为 Go？”
+
+不是现在立即做。第十二阶段先评估。
+
+## 评估维度
+
+### 1. FastAPI 剩余职责
+
+列出 FastAPI 剩余模块：
+
+```txt
+auth
+admin
+settings
+provider admin
+comic
+character library
+uploads
+gallery fallback
+legacy image
+public quota fallback
+ops
+```
+
+逐项判断：
+
+```txt
+必须迁 Go
+保留 Python
+删除
+fallback
+```
+
+### 2. API 流量占比
+
+需要统计：
+
+```txt
+Go image API 流量占比
+FastAPI public API 流量占比
+FastAPI admin API 流量占比
+FastAPI comic API 流量占比
+FastAPI error rate
+FastAPI p95 latency
+```
+
+### 3. 迁移收益
+
+只有这些条件成立，才值得彻底 Go 化：
+
+```txt
+FastAPI 已无高频主链路
+FastAPI 剩余功能少于 20%-30%
+Go contract tests 已覆盖核心 payload
+admin-web 已主要使用 Go ops
+FastAPI 维护成本高于迁移成本
+```
+
+## 结论分支
+
+| 评估结果                              | 动作                                 |
+| --------------------------------- | ---------------------------------- |
+| FastAPI 只剩 fallback/admin 低频      | 启动 FastAPI Sunset Plan             |
+| FastAPI 仍承担 auth/admin/comic 大量功能 | 继续保留 FastAPI                       |
+| FastAPI 和 Go 双写风险高                | 优先做 contract 和 route consolidation |
+
+---
+
+# 推荐下一步执行顺序
+
+```txt
+1. 运行 24h cutover evidence collector
+2. 根据 evidence 决定第八阶段是否 complete
+3. 若通过：Go image API create/read 设为默认生产主路径
+4. 保留 FastAPI fallback 1-2 个 release
+5. 强化 worker/provider/dead-letter/outbox/asset ops
+6. 收缩 FastAPI image fallback
+7. 做 FastAPI 全局 legacy 评估
+8. 再决定是否启动 FastAPI 全量 Go 化
+```
+
+---
+
+# 当前不要做的事
+
+```txt
+不要继续扩 core-api-go 商业核心
+不要重建 local wallet/reservation/activation code
+不要立即删除 FastAPI image routes
+不要立即彻底迁移 FastAPI
+不要把第八阶段标为 complete，直到 24h evidence 通过
+```
+
+原因很简单：你现在已经到了生产切流门槛，不能继续用“开发测试通过”替代“真实运行证据”。
+
+---
+
+# 下一条最该给 Codex 的提示词
+
+```text
+继续在 main 分支工作，不要创建新分支。
+
+任务目标：
+完成第八阶段 Go image API cutover 的真实证据收口。不要新增业务功能，不要修改 Go image API 或 worker 主逻辑。重点是运行 collector、校验证据、生成 cutover 报告，并判断第八阶段是否可以从 blocked 改为 complete。
+
+请执行：
+1. 确认目标环境已经运行：
+   - image-api-go
+   - worker-go render mode
+   - nginx route flags
+   - Postgres
+   - asset storage
+2. 运行：
+   DATABASE_URL="$DATABASE_URL" \
+   RENDER_DURATION_P95_THRESHOLD_SECONDS=180 \
+   scripts/collect-go-image-api-cutover-evidence.sh
+
+3. 检查 collector 输出：
+   - create 5xx rate
+   - render duration p95
+   - queue wait p95
+   - dead letter count
+   - outbox pending oldest age
+   - worker heartbeat failures
+   - assetctl verify-assets 输出
+   - nginx log 证据
+
+4. 如果证据缺失：
+   - 不要伪造成功
+   - 明确列出缺失项
+   - goal 保持 blocked
+
+5. 如果证据通过：
+   - 更新第八阶段 checkpoint 文档
+   - 标记 cutover gate passed
+   - 记录报告路径
+   - 建议将 Go image API read/create 设为生产默认主路径
+
+6. 运行定向测试：
+   - pytest tests/test_go_dockerfiles.py -q
+   - pytest tests/contracts -q
+   - go test ./... -count=1 -timeout 60s in apps/image-api-go
+   - go test ./... -count=1 -timeout 60s in apps/worker-go
+   - docker compose config --quiet
+
+限制：
+- 不要修改业务逻辑。
+- 不要用 synthetic success 替代真实证据。
+- 不要把缺失证据标为通过。
+- 不要创建新分支。
+
+验收标准：
+- 有真实 cutover evidence report。
+- checker 对缺失证据会失败。
+- 第八阶段 complete / blocked 状态有明确依据。
+- 输出：
+  - collector 命令
+  - 报告路径
+  - 每个 gate 的结果
+  - 是否允许 Go image API create/read 默认生产开启
+  - 下一步建议
+```
+
+---
+
+# 一句话结论
+
+你现在的重构已经进入 **生产切流验证阶段**。
+下一步不是继续加功能，而是：
+
+```txt
+拿到 24h 真实证据
+通过 cutover gate
+把 Go image API 设为默认主路径
+再逐步收缩 FastAPI image fallback
+```
+
+只有这一步完成，后面的“全面 FastAPI Go 化”才有现实基础。

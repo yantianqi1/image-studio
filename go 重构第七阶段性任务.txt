@@ -1,0 +1,388 @@
+下面按 **main-only / 单主分支** 继续推进。你刚完成的是 `image-api-go internal create auth`，这已经解决审核报告里的一个 P1 安全项；后续应优先补 **contract tests、admin 测试、audit、Core scope、灰度发布验收**。审核报告里也明确指出：Go worker 可作为 image execution 主路径，但 Go image API create 还不建议全量切，因为 contract、internal auth、CI/发布链路、admin 红测仍需补齐。
+
+# 后续 main 开发顺序
+
+```txt id="main-plan"
+1. Go image API contract tests
+2. admin-web test harness 修复
+3. admin ops audit 补齐
+4. image-api-go 发布链路最终确认
+5. core-api-go scope 固化
+6. Go image API create 灰度验收
+7. Python image legacy 再收缩
+```
+
+---
+
+# 1. 下一步：Go image API contract tests
+
+## 目标
+
+确认 Go image API 和 FastAPI 在核心 image 场景上的行为一致，尤其是：
+
+```txt id="contract-scope"
+POST /api/public/image/jobs
+POST /internal/image/jobs
+GET  /api/public/image/jobs/{id}
+GET  /api/public/image/jobs/{id}/results
+GET  /api/public/image/jobs/{id}/items
+GET  /api/public/image/jobs/{id}/events
+```
+
+## 重点场景
+
+```txt id="contract-cases"
+1. 正常创建任务返回 queued
+2. requested_count=N 创建 N 个 image_job_items
+3. invalid model 返回一致错误
+4. uploads disabled 时 edit/reference 失败
+5. anonymous quota exceeded 行为一致
+6. client_provider_config charge=0 / source 正确
+7. job payload 字段兼容
+8. results payload 字段兼容
+9. item status 聚合父 job status
+10. internal create 有 token 时通过，无 token/错 token 拒绝
+```
+
+## 给 Codex 的提示词
+
+```text id="codex-contract"
+继续在 main 分支工作，不要创建新分支。
+
+任务目标：
+补齐 Go image API 与 FastAPI 的 image job contract tests。不要修改业务逻辑，除非测试暴露出明确 bug；如果需要修 bug，保持最小改动。
+
+背景：
+POST /internal/image/jobs 已经加入 INTERNAL_SERVICE_TOKEN / INTERNAL_SERVICE_TOKEN_NEXT，并且 apps/image-api-go 测试已通过。下一步需要验证 Go image API create/read payload 与 FastAPI 兼容，降低灰度风险。
+
+请执行：
+1. 搜索当前已有 contract tests：
+   - tests/contracts
+   - apps/image-api-go/internal/httpapi/*_test.go
+   - apps/api/tests/test_image_jobs.py
+   - apps/api/tests/test_image_job_items.py
+
+2. 新增或扩展 contract tests，覆盖：
+   - POST /api/public/image/jobs 正常创建，返回 status=queued
+   - requested_count=3 创建 3 个 image_job_items
+   - GET /api/public/image/jobs/{id} payload 字段与 FastAPI 兼容
+   - GET /api/public/image/jobs/{id}/results payload 字段与 FastAPI 兼容
+   - GET /api/public/image/jobs/{id}/items payload 字段与预期一致
+   - invalid model 错误码兼容
+   - uploads disabled 时 edit/reference 请求失败
+   - anonymous quota exceeded 行为兼容
+   - client_provider_config 任务 charge/source 行为兼容
+   - POST /internal/image/jobs：
+     a. flag 关闭时不可用
+     b. flag 开启但无 token 拒绝
+     c. token 错误拒绝
+     d. token 正确允许进入 create 流程
+
+3. 如果当前测试基础设施无法同时启动 FastAPI 和 Go image API：
+   - 优先写 payload-level contract tests
+   - 使用 fixtures 构造同一 DB 状态
+   - 对比 JSON shape、字段名、关键 status/error code
+   - 不要引入复杂 e2e harness
+
+4. 运行：
+   - go test ./... -count=1 -timeout 60s，在 apps/image-api-go 目录
+   - go test ./... -count=1 -timeout 60s，在 apps/image-runtime-go 目录，如有改动
+   - pytest tests/contracts -q，如存在
+   - pytest apps/api/tests/test_image_jobs.py apps/api/tests/test_image_job_items.py -q
+
+5. 不要改 FastAPI 路由，除非发现明确 contract bug。
+6. 不要改 admin-web。
+7. 不要改 provider renderer。
+8. 不要改 worker-go 主循环。
+9. 不要创建新分支。
+
+验收标准：
+- Go image API create/read 关键 payload 有 contract tests。
+- internal create token 行为有 contract tests。
+- tests/contracts 或对应 test 文件通过。
+- 输出：
+  - 新增/修改测试文件
+  - 覆盖的 contract 场景
+  - 测试命令和结果
+  - 是否发现 Go/FastAPI 行为差异
+```
+
+---
+
+# 2. 接着修 admin-web test harness
+
+## 目标
+
+审核报告里 admin 测试当前有 4 个失败，原因是测试 harness 没处理 `@/lib/admin-worker-api`。
+这属于发布质量阻塞项，应该在继续扩 admin 页面前修掉。
+
+## 给 Codex 的提示词
+
+```text id="codex-admin-harness"
+继续在 main 分支工作，不要创建新分支。
+
+任务目标：
+修复 admin-web node tests 中 @/lib/admin-worker-api 的 test harness/mock 问题，让 admin-web 测试恢复通过。不要改 Go 后端业务逻辑。
+
+请执行：
+1. 运行并复现：
+   pnpm exec node --test apps/admin-web/tests/*.mjs
+
+2. 定位失败原因：
+   - Unexpected require: @/lib/admin-worker-api
+   - 检查 apps/admin-web/tests 的 module mock / require shim / loader
+
+3. 修复测试 harness：
+   - 给 @/lib/admin-worker-api 添加 mock
+   - 或更新测试 loader 让该模块可被解析
+   - 不要为了测试删除真实 admin-worker-api 逻辑
+   - mock 只返回测试所需最小 API
+
+4. 如有必要，补测试覆盖：
+   - Worker Dashboard 渲染
+   - Queue Dashboard 渲染
+   - Dead Letter 页面渲染
+   - Provider Runtime 页面渲染
+
+5. 运行：
+   - pnpm exec node --test apps/admin-web/tests/*.mjs
+   - pnpm build:admin
+
+6. 不要修改 FastAPI。
+7. 不要修改 Go worker。
+8. 不要修改 image-api-go。
+9. 不要创建新分支。
+
+验收标准：
+- apps/admin-web/tests/*.mjs 全部通过。
+- pnpm build:admin 通过。
+- mock 不影响生产代码。
+- 输出修改文件、失败原因、修复方式、测试结果。
+```
+
+---
+
+# 3. 补 admin ops audit
+
+## 目标
+
+让所有运营 mutation 都能追踪：
+
+```txt id="audit-targets"
+retry item
+cancel item
+pause provider
+resume provider
+priority update
+asset delete / rebuild thumbnail
+worker drain / resume
+runtime config update
+```
+
+## 给 Codex 的提示词
+
+```text id="codex-admin-audit"
+继续在 main 分支工作，不要创建新分支。
+
+任务目标：
+为 image/provider/worker/admin ops mutation 补齐 audit log。不要重构业务主流程，只在 mutation 成功或明确失败时记录可审计事件。
+
+请先检查现有 audit 机制：
+- admin_action_logs 或 audit_logs 表
+- apps/api/app/domains/admin*
+- apps/api/app/domains/ops*
+- record_admin_action 或类似 helper
+- apps/admin-web 调用的 admin ops endpoints
+
+请执行：
+1. 找出所有 admin mutation endpoints：
+   - image item retry/cancel
+   - job retry/cancel
+   - provider pause/resume
+   - worker drain/resume
+   - runtime config update
+   - dead letter retry
+   - asset delete / rebuild thumbnail
+   - priority update
+
+2. 对每个 mutation 写 audit：
+   字段至少包括：
+   - actor admin id / username
+   - action
+   - target_type
+   - target_id
+   - request_id 如已有
+   - metadata，不包含密钥、Authorization、完整 prompt、base64 image
+
+3. 如果已有 audit helper，复用。
+   如果没有，新增最小 helper，但不要大规模重构 admin auth。
+
+4. 增加测试：
+   - retry item 会写 audit
+   - cancel item 会写 audit
+   - pause/resume provider 会写 audit
+   - worker drain/resume 会写 audit，如 endpoint 已存在
+   - audit metadata 不包含 secret/token
+
+5. 运行相关 pytest：
+   - pytest apps/api/tests -k "admin or ops or audit or worker" -q
+   - 如果范围太大超时，拆分运行相关测试文件
+
+6. 不要改 Go worker 主循环。
+7. 不要改 image provider renderer。
+8. 不要改 frontend UI，除非需要字段兼容。
+9. 不要创建新分支。
+
+验收标准：
+- 关键 admin ops mutation 都有 audit log。
+- 测试覆盖主要操作。
+- 不记录敏感信息。
+- 输出修改文件、覆盖的操作、测试结果。
+```
+
+---
+
+# 4. 确认 image-api-go 发布链路
+
+你刚做的是 internal auth，不是发布链路。若前面已经修过 GHCR workflow，就只做确认；若没修，需要补上。
+
+## 给 Codex 的提示词
+
+```text id="codex-release-check"
+继续在 main 分支工作，不要创建新分支。
+
+任务目标：
+确认 image-api-go 发布链路已经完整。如果 GHCR workflow 尚未构建 image-studio-image-api-go，请补齐。不要修改业务逻辑。
+
+请执行：
+1. 检查 docker-compose.yml 中 image-api-go 镜像名。
+2. 检查 .github/workflows/build-ghcr-images.yml matrix 是否包含同名镜像。
+3. 检查 docker/image-api-go.Dockerfile 是否存在并可从仓库根目录构建。
+4. 如 workflow 缺失 image-api-go：
+   - 增加 image-studio-image-api-go
+   - dockerfile 指向 docker/image-api-go.Dockerfile
+5. 运行：
+   - go test ./... -count=1 -timeout 60s，在 apps/image-api-go
+   - docker build -f docker/image-api-go.Dockerfile .，在仓库根目录
+6. 更新 docs/deploy 或 runbook 中关于 image-api-go 镜像的说明。
+
+限制：
+- 不要改 Go API 业务逻辑。
+- 不要改 FastAPI。
+- 不要改 admin-web。
+- 不要创建新分支。
+
+验收标准：
+- compose 引用的 image-api-go 镜像会被 GHCR workflow 构建。
+- Dockerfile 可构建。
+- image-api-go tests 通过。
+- 输出发布链路是否仍有风险。
+```
+
+---
+
+# 5. 明确 core-api-go scope
+
+审核报告里有一个重要提醒：`core-api-go` 目前只有 health/ready skeleton，且 local billing/wallet/redeem/model_variants 已经被 migration 删除，不应重建。
+所以下一步不是盲目继续写 wallet，而是先定 scope。
+
+## 给 Codex 的提示词
+
+```text id="codex-core-scope"
+继续在 main 分支工作，不要创建新分支。
+
+任务目标：
+明确 core-api-go 的真实职责边界，避免重建已经被当前架构删除的 local wallet / reservation / activation code / model_variants。
+
+请执行：
+1. 检查当前 migrations：
+   - 是否已经删除 local billing/wallet/redeem/model_variants
+   - 确认当前商业化边界是否已经迁到 NewAPI/provider usage 或其他模型
+
+2. 检查 apps/core-api-go：
+   - 当前 endpoints
+   - tests
+   - docs
+
+3. 新增或更新文档：
+   docs/architecture/go-core-api-scope.md
+
+文档必须回答：
+- core-api-go 当前是否继续保留
+- core-api-go 不负责什么：
+  - 不重建 local wallet
+  - 不重建 reservation
+  - 不重建 activation code
+  - 不重建已删除 model_variants
+- core-api-go 可以负责什么：
+  - health/ready
+  - internal auth helper
+  - provider/runtime readonly
+  - quota helper，如果当前 schema 支持
+  - future admin ops aggregation
+- 哪些功能继续由 FastAPI 或 image-api-go 负责
+- 何时才扩展 core-api-go
+
+4. 如果 core-api-go 当前存在未实现 route：
+   - 保持 404 或 501
+   - 测试明确这些 route unavailable
+   - 不要添加假实现
+
+5. 运行：
+   - go test ./... -count=1 -timeout 60s，在 apps/core-api-go
+   - 如改文档，无需跑全量测试
+
+限制：
+- 不要实现 wallet/reservation/activation code。
+- 不要改 DB schema。
+- 不要改 image-api-go。
+- 不要改 worker-go。
+- 不要创建新分支。
+
+验收标准：
+- core-api-go scope 明确。
+- 不会误导后续开发重建已删除商业模块。
+- tests 保持通过。
+- 输出文档路径和结论。
+```
+
+---
+
+# 建议执行顺序
+
+```txt id="next-order"
+1. contract tests
+2. admin-web test harness
+3. admin ops audit
+4. image-api-go 发布链路确认
+5. core-api-go scope
+6. Go image create 灰度演练
+```
+
+# 完成前 5 项后的灰度演练
+
+前 5 项完成后，再做一次完整演练：
+
+```txt id="gray-drill"
+1. 启动 image-api-go
+2. GO_IMAGE_API_READS_ENABLED=true
+3. 只切 GET read/results/assets/events
+4. 观察 metrics / admin dashboard
+5. 小流量打开 GO_IMAGE_API_CREATE_ENABLED=true
+6. 创建任务
+7. Go worker 消费 item
+8. 查看 events/results/assets
+9. 关闭 flag 回滚
+```
+
+# 当前判断
+
+```txt id="judgement"
+Go worker：可以继续作为 image execution 主路径
+Go image API read：可以灰度
+Go image API create：完成 contract tests 后再灰度
+Go Core API：先冻结 scope，不继续盲目扩展
+FastAPI：仍不适合彻底迁移
+```
+
+你现在下一步最应该做的是 **contract tests**，因为 internal auth 已经完成，下一道门槛就是“Go image API create 行为是否真的和 FastAPI 兼容”。

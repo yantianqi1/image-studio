@@ -1,0 +1,383 @@
+你现在已经完成了关键闭环：**Go image API create 可灰度、Go worker render 可消费、results/assets/events/outbox 都验证成功、回滚也验证成功**。这意味着下一步不应继续大规模功能重构，而应进入 **第八阶段：生产切流与稳定性收口**。
+
+此前审核报告里最大的阻塞点是 image-api-go create 未达切流标准、internal auth/contract/admin 测试/发布链路不完整；你这一轮已经基本打掉这些阻塞项。
+
+# 下一步总目标
+
+```txt
+第八阶段：Go Image API 生产主路径收口
+
+目标：
+1. 把 Go image API read/create 从“可灰度”推进到“默认生产主路径”
+2. 保留 FastAPI fallback，但不再作为默认 image 主路径
+3. 建立切流前/切流中/切流后验收
+4. 清理 dirty workspace、锁定 release checkpoint
+5. 开始准备第九阶段：FastAPI image legacy 最终下线
+```
+
+---
+
+# 先做一个硬性收口动作
+
+你提到工作区仍然是既有 dirty 状态，而且这轮没有提交。下一步第一件事不是继续写代码，而是：
+
+```txt
+1. 检查 git status
+2. 把本轮第七阶段所有变更整理成一个清晰 commit
+3. 确保没有夹带临时文件、压测结果、大日志、端口配置残留
+4. 打一个 main checkpoint tag 或至少写 release note
+```
+
+建议 commit message：
+
+```txt
+stabilize go image api create cutover path
+```
+
+这一步很重要，因为你已经进入“可生产灰度”状态，后面每个改动都要能快速定位和回滚。
+
+---
+
+# 第八阶段拆分
+
+## 8.1 Release checkpoint 与脏区清理
+
+目标：
+
+```txt
+把当前 main 收口成一个可回滚、可部署、可复现的 checkpoint。
+```
+
+要做：
+
+```txt
+- git status 分类
+- 删除临时文件
+- 确认没有本地端口、临时 env、压测输出被提交
+- 确认 docs 与实际 compose/nginx flags 一致
+- 确认 go test / pytest / admin build 的命令记录到 runbook
+```
+
+Codex 提示词：
+
+```text
+继续在 main 分支工作，不要创建新分支。
+
+任务目标：
+整理当前 Go image API create 灰度完成后的工作区，形成一个可提交、可回滚的 release checkpoint。不要新增业务功能。
+
+请执行：
+1. 运行 git status --short。
+2. 对所有 modified / untracked 文件分类：
+   - 本轮 Go image API / worker / docs / tests 的有效变更
+   - 临时文件
+   - 压测输出
+   - 本地环境文件
+   - 不应提交的文件
+3. 不要自动删除不确定文件。对明显临时文件可以移除；不确定的列出来。
+4. 检查以下文件是否与实际状态一致：
+   - README.md
+   - docs/deploy/*
+   - docs/runbooks/*
+   - docker-compose.yml
+   - .env.example
+   - infra/nginx/nginx.prod.conf
+   - .github/workflows/build-ghcr-images.yml
+5. 运行快速验收：
+   - go test ./... -count=1 -timeout 60s in apps/image-api-go
+   - go test ./... -count=1 -timeout 60s in apps/worker-go
+   - go test ./... -count=1 -timeout 60s in apps/image-runtime-go
+   - python3.13 -m pytest -q tests/contracts
+   - pnpm exec node --test apps/admin-web/tests/*.mjs
+   - pnpm build:admin
+   - docker compose config --quiet
+6. 不要改业务逻辑。
+7. 不要创建新分支。
+8. 不要提交 commit，只输出建议的 commit 文件清单和 commit message。
+
+验收标准：
+- 工作区变更被清楚分类。
+- 没有明显临时文件混入。
+- release checkpoint 的测试命令和结果清楚。
+- 输出：
+  - 应提交文件列表
+  - 不应提交文件列表
+  - 建议 commit message
+  - 是否存在阻塞项
+```
+
+---
+
+## 8.2 Go image API 默认生产主路径准备
+
+目标：
+
+```txt
+让 Go image API read/create 在生产配置中可以作为默认路径，但仍保留一键回滚。
+```
+
+不要立即删除 FastAPI fallback。应该做成：
+
+```txt
+Go image API 默认开启
+FastAPI fallback 保留
+nginx/env flag 可关闭
+```
+
+建议 flags：
+
+```env
+GO_IMAGE_API_READS_ENABLED=true
+GO_IMAGE_API_CREATE_ENABLED=true
+GO_IMAGE_API_ASSETS_ENABLED=true
+GO_IMAGE_API_SSE_ENABLED=true
+GO_IMAGE_API_FALLBACK_ENABLED=true
+```
+
+要检查：
+
+```txt
+- nginx flag 行为
+- image-api-go health/readiness
+- image-api-go create disabled/enabled 行为
+- worker-go render 模式
+- outbox/events
+- asset 读取
+- 回滚关闭 create/read 后 FastAPI 是否接回
+```
+
+Codex 提示词：
+
+```text
+继续在 main 分支工作，不要创建新分支。
+
+任务目标：
+把 Go image API read/create 从“灰度可用”推进到“生产默认主路径准备状态”。要求保留 FastAPI fallback 和一键回滚，不删除旧路由。
+
+请执行：
+1. 检查 infra/nginx/nginx.prod.conf 中 Go image API flags：
+   - GO_IMAGE_API_READS_ENABLED
+   - GO_IMAGE_API_CREATE_ENABLED
+   - GO_IMAGE_API_ASSETS_ENABLED
+   - GO_IMAGE_API_SSE_ENABLED
+2. 检查 docker-compose.yml / .env.example / docs 是否说明：
+   - 生产默认推荐 Go image API read/create
+   - FastAPI fallback 保留
+   - 如何关闭 Go create 回滚
+3. 如果 docs 仍把 Go create 描述为实验路径，请更新为“推荐生产主路径，但必须保留 fallback”。
+4. 不要删除 FastAPI routes。
+5. 不要删除 Python legacy helper。
+6. 增加或更新部署 runbook：
+   - 开启 Go read
+   - 开启 Go create
+   - 验证 create -> worker render -> results -> asset -> events
+   - 关闭 create 回滚
+   - 关闭 reads 回滚
+7. 增加 smoke checklist：
+   - public create returns queued
+   - item count matches requested_count
+   - worker consumes item
+   - result asset readable
+   - events include job/item transitions
+   - outbox has asset/job event
+8. 运行：
+   - docker compose config --quiet
+   - go test ./... in apps/image-api-go
+   - go test ./... in apps/worker-go
+   - pytest tests/contracts -q
+
+限制：
+- 不要改 provider renderer。
+- 不要改 billing/quota 语义。
+- 不要删除 FastAPI fallback。
+- 不要创建新分支。
+
+验收标准：
+- 文档和配置表明 Go image API 可作为推荐生产主路径。
+- FastAPI fallback 路径仍清楚。
+- 回滚步骤可执行。
+- 测试通过。
+```
+
+---
+
+## 8.3 生产切流监控门槛
+
+目标：
+
+```txt
+定义“什么时候允许开 Go create 全量”的 SLO 门槛。
+```
+
+建议门槛：
+
+```txt
+过去 24h：
+- create 5xx rate < 0.5%
+- image item terminal failure rate < 3%
+- queue wait p95 < 120s
+- render duration p95 在 provider 正常范围内
+- outbox pending oldest age < 60s
+- dead_letter_count 无异常增长
+- worker heartbeat failed 无连续报警
+- asset missing = 0
+```
+
+要补：
+
+```txt
+- docs/runbooks/go-image-api-cutover.md
+- admin dashboard 展示这些核心指标
+- metrics 命名和 runbook 对齐
+```
+
+Codex 提示词：
+
+```text
+继续在 main 分支工作，不要创建新分支。
+
+任务目标：
+定义 Go image API create/read 全量切流的生产监控门槛，并让 runbook/admin dashboard 能使用这些指标。不要重构业务逻辑。
+
+请执行：
+1. 新增或更新 docs/runbooks/go-image-api-cutover.md。
+2. 文档定义允许全量切流的 SLO/SLA 门槛：
+   - create 5xx rate
+   - image item terminal failure rate
+   - queue wait p95
+   - render duration p95
+   - outbox pending oldest age
+   - dead letter count
+   - worker heartbeat failed
+   - asset missing count
+3. 检查 admin dashboard 是否已有这些指标。
+   如果已有 API 但 UI 未展示，补 UI 展示。
+   如果后端没有某个指标，只在文档标注 TODO，不要伪造。
+4. 检查 Go metrics 是否包含对应指标。
+5. 增加一个 smoke checklist：
+   - 切流前
+   - 切流中
+   - 切流后 15 分钟
+   - 切流后 24 小时
+6. 不要改 image create 业务逻辑。
+7. 不要改 provider renderer。
+8. 不要创建新分支。
+
+验收标准：
+- 有明确的生产切流门槛。
+- dashboard 或 runbook 能指导运维判断是否回滚。
+- 不存在“开了就不知道好坏”的状态。
+- 输出修改文件和仍缺失的指标。
+```
+
+---
+
+## 8.4 FastAPI image legacy 最终下线计划
+
+目标：
+
+```txt
+不是马上删除 FastAPI image routes，而是定义最终下线边界。
+```
+
+要分三层：
+
+```txt
+A. 立刻禁止生产执行：
+   Python worker image execution
+   direct_rendering public route
+
+B. 保留 fallback：
+   FastAPI image read/create routes
+   fallback window 1-2 个 release
+
+C. 最终删除：
+   Python image execution helpers
+   legacy docs
+   obsolete tests
+```
+
+Codex 提示词：
+
+```text
+继续在 main 分支工作，不要创建新分支。
+
+任务目标：
+制定 FastAPI image legacy 最终下线计划。不要立刻删除 FastAPI image routes，只做边界文档、deprecated 标记和防回归测试。
+
+请执行：
+1. 新增 docs/architecture/fastapi-image-legacy-sunset.md。
+2. 文档分三类：
+   A. 已禁止生产使用
+   B. 暂时保留 fallback
+   C. 计划删除
+3. 检查并补充 deprecated 注释：
+   - apps/worker/worker/tasks/image_jobs.py
+   - apps/api/app/domains/image/direct_rendering.py
+   - 任何 Python image execution helper
+4. 增加或确认测试：
+   - public create route 不调用 render_job_immediately
+   - Python worker 默认不注册 image branch
+   - README 不推荐 Python image worker 作为 production fallback
+5. 不要删除 FastAPI public image routes。
+6. 不要删除测试 helper。
+7. 不要修改 Go worker 主循环。
+8. 不要创建新分支。
+
+验收标准：
+- FastAPI image legacy 边界明确。
+- 生产执行路径只推荐 Go image API + Go worker。
+- FastAPI fallback 仍保留。
+- 有防回归测试。
+```
+
+---
+
+# 推荐执行顺序
+
+```txt
+1. Release checkpoint / dirty workspace 收口
+2. Go image API 默认主路径准备
+3. 生产切流监控门槛
+4. FastAPI image legacy sunset 计划
+5. 小流量生产或准生产切流
+6. 24h 观察
+7. 决定是否把 Go image create 设为默认
+```
+
+---
+
+# 现在不建议做的事
+
+```txt
+- 不要继续扩 Go Core API 商业核心
+- 不要重建 local wallet/reservation/activation code
+- 不要立刻删除 FastAPI image routes
+- 不要全量迁移 FastAPI
+- 不要继续多路并发大改
+```
+
+原因：你刚完成第七阶段，接下来最重要的是稳定、观测、切流和回滚，而不是继续扩大改动面。
+
+---
+
+# 下一轮完成后的判断标准
+
+第八阶段完成后，如果满足：
+
+```txt
+1. Go image API read/create 默认开启
+2. FastAPI fallback 可一键恢复
+3. Go worker render 稳定
+4. admin dashboard 能观察 queue/worker/provider/outbox/dead-letter
+5. asset/events/results 全链路稳定
+6. 24h 内错误率和 queue wait 达标
+```
+
+那下一阶段才适合进入：
+
+```txt
+第九阶段：FastAPI image API fallback 下线
+```
+
+而不是继续做第十、第十一阶段。当前核心是：**把已经跑通的 Go image API 变成可长期生产运行的默认主路径。**

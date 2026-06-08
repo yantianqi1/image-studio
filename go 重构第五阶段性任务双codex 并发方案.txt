@@ -1,0 +1,924 @@
+# 两路并发开发方案
+
+你现在可以把 Codex 拆成两路：
+
+```txt id="parallel-map"
+Codex A：第五阶段主线
+目标：Go Core API / 商业核心 Go 化
+
+Codex B：下一步并行线
+目标：Go Runtime 生产化 / 运维控制面 / 性能与灰度
+```
+
+这样拆的好处是：
+
+```txt id="why-parallel"
+A 负责业务核心：identity、billing、quota、provider、pricing
+B 负责运行平台：worker control plane、metrics、runbook、压测、灰度、Python legacy 清理
+```
+
+两路可以并行，因为主要改动目录不同。当前仓库已有 `apps/worker-go`，Go module 是 Go 1.23，并使用 `pgx/v5`。 当前执行模型也已经有 `image_job_items`，并带 queue pick、job result、running lease 相关索引。
+建议新增 `go.work` 管理多个 Go module；Go 官方文档说明 `go.work` 的 `use` directive 可以让多个 module 在同一 workspace 中作为 main modules 一起构建和开发。([go.dev][1])
+
+---
+
+# 并行边界
+
+## Codex A：第五阶段主线
+
+负责：
+
+```txt id="codex-a-owns"
+apps/core-api-go/
+apps/runtime-go/pkg/identity/
+apps/runtime-go/pkg/billing/
+apps/runtime-go/pkg/quota/
+apps/runtime-go/pkg/providercatalog/
+apps/runtime-go/pkg/pricing/
+apps/runtime-go/pkg/audit/
+docs/architecture/go-core-api.md
+```
+
+不要碰：
+
+```txt id="codex-a-no-touch"
+apps/worker-go/internal/worker runtime 主循环
+docker-compose.yml 的 worker-go profile
+infra/nginx
+apps/admin-web dashboard 页面
+```
+
+---
+
+## Codex B：下一步并行线
+
+负责：
+
+```txt id="codex-b-owns"
+apps/runtime-go/pkg/workercontrol/
+apps/runtime-go/pkg/observability/
+apps/runtime-go/pkg/ops/
+apps/worker-go/internal/control/
+apps/worker-go/internal/metrics/
+docs/runbooks/
+docs/deploy/
+scripts/bench-*
+infra/nginx 可选
+docker-compose.yml 可选
+```
+
+不要碰：
+
+```txt id="codex-b-no-touch"
+billing 事务逻辑
+quota 消耗逻辑
+provider pricing 业务规则
+core-api-go public business routes
+```
+
+---
+
+# 合并顺序
+
+建议：
+
+```txt id="merge-order"
+1. 先合 Codex A 的 runtime-go 基础结构和 core-api-go skeleton
+2. 再合 Codex B 的 worker control / observability
+3. 最后合统一 go.work、CI、docker-compose 变更
+```
+
+如果两个 Codex 都需要改 `go.work`、`.github/workflows/*`、`docker-compose.yml`，让 Codex B 暂时只输出 patch 说明，不直接提交这些共享文件，等 A 合并后再统一处理。
+
+---
+
+# 方案 A：第五阶段开发方案 — Go Core API / 商业核心
+
+## 目标
+
+建立 `apps/core-api-go`，把高频商业核心能力从 FastAPI 抽到 Go：
+
+```txt id="a-goal"
+1. session / owner 解析
+2. wallet / reservation / ledger
+3. quota / rate limit
+4. provider catalog
+5. pricing
+6. activation code
+7. audit log
+```
+
+## 阶段 A1：Go workspace + runtime-go 基础
+
+### Codex A 提示词
+
+```text id="codex-a1"
+你在 GitHub 仓库 yantianqi1/image-studio 中工作。请从仓库根目录开始。
+
+目标：
+建立 Go 多模块基础，为 Go Core API 和现有 worker-go 共享 runtime 包做准备。
+
+当前情况：
+仓库已有 apps/worker-go，使用 Go 1.23 和 pgx/v5。现在要新增 apps/runtime-go 和 apps/core-api-go，但不要破坏 worker-go。
+
+请执行：
+1. 新增 apps/runtime-go/
+   - go.mod
+   - pkg/db
+   - pkg/errors
+   - pkg/config
+   - pkg/identity
+   - pkg/audit
+   第一版只放基础类型和 DB pool helper，不实现复杂业务。
+
+2. 新增 apps/core-api-go/
+   - go.mod
+   - cmd/core-api/main.go
+   - internal/config
+   - internal/http
+   - internal/service
+   - internal/db
+
+3. 根目录新增 go.work
+   use:
+   - ./apps/worker-go
+   - ./apps/runtime-go
+   - ./apps/core-api-go
+
+4. core-api-go 实现：
+   - GET /healthz
+   - GET /readyz
+   - readyz 检查 DATABASE_URL 和 DB ping
+   - JSON error response
+
+5. 不改 worker-go 逻辑。
+6. 不改 docker-compose。
+7. 不改 FastAPI。
+8. 添加 go test ./... 能通过的基础测试。
+
+限制：
+- 不要移动 worker-go 现有代码。
+- 不要改 DB schema。
+- 不要改 Python。
+- 不要改前端。
+- 不要实现 billing/quota/provider 业务，只搭骨架。
+
+验收标准：
+- apps/runtime-go go test ./... 通过。
+- apps/core-api-go go test ./... 通过。
+- go work sync 可运行。
+- core-api-go 可本地 go run ./cmd/core-api。
+- 最后总结新增目录、模块边界、测试结果。
+```
+
+---
+
+## 阶段 A2：统一 identity / owner runtime
+
+### Codex A 提示词
+
+```text id="codex-a2"
+你在 GitHub 仓库 yantianqi1/image-studio 中工作。请从仓库根目录开始。
+
+目标：
+在 apps/runtime-go/pkg/identity 中实现 Go 版 session / owner 解析，供 core-api-go、image-api-go 和 worker 侧共享。
+
+请先阅读 FastAPI 现有逻辑：
+- apps/api/app/domains/auth/*
+- apps/api/app/core/deps.py
+- apps/api/app/core/config.py
+- apps/api/app/domains/image/routes.py 中 resolve_request_owner / ensure_anonymous_owner 的调用方式
+
+实现：
+1. apps/runtime-go/pkg/identity
+   - OwnerContext
+   - SessionResolver
+   - ResolveOwnerFromRequest
+   - ResolveAdminFromRequest
+   - ResolveInternalService
+
+2. 支持 cookie：
+   - USER_SESSION_COOKIE_NAME
+   - ANONYMOUS_SESSION_COOKIE_NAME
+   - ADMIN_SESSION_COOKIE_NAME
+
+3. 支持查询：
+   - user_sessions
+   - anonymous_sessions
+   - admin_sessions
+   - users / admin_users 状态校验
+
+4. core-api-go 新增接口：
+   - GET /api/core/session/resolve
+   - GET /api/core/me
+
+5. 错误语义：
+   - 未登录返回 401
+   - owner 不存在返回 401
+   - 禁用用户返回 403
+   - admin endpoint 普通用户访问返回 403
+
+6. 测试：
+   - valid user session
+   - valid anonymous session
+   - invalid session
+   - disabled user
+   - admin session
+   - cookie name 从 env 读取
+
+限制：
+- 不要改 FastAPI session 生成逻辑。
+- 不要改 cookie 格式。
+- 不要改 DB schema，除非发现 Go 无法兼容；如需 schema，先用 TODO 文档说明。
+- 不要实现登录注册，只解析现有 session。
+
+验收标准：
+- Go owner 解析行为与 FastAPI 兼容。
+- core-api-go /api/core/me 能返回当前 owner。
+- 单元测试和必要集成测试通过。
+- 最后总结兼容的 cookie/session 规则。
+```
+
+---
+
+## 阶段 A3：Go billing runtime
+
+### Codex A 提示词
+
+```text id="codex-a3"
+你在 GitHub 仓库 yantianqi1/image-studio 中工作。请从仓库根目录开始。
+
+目标：
+实现 Go 版 billing runtime，承接 wallet、reservation、ledger、activation code 的核心能力。
+
+请先阅读 Python 逻辑：
+- apps/api/app/domains/billing/models.py
+- apps/api/app/domains/billing/service.py
+- apps/api/app/domains/image/repository.py 中 reservation commit/release 相关逻辑
+
+实现：
+1. apps/runtime-go/pkg/billing
+   - Wallet
+   - Reservation
+   - LedgerEntry
+   - Service
+   - Repository
+
+2. 支持方法：
+   - GetWallet(ctx, userID)
+   - CreateReservation(ctx, userID, amountCents, reason, referenceType, referenceID)
+   - CommitReservation(ctx, userID, reservationID)
+   - ReleaseReservation(ctx, userID, reservationID)
+   - RedeemActivationCode(ctx, userID, code)
+
+3. 事务要求：
+   - 使用 pgx tx。
+   - wallet row 必须 SELECT ... FOR UPDATE。
+   - 不允许余额负数。
+   - commit/release 必须幂等。
+   - ledger 必须记录 balance_after_cents。
+   - activation code 兑换必须幂等且并发安全。
+
+4. core-api-go 新增接口：
+   - GET /api/core/wallet
+   - POST /api/core/activation-codes/redeem
+   - GET /api/admin/core/billing/ledger
+   - GET /api/admin/core/billing/reservations
+
+5. 审计：
+   - mutation 先调用 runtime-go/pkg/audit 写 audit_logs；如果 audit_logs 表还不存在，先设计 migration 并添加。
+
+6. 测试：
+   - reservation create/commit/release
+   - duplicate commit 不重复扣款
+   - duplicate release 不重复释放
+   - insufficient balance
+   - activation code redeem
+   - concurrent redeem 同一码只成功一次
+
+限制：
+- 不要改 image worker。
+- 不要改 pricing 规则。
+- 不要删除 Python billing。
+- 不要绕过 ledger。
+- 不要在错误日志中暴露敏感信息。
+
+验收标准：
+- Go billing runtime 可以独立处理钱包核心操作。
+- core-api-go 暴露 wallet 和 activation code 基础接口。
+- 测试覆盖并发和幂等。
+- 最后总结事务边界和幂等策略。
+```
+
+---
+
+## 阶段 A4：Go quota / rate limit runtime
+
+### Codex A 提示词
+
+```text id="codex-a4"
+你在 GitHub 仓库 yantianqi1/image-studio 中工作。请从仓库根目录开始。
+
+目标：
+实现 Go 版 quota / rate limit runtime，让 image create 可以从 FastAPI quota 迁移到 Go core。
+
+请先阅读：
+- apps/api/app/domains/public_quota/*
+- apps/api/app/domains/settings/service.py
+- apps/api/app/domains/image/routes.py 中 consume_public_quota 的调用
+
+实现：
+1. apps/runtime-go/pkg/quota
+   - Subject
+   - Feature
+   - QuotaStatus
+   - Service
+   - Check
+   - Consume
+   - Refund
+
+2. 支持 scope：
+   - ip
+   - user_id
+   - anonymous_session_id
+   - client_id
+   - feature
+
+3. 如果现有表能复用，优先复用。
+   如果现有表不足，新增 migration：
+   runtime_rate_limits 或 public_quota_events，保持可审计。
+
+4. core-api-go 新增：
+   - GET /api/core/quota/status
+   - POST /api/internal/core/quota/check
+   - POST /api/internal/core/quota/consume
+   - POST /api/internal/core/quota/refund
+
+5. image create 集成暂不强制改 Go image API。
+   先提供 internal endpoint，供后续 image-api-go 调用。
+
+6. 测试：
+   - check 不消耗
+   - consume 消耗
+   - 超限返回明确错误
+   - refund 幂等
+   - 按 IP / anonymous / user 维度隔离
+
+限制：
+- 不要改前端。
+- 不要删除 Python quota。
+- 不要默认接管生产 quota。
+- 不要引入 Redis，先用 Postgres。
+
+验收标准：
+- Go core 可以查询和消费 quota。
+- internal API 可供 image-api-go 后续调用。
+- 测试覆盖超限、退款、并发。
+- 最后总结 quota 表结构和兼容策略。
+```
+
+---
+
+## 阶段 A5：Provider catalog / pricing control plane
+
+### Codex A 提示词
+
+```text id="codex-a5"
+你在 GitHub 仓库 yantianqi1/image-studio 中工作。请从仓库根目录开始。
+
+目标：
+实现 Go 版 provider catalog 和 pricing control plane，为 Go image API / worker 提供统一的 provider、model、pricing 配置。
+
+请先阅读：
+- apps/api/app/domains/llm/models.py
+- apps/api/app/domains/llm/service.py
+- apps/api/app/domains/llm/catalog.py
+- apps/api/app/domains/llm/provider_validation.py
+- apps/api/app/domains/image/repository.py 中 resolve_charge_cents 相关逻辑
+
+实现：
+1. apps/runtime-go/pkg/providercatalog
+   - Provider
+   - SellableModel
+   - ModelVariant
+   - ProviderRuntimeState
+   - Repository
+   - Service
+
+2. apps/runtime-go/pkg/pricing
+   - ResolveImageJobCharge
+   - reference image surcharge
+   - edit surcharge
+   - member / anonymous pricing
+   - client provider config => charge 0
+
+3. core-api-go public readonly：
+   - GET /api/core/providers
+   - GET /api/core/models
+   - GET /api/core/pricing/image
+
+4. core-api-go admin：
+   - GET /api/admin/core/providers
+   - POST /api/admin/core/providers
+   - PATCH /api/admin/core/providers/{id}
+   - POST /api/admin/core/providers/{id}/pause
+   - POST /api/admin/core/providers/{id}/resume
+   - POST /api/admin/core/providers/{id}/test
+   - GET /api/admin/core/models
+   - POST /api/admin/core/models
+   - PATCH /api/admin/core/models/{id}
+
+5. Provider test：
+   - 不调用真实昂贵生成。
+   - 只做 base_url / api key / lightweight model endpoint，如 provider 支持。
+   - 不记录 API key。
+
+6. 测试：
+   - provider validation
+   - pricing member/anonymous
+   - reference surcharge
+   - edit surcharge
+   - client provider charge 0
+   - pause 后状态可被 worker 查询
+
+限制：
+- 不要删除 Python provider admin。
+- 不要改 worker claim 逻辑，除非只读 ProviderRuntimeState。
+- 不要泄露 API key。
+- 不要改变现有价格结果。
+
+验收标准：
+- Go core 可以管理 provider/model/pricing。
+- pricing 结果与 Python 一致。
+- admin mutation 写 audit log。
+- 测试通过。
+```
+
+---
+
+# 方案 B：下一步开发方案 — Runtime Ops / Control Plane / 生产化
+
+## 目标
+
+并行加强运行平台，不阻塞 Go Core API：
+
+```txt id="b-goal"
+1. worker 注册与动态配置
+2. metrics / pprof / health
+3. 压测工具
+4. runbook
+5. 灰度切换
+6. Python legacy shrink
+```
+
+当前 `docker-compose.yml` 里已有 `worker-go` 服务，但在 `worker-go` profile 下，默认 `GO_WORKER_MODE=simulate`。
+这一路可以专门把它变成生产可控服务。
+
+---
+
+## 阶段 B1：Worker Control Plane
+
+### Codex B 提示词
+
+```text id="codex-b1"
+你在 GitHub 仓库 yantianqi1/image-studio 中工作。请从仓库根目录开始。
+
+目标：
+给 Go worker 增加 worker registry、heartbeat、drain/resume 和 runtime config 拉取能力。不要改 billing/quota/provider 业务逻辑。
+
+实现：
+1. 新增 migration：
+   worker_nodes:
+     id varchar primary key
+     worker_name varchar not null
+     hostname varchar
+     version varchar
+     status varchar
+     mode varchar
+     concurrency integer
+     started_at timestamp
+     last_heartbeat_at timestamp
+     metadata jsonb
+
+   worker_runtime_config:
+     id bigserial primary key
+     config_key varchar unique not null
+     config_value jsonb not null
+     updated_at timestamp not null
+
+2. apps/runtime-go/pkg/workercontrol
+   - RegisterWorker
+   - HeartbeatWorker
+   - MarkDraining
+   - MarkStopped
+   - LoadRuntimeConfig
+
+3. apps/worker-go 集成：
+   - 启动时 register。
+   - 定期 heartbeat。
+   - 收到 draining 状态后停止 claim 新任务，但继续完成 running item。
+   - shutdown 时标记 stopped。
+   - runtime config 支持动态调整：
+     concurrency
+     provider concurrency default
+     poll interval
+     drain flag
+
+4. Admin internal API 可先放 apps/core-api-go 或独立 ops 包：
+   - GET /api/admin/core/workers
+   - POST /api/admin/core/workers/{id}/drain
+   - POST /api/admin/core/workers/{id}/resume
+   - PATCH /api/admin/core/runtime-config
+
+如果 core-api-go 还不存在，则只实现 runtime 包和 worker 集成，并留 TODO。
+
+5. 测试：
+   - register creates node
+   - heartbeat updates timestamp
+   - drain stops claim
+   - running item still completes
+   - stopped status on shutdown path
+
+限制：
+- 不要改 image render provider。
+- 不要改 billing/quota。
+- 不要删除 env 配置；runtime config 覆盖 env，但 env 仍作为默认。
+- 不要让 drain 取消正在执行的 provider 请求。
+
+验收标准：
+- worker 可被后台观察。
+- worker 可优雅 drain。
+- runtime config 可动态加载。
+- go test ./... 通过。
+- 总结 DB schema、worker 状态机和测试结果。
+```
+
+---
+
+## 阶段 B2：Observability / metrics / pprof
+
+### Codex B 提示词
+
+```text id="codex-b2"
+你在 GitHub 仓库 yantianqi1/image-studio 中工作。请从仓库根目录开始。
+
+目标：
+给 apps/worker-go 和后续 Go 服务建立统一 observability 包：metrics、health、ready、pprof 可选。
+
+实现：
+1. apps/runtime-go/pkg/observability
+   - HTTP diagnostics server
+   - /healthz
+   - /readyz
+   - /metrics
+   - optional /debug/pprof only when GO_ENABLE_PPROF=true
+
+Go 官方 net/http/pprof 提供 HTTP pprof handlers，可用于诊断 goroutine、heap、profile 等；只允许在配置开启时注册，避免生产误暴露。
+
+2. worker-go 集成：
+   - GO_WORKER_HTTP_ADDR 默认 :7900
+   - GO_WORKER_ENABLE_HTTP 默认 true
+   - GO_ENABLE_PPROF 默认 false
+   - readyz 检查 DB ping、storage writable、必要表存在
+   - healthz 只检查进程 alive
+
+3. metrics：
+   - image_worker_claim_total
+   - image_worker_claim_empty_total
+   - image_worker_item_started_total
+   - image_worker_item_succeeded_total
+   - image_worker_item_failed_total
+   - image_worker_item_retried_total
+   - image_worker_running_items
+   - image_worker_render_duration_seconds
+   - image_worker_queue_wait_seconds
+   - image_worker_heartbeat_failed_total
+
+4. 日志：
+   - item_id
+   - job_id
+   - provider_name
+   - provider_type
+   - model
+   - worker_name
+   - attempt_count
+   - prompt_length
+   不输出 prompt 全文、API key、Authorization、base64 image。
+
+5. docker-compose：
+   - worker-go healthcheck 改为 /readyz。
+   - 不需要 publish 到公网。
+
+6. 测试：
+   - healthz returns 200
+   - readyz DB fail returns 503
+   - metrics includes counters
+   - pprof disabled by default
+
+限制：
+- 不要引入大型框架。
+- 不要暴露敏感信息。
+- 不要让 metrics 影响主循环。
+- 不要默认开启 pprof。
+
+验收标准：
+- Go worker 有可用 health/ready/metrics。
+- compose 使用 readyz。
+- go test ./... 通过。
+- 总结 endpoint、指标、配置。
+```
+
+---
+
+## 阶段 B3：压测与基准工具
+
+### Codex B 提示词
+
+```text id="codex-b3"
+你在 GitHub 仓库 yantianqi1/image-studio 中工作。请从仓库根目录开始。
+
+目标：
+建立 image runtime 压测工具，量化 Go worker / Go API 的吞吐、排队时间、失败率、provider 延迟影响。
+
+新增：
+scripts/bench-image-runtime.py
+或 apps/tools-go/cmd/image-bench
+
+功能：
+1. 创建测试任务：
+   - --jobs
+   - --items-per-job
+   - --owner-count
+   - --provider-id
+   - --model-code
+   - --mode db-seed 或 api
+   - --allow-production 默认 false
+
+2. Mock provider：
+   - 本地 HTTP server
+   - 支持 openai-chat-compatible 响应格式
+   - --delay-ms
+   - --fail-rate
+   - --image-format svg/png
+   - 不调用真实 provider
+
+3. 采集指标：
+   - queued/running/succeeded/failed item count
+   - avg/p50/p95 queue wait
+   - avg/p50/p95 render duration
+   - retry count
+   - dead letter count
+   - throughput items/min
+   - worker metrics endpoint dump
+
+4. 输出：
+   - stdout summary
+   - perf-results/*.json，默认 gitignored
+
+5. 文档：
+   docs/perf/image-runtime-benchmark.md
+   包含示例：
+   - 100 jobs x 1 item
+   - 100 jobs x 4 items
+   - 1000 items with concurrency 8
+   - provider delay 30s
+
+测试：
+- 参数解析
+- mock provider response
+- production safety guard
+- JSON output shape
+
+限制：
+- 不要接真实 provider。
+- 不要默认写 production DB。
+- 不要提交大结果文件。
+- 不要要求复杂外部工具。
+
+验收标准：
+- 一条命令可创建压测任务。
+- 一条命令可启动 mock provider。
+- 能输出 p95 queue wait 和 throughput。
+- 总结用法和测试结果。
+```
+
+---
+
+## 阶段 B4：部署灰度与回滚手册
+
+### Codex B 提示词
+
+```text id="codex-b4"
+你在 GitHub 仓库 yantianqi1/image-studio 中工作。请从仓库根目录开始。
+
+目标：
+建立 Go runtime 灰度、回滚、故障处理文档和配置模板。不要大改业务代码。
+
+请新增：
+docs/deploy/go-runtime-cutover.md
+docs/runbooks/image-runtime.md
+docker-compose.go-runtime.example.yml 或 docker-compose.override.example.yml
+
+内容必须覆盖：
+1. simulate 验证：
+   - GO_WORKER_MODE=simulate
+   - worker-go profile 启动
+   - 如何观察 metrics
+
+2. render 接管：
+   - WORKER_ENABLE_IMAGE_JOBS=false
+   - GO_WORKER_MODE=render
+   - GO_WORKER_CONCURRENCY
+   - provider env
+   - storage env
+
+3. Go Image API / Go Core API 灰度：
+   - GO_IMAGE_API_READS_ENABLED
+   - GO_IMAGE_API_CREATE_ENABLED
+   - GO_CORE_API_BILLING_ENABLED
+   - GO_CORE_API_QUOTA_ENABLED
+   - nginx reload
+
+4. 回滚：
+   - 关闭 Go route flags
+   - 停止 worker-go
+   - 恢复 Python worker image-jobs，如仍保留
+   - 等 lease 过期重新排队
+   - 检查 dead letter
+
+5. 故障处理：
+   - 队列堆积
+   - provider 熔断
+   - 大量 failed
+   - asset 文件缺失
+   - billing reconcile failed
+   - DB migration failed
+
+6. 安全：
+   - 不暴露 pprof
+   - internal service token
+   - 不记录 API key
+
+限制：
+- 不要删除现有 README 内容，只增补或链接。
+- 不要默认改生产 compose 行为。
+- 不要让示例配置覆盖用户 .env。
+
+验收标准：
+- 运维可以按文档完成 simulate -> render -> rollback。
+- 有故障排查 checklist。
+- 有配置示例。
+- 总结新增文档和关键命令。
+```
+
+---
+
+## 阶段 B5：Python image legacy shrink
+
+### Codex B 提示词
+
+```text id="codex-b5"
+你在 GitHub 仓库 yantianqi1/image-studio 中工作。请从仓库根目录开始。
+
+目标：
+清理 Python image execution 旧路径，使 Python 不再作为生产 image 执行器。保留 FastAPI 兼容 API 和测试 helper，但文档和生产 compose 明确 Go 是主路径。
+
+请执行：
+1. 标注 deprecated：
+   - apps/worker/worker/tasks/image_jobs.py
+   - apps/api/app/domains/image/direct_rendering.py
+   - Python provider render 生产路径相关文件中加注释
+
+2. 防回归测试：
+   - public create_image_job 不能调用 render_job_immediately
+   - Python worker 默认 WORKER_ENABLE_IMAGE_JOBS=false
+   - README 不再建议 Python worker 处理 image jobs
+
+3. 文档：
+   - docs/architecture/python-image-legacy.md
+   - 说明哪些 Python image 路径仍保留、何时删除、Go 替代路径是什么
+
+4. compose：
+   - 保持 worker 中 WORKER_ENABLE_IMAGE_JOBS=false 默认
+   - 不删除 Python worker，因为 comic-task / comic-orchestration 仍可能需要
+
+5. 搜索仓库：
+   - 找到 render_job_immediately 的生产调用
+   - 找到 run_next_image_jobs 的生产调用
+   - 标注或移除不应再使用的路径
+
+限制：
+- 不要删除 FastAPI public image routes。
+- 不要删除 Python worker comic 相关分支。
+- 不要删除测试 helper。
+- 不要改 Go worker 行为。
+
+验收标准：
+- 生产文档只推荐 Go image execution。
+- Python image execution 不会被默认启动。
+- 有测试防止同步 render 回归。
+- 总结 deprecated 文件和保留原因。
+```
+
+---
+
+# 两路并发任务排期
+
+## 第一批并发
+
+```txt id="batch-1"
+Codex A：
+A1 Go workspace + runtime-go + core-api-go skeleton
+
+Codex B：
+B2 observability / metrics / readyz
+```
+
+原因：A 改新服务结构，B 改 worker 可观测性，冲突小。
+
+---
+
+## 第二批并发
+
+```txt id="batch-2"
+Codex A：
+A2 identity runtime
+
+Codex B：
+B3 benchmark tools
+```
+
+原因：identity 是业务核心，bench 工具独立，冲突小。
+
+---
+
+## 第三批并发
+
+```txt id="batch-3"
+Codex A：
+A3 billing runtime
+
+Codex B：
+B1 worker control plane
+```
+
+注意：两边可能都需要 migration。要求 migration 文件名不同，revision 不冲突。合并时手动确认 Alembic down_revision。
+
+---
+
+## 第四批并发
+
+```txt id="batch-4"
+Codex A：
+A4 quota runtime
+A5 provider/pricing control plane
+
+Codex B：
+B4 deploy/runbook
+B5 Python legacy shrink
+```
+
+注意：B5 不要删除 A 仍可能用到的 Python compatibility code，只标注 deprecated 和防回归。
+
+---
+
+# 最终并行落地结构
+
+```txt id="final-tree"
+apps/
+  worker-go/        已有，继续做执行器
+  core-api-go/      Codex A 新增，商业核心 API
+  runtime-go/       Codex A/B 共享 runtime 包
+  api/              FastAPI legacy / fallback
+  public-web/
+  admin-web/
+
+docs/
+  architecture/
+  deploy/
+  runbooks/
+  perf/
+
+scripts/
+  bench-image-runtime.py
+```
+
+---
+
+# 当前最建议你先跑的两个 Codex
+
+## Codex A 先跑
+
+```txt id="run-a"
+A1：Go workspace + runtime-go + core-api-go skeleton
+```
+
+## Codex B 同时跑
+
+```txt id="run-b"
+B2：observability / metrics / readyz
+```
+
+这两个冲突最小，能最快把第五阶段并行开发基础打出来。
+
+[1]: https://go.dev/doc/tutorial/workspaces "Tutorial: Getting started with multi-module workspaces - The Go Programming Language"
