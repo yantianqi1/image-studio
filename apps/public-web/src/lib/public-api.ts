@@ -17,6 +17,7 @@ import type {
   ImageGalleryScope,
   ImageGenerationRequest,
   ImageGenerationResponse,
+  ImageJobItem,
   ImageJobResult,
   LoginRequest,
   LoginResponse,
@@ -108,6 +109,9 @@ export const publicApi = {
   getImageJobResults(jobId: number, options: Pick<ApiRequestOptions, "signal"> = {}) {
     return apiFetch<readonly ImageJobResult[]>(`/image/jobs/${jobId}/results`, options);
   },
+  getImageJobItems(jobId: number, options: Pick<ApiRequestOptions, "signal"> = {}) {
+    return apiFetch<readonly ImageJobItem[]>(`/image/jobs/${jobId}/items`, options);
+  },
   getImageGallery(scope: ImageGalleryScope) {
     return apiFetch<readonly ImageGalleryItem[]>(`/image/gallery?scope=${scope}`);
   },
@@ -119,6 +123,12 @@ export const publicApi = {
   },
   deleteImageJob(jobId: number) {
     return apiFetch<DeleteResult>(`/image/jobs/${jobId}`, { method: "DELETE" });
+  },
+  retryImageJobItem(itemId: number) {
+    return apiFetch<ImageJobItem>(`/image/items/${itemId}/retry`, { method: "POST" });
+  },
+  cancelImageJobItem(itemId: number) {
+    return apiFetch<ImageJobItem>(`/image/items/${itemId}/cancel`, { method: "POST" });
   },
   deleteImageAsset(assetId: number) {
     return apiFetch<DeleteResult>(`/image/assets/${assetId}`, { method: "DELETE" });

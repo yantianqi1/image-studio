@@ -66,6 +66,43 @@ test("publicApi updates image asset visibility", async () => {
   assert.equal(calls[0].body.visibility, "public");
 });
 
+test("publicApi retries and cancels image job items", async () => {
+  const calls = [];
+  const { publicApi } = loadPublicApi({
+    apiFetch: async (path, options) => {
+      calls.push({ path, method: options.method });
+      return { id: 7, status: "queued" };
+    },
+    apiUpload: unexpectedApiUpload,
+    apiDownload: unexpectedApiDownload,
+  });
+
+  await publicApi.retryImageJobItem(7);
+  await publicApi.cancelImageJobItem(8);
+
+  assert.deepEqual(calls, [
+    { path: "/image/items/7/retry", method: "POST" },
+    { path: "/image/items/8/cancel", method: "POST" },
+  ]);
+});
+
+test("publicApi reads image job items", async () => {
+  const calls = [];
+  const { publicApi } = loadPublicApi({
+    apiFetch: async (path) => {
+      calls.push(path);
+      return [{ id: 7, status: "failed" }];
+    },
+    apiUpload: unexpectedApiUpload,
+    apiDownload: unexpectedApiDownload,
+  });
+
+  const items = await publicApi.getImageJobItems(12);
+
+  assert.deepEqual(calls, ["/image/jobs/12/items"]);
+  assert.equal(items[0].status, "failed");
+});
+
 test("publicApi sends image job visibility", async () => {
   const calls = [];
   const { publicApi } = loadPublicApi({

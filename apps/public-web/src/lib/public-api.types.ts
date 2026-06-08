@@ -97,8 +97,24 @@ export type ImageJobResult = Readonly<{
   visibility?: ImageAssetVisibility;
   published_at?: string | null;
   created_at?: string;
-  revised_prompt: string;
+  revised_prompt: string | null;
   provider_request_id: string | null;
+}>;
+
+export type ImageJobItem = Readonly<{
+  id: number;
+  job_id: number;
+  result_index: number;
+  status: string;
+  asset_id: number | null;
+  error_code: string | null;
+  error_message: string | null;
+  manual_retry_count: number;
+  created_at: string;
+  available_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  cancelled_at: string | null;
 }>;
 
 export type ImageGalleryItem = Readonly<{

@@ -5,7 +5,6 @@ import type { CSSProperties } from "react";
 import {
   Check,
   CircleStop,
-  Clock3,
   Download,
   Eye,
   Globe2,
@@ -22,6 +21,11 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/cn";
+import { getImageResultSlots } from "@/features/studio/studio-image-job-items";
+import {
+  ImageJobItemPlaceholder,
+  ImageJobItemSummaryBar,
+} from "@/features/studio/studio-image-job-slots";
 import type { TurnProgress } from "@/features/studio/studio-turn-progress";
 import type { ImageAssetVisibility } from "@/lib/public-api";
 import type { StudioConversation, StudioTurn, StoredImage } from "@/features/studio/studio-types";
@@ -52,6 +56,8 @@ type StudioResultsProps = Readonly<{
   onEditPromptRetry: (turnId: string, prompt: string) => void;
   onEditFromTurn: (turnId: string, image: StoredImage) => void;
   onCancelTurn: (turnId: string) => void;
+  onRetryImageItem: (turnId: string, itemId: number) => void;
+  onCancelImageItem: (turnId: string, itemId: number) => void;
   onDeleteTurn: (turnId: string) => void;
   onImageVisibilityChange: (assetId: number, visibility: ImageAssetVisibility) => void;
   onOpenLightbox: (images: readonly StoredImage[], startIndex: number) => void;
@@ -86,6 +92,8 @@ export const StudioResults = memo(function StudioResults({
   onEditPromptRetry,
   onEditFromTurn,
   onCancelTurn,
+  onRetryImageItem,
+  onCancelImageItem,
   onDeleteTurn,
   onImageVisibilityChange,
   onOpenLightbox,
@@ -211,6 +219,8 @@ export const StudioResults = memo(function StudioResults({
             onEditPromptRetry={(prompt) => onEditPromptRetry(turn.id, prompt)}
             onEditFromImage={(image) => onEditFromTurn(turn.id, image)}
             onCancel={() => onCancelTurn(turn.id)}
+            onRetryImageItem={(itemId) => onRetryImageItem(turn.id, itemId)}
+            onCancelImageItem={(itemId) => onCancelImageItem(turn.id, itemId)}
             onDelete={() => onDeleteTurn(turn.id)}
             onVisibilityChange={onImageVisibilityChange}
             onOpenLightbox={(startIndex) => onOpenLightbox(turn.images, startIndex)}
@@ -277,6 +287,8 @@ const TurnCard = memo(function TurnCard({
   onEditPromptRetry,
   onEditFromImage,
   onCancel,
+  onRetryImageItem,
+  onCancelImageItem,
   onDelete,
   onVisibilityChange,
   onOpenLightbox,
@@ -288,6 +300,8 @@ const TurnCard = memo(function TurnCard({
   onEditPromptRetry: (prompt: string) => void;
   onEditFromImage: (image: StoredImage) => void;
   onCancel: () => void;
+  onRetryImageItem: (itemId: number) => void;
+  onCancelImageItem: (itemId: number) => void;
   onDelete: () => void;
   onVisibilityChange: (assetId: number, visibility: ImageAssetVisibility) => void;
   onOpenLightbox: (startIndex: number) => void;
@@ -295,6 +309,12 @@ const TurnCard = memo(function TurnCard({
   const modeInfo = MODE_LABELS[turn.mode] ?? MODE_LABELS.generate;
   const isBusy = turn.status === "queued" || turn.status === "generating";
   const isComplianceRetrying = turn.status === "error" && progress !== undefined;
+  const resultSlots = getImageResultSlots({
+    count: turn.count,
+    images: turn.images,
+    imageJobItems: turn.imageJobItems,
+  });
+  const hasResultSlots = turn.images.length > 0 || isBusy || (turn.imageJobItems?.length ?? 0) > 0;
   const [editingPrompt, setEditingPrompt] = useState(false);
   const [promptDraft, setPromptDraft] = useState("");
 
@@ -412,33 +432,44 @@ const TurnCard = memo(function TurnCard({
       <div className="flex justify-start">
         <section className="w-full px-1">
           {/* Image grid + loading skeletons */}
-          {(turn.images.length > 0 || isBusy) && (
-            <div className={cn(
-              "grid gap-3 sm:gap-4",
-              turn.count <= 1 ? "grid-cols-1 max-w-[240px] sm:max-w-[360px]" : "grid-cols-2 max-w-[560px]",
-            )}>
-              {turn.images.map((image, index) => (
-                <ImageCell
-                  key={image.id}
-                  image={image}
-                  index={index}
-                  turn={turn}
-                  onOpenLightbox={onOpenLightbox}
-                  onEditFromImage={onEditFromImage}
-                  onVisibilityChange={onVisibilityChange}
-                />
-              ))}
-              {isBusy && Array.from({ length: Math.max(0, turn.count - turn.images.length) }).map((_, i) => (
-                <GenerationSkeleton
-                  key={`skeleton-${i}`}
-                  aspectRatio={turn.aspectRatio}
-                  resolution={turn.resolution}
-                  progress={i === 0 ? progress : undefined}
-                  status={turn.status}
-                  index={i}
-                />
-              ))}
-            </div>
+          {hasResultSlots && (
+            <>
+              <ImageJobItemSummaryBar items={turn.imageJobItems ?? []} totalCount={turn.count} />
+              <div className={cn(
+                "grid gap-3 sm:gap-4",
+                turn.count <= 1 ? "grid-cols-1 max-w-[240px] sm:max-w-[360px]" : "grid-cols-2 max-w-[560px]",
+              )}>
+                {resultSlots.map((slot, index) => {
+                  const imageIndex = slot.image ? turn.images.findIndex((image) => image.id === slot.image?.id) : -1;
+                  return slot.image ? (
+                    <ImageCell
+                      key={slot.key}
+                      image={slot.image}
+                      index={imageIndex >= 0 ? imageIndex : index}
+                      turn={turn}
+                      onOpenLightbox={onOpenLightbox}
+                      onEditFromImage={onEditFromImage}
+                      onVisibilityChange={onVisibilityChange}
+                    />
+                  ) : (
+                    <ImageJobItemPlaceholder
+                      key={slot.key}
+                      aspectPadding={getAspectPadding(turn.aspectRatio, turn.resolution)}
+                      fallbackStatus={turn.status}
+                      index={index}
+                      item={slot.item}
+                      progress={index === 0 ? progress : undefined}
+                      onCancel={() => {
+                        if (slot.item) onCancelImageItem(slot.item.id);
+                      }}
+                      onRetry={() => {
+                        if (slot.item) onRetryImageItem(slot.item.id);
+                      }}
+                    />
+                  );
+                })}
+              </div>
+            </>
           )}
 
           {/* Error state */}
@@ -758,49 +789,6 @@ const QUALITY_LABELS: Record<string, string> = {
   medium: "中质量",
   high: "高质量",
 };
-
-function GenerationSkeleton({
-  aspectRatio,
-  resolution,
-  progress,
-  status,
-  index,
-}: Readonly<{
-  aspectRatio: string;
-  resolution: string;
-  progress: TurnProgress | undefined;
-  status: string;
-  index: number;
-}>) {
-  const aspectPadding = getAspectPadding(aspectRatio, resolution);
-
-  return (
-    <div
-      className="relative w-full overflow-hidden rounded-2xl border border-blue-100/80 bg-gradient-to-br from-blue-50/60 via-white to-indigo-50/40"
-      style={{ animationDelay: `${index * 80}ms` }}
-    >
-      <div className="relative w-full" style={{ paddingBottom: aspectPadding }}>
-        <div className="skeleton-shimmer absolute inset-0" />
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-center">
-          <div className="rounded-full bg-white/80 p-2.5 shadow-sm ring-1 ring-blue-100/60 backdrop-blur-sm">
-            {status === "queued" && !progress ? (
-              <Clock3 className="size-4 text-gray-400" />
-            ) : (
-              <Loader2 className="size-4 animate-spin text-blue-500" />
-            )}
-          </div>
-          {index === 0 && (
-            <>
-              <p className="text-xs font-medium text-gray-600">
-                {progress?.message || (status === "queued" ? "正在向生图模型发送请求..." : "生成中...")}
-              </p>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function getAspectPadding(aspectRatio: string, resolution: string): string {
   const ratioMap: Record<string, number> = {

@@ -11,9 +11,11 @@ const HISTORY_STATUS_SUCCESS = "success";
 const TERMINAL_FAILED_STATUS = "failed";
 const TERMINAL_SUCCEEDED_STATUS = "succeeded";
 const MISSING_RESULTS_MESSAGE = "生成任务已完成，但没有返回图片结果";
+const MISSING_PARTIAL_RESULTS_MESSAGE = "生成任务收到单张完成事件，但没有返回图片结果";
 
 type Sleep = (milliseconds: number, signal?: AbortSignal) => Promise<void>;
 type JobUpdateHandler = (job: ImageGenerationResponse) => void;
+type ResultsUpdateHandler = (results: readonly ImageJobResult[]) => void;
 type ImageJobEventSource = {
   addEventListener: (name: string, handler: (event: MessageEvent) => void) => void;
   close: () => void;
@@ -33,6 +35,7 @@ type ImageJobPollingApi = Readonly<{
 
 type WaitForImageJobOptions = Readonly<{
   onJobUpdate?: JobUpdateHandler;
+  onResultsUpdate?: ResultsUpdateHandler;
   signal?: AbortSignal;
   sleep?: Sleep;
   eventSourceFactory?: EventSourceFactory;
@@ -110,6 +113,7 @@ async function waitForImageJobResultsWithSSE(
   }
   return new Promise<CompletedImageJob | null>((resolve, reject) => {
     const source = factory(`/api/public/image/jobs/${jobId}/events`);
+    let pendingResultsUpdate = Promise.resolve();
     const close = () => source.close();
     options.signal?.addEventListener("abort", () => {
       close();
@@ -125,13 +129,26 @@ async function waitForImageJobResultsWithSSE(
     source.addEventListener("item_started", (event) => {
       options.onJobUpdate?.(parseJobEvent(event));
     });
-    source.addEventListener("job_failed", (event) => {
+    source.addEventListener("item_succeeded", () => {
+      pendingResultsUpdate = pendingResultsUpdate.then(() => emitPartialResults(api, jobId, options));
+      pendingResultsUpdate.catch((error) => {
+        close();
+        reject(error);
+      });
+    });
+    source.addEventListener("job_failed", async (event) => {
       close();
-      reject(new Error(parseJobEvent(event).error_message || "生成任务失败"));
+      try {
+        await pendingResultsUpdate;
+        reject(new Error(parseJobEvent(event).error_message || "生成任务失败"));
+      } catch (error) {
+        reject(error);
+      }
     });
     source.addEventListener("job_succeeded", async (event) => {
       close();
       try {
+        await pendingResultsUpdate;
         const job = parseJobEvent(event);
         options.onJobUpdate?.(job);
         resolve({ job, results: await loadCompletedResults(api, jobId, options.signal) });
@@ -140,6 +157,20 @@ async function waitForImageJobResultsWithSSE(
       }
     });
   });
+}
+
+async function emitPartialResults(
+  api: ImageJobPollingApi,
+  jobId: number,
+  options: WaitForImageJobOptions,
+) {
+  throwIfAborted(options.signal);
+  const results = await api.getImageJobResults(jobId, { signal: options.signal });
+  throwIfAborted(options.signal);
+  if (results.length === 0) {
+    throw new Error(MISSING_PARTIAL_RESULTS_MESSAGE);
+  }
+  options.onResultsUpdate?.(results);
 }
 
 function resolveEventSourceFactory(options: WaitForImageJobOptions): EventSourceFactory | null {

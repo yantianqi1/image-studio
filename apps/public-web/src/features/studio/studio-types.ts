@@ -30,8 +30,25 @@ export type StoredImage = Readonly<{
   visibility?: ImageAssetVisibility;
   width?: number;
   height?: number;
+  resultIndex?: number;
+  jobItemId?: number;
+  jobItemStatus?: string;
+  jobItemError?: string | null;
+  jobItemManualRetryCount?: number;
+  publishedAt?: string | null;
   revisedPrompt?: string;
   error?: string;
+}>;
+
+export type StoredImageJobItem = Readonly<{
+  id: number;
+  jobId?: number;
+  resultIndex: number;
+  status: string;
+  assetId?: number | null;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+  manualRetryCount: number;
 }>;
 
 export type StudioTurn = Readonly<{
@@ -48,6 +65,7 @@ export type StudioTurn = Readonly<{
   quality: string;
   visibility: ImageAssetVisibility;
   images: readonly StoredImage[];
+  imageJobItems?: readonly StoredImageJobItem[];
   status: TurnStatus;
   error?: string;
   taskId?: number | null;
@@ -82,7 +100,7 @@ export type TurnDraft = Readonly<{
   visibility: ImageAssetVisibility;
 }>;
 
-export type TurnUpdate = Partial<Pick<StudioTurn, "status" | "images" | "referenceImages" | "error" | "taskId" | "taskStatus">>;
+export type TurnUpdate = Partial<Pick<StudioTurn, "status" | "images" | "imageJobItems" | "referenceImages" | "error" | "taskId" | "taskStatus">>;
 
 export const DEFAULT_ASPECT_RATIO = "1:1";
 export const DEFAULT_RESOLUTION = "1024x1024";

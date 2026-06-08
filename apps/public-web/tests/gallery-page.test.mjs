@@ -64,6 +64,12 @@ test("gallery page loads mine and public image scopes", () => {
   assert.match(gallerySource, /scope === "public"/);
 });
 
+test("gallery page inserts generated images from events without refetch", () => {
+  assert.match(gallerySource, /subscribeImageGalleryItemsAdded/);
+  assert.match(gallerySource, /mergeImageGalleryItems/);
+  assert.match(gallerySource, /revalidate:\s*false/);
+});
+
 test("gallery page uses a responsive masonry layout", () => {
   assert.match(masonrySource, /useMeasuredGalleryColumns/);
   assert.match(masonrySource, /GALLERY_MASONRY_BREAKPOINTS/);

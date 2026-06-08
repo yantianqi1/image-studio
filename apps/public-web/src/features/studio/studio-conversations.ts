@@ -202,6 +202,7 @@ function resetTurnForRetry(turn: StudioTurn, retriedAt: string): StudioTurn {
   return {
     ...turn,
     images: [],
+    imageJobItems: [],
     status: "queued",
     error: undefined,
     taskId: null,

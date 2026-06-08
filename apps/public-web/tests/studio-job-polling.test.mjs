@@ -67,6 +67,109 @@ test("waitForImageJobResults uses SSE before polling in studio", async () => {
   assert.equal(source.closed, true);
 });
 
+test("waitForImageJobResults emits partial results from SSE item success", async () => {
+  const { waitForImageJobResults } = loadStudioPolling();
+  const source = new FakeEventSource();
+  const partialUpdates = [];
+  const itemUpdates = [];
+  let resultCall = 0;
+  let itemCall = 0;
+  const api = {
+    async getImageJob() {
+      throw new Error("polling should not start when SSE succeeds");
+    },
+    async getImageJobResults(jobId) {
+      resultCall += 1;
+      if (resultCall === 1) {
+        return [{ id: 1, job_id: jobId, result_index: 1, asset_id: 2, asset_url: "/asset/2" }];
+      }
+      return [
+        { id: 1, job_id: jobId, result_index: 1, asset_id: 2, asset_url: "/asset/2" },
+        { id: 2, job_id: jobId, result_index: 2, asset_id: 3, asset_url: "/asset/3" },
+      ];
+    },
+    async getImageJobItems(jobId) {
+      itemCall += 1;
+      return [
+        { id: 6, job_id: jobId, result_index: 1, status: "succeeded" },
+        { id: 7, job_id: jobId, result_index: 2, status: itemCall > 1 ? "succeeded" : "running" },
+      ];
+    },
+  };
+
+  const completedPromise = waitForImageJobResults(api, 15, {
+    eventSourceFactory: () => source,
+    onItemsUpdate: (items) => itemUpdates.push(items.map((item) => item.status)),
+    onResultsUpdate: (results) => partialUpdates.push(results.map((result) => result.asset_url)),
+  });
+  source.emit("item_succeeded", { id: 15, status: "running", item_id: 6, asset_id: 2 });
+  await Promise.resolve();
+  source.emit("job_succeeded", { id: 15, status: "succeeded" });
+  const completed = await completedPromise;
+
+  assert.deepEqual(partialUpdates[0], ["/asset/2"]);
+  assert.deepEqual(itemUpdates[0], ["succeeded", "running"]);
+  assert.deepEqual(itemUpdates.at(-1), ["succeeded", "succeeded"]);
+  assert.equal(completed.results.length, 2);
+});
+
+test("waitForImageJobResults emits item updates from SSE item state changes", async () => {
+  const { waitForImageJobResults } = loadStudioPolling();
+  const source = new FakeEventSource();
+  const itemUpdates = [];
+  const api = {
+    async getImageJob() {
+      throw new Error("polling should not start when SSE succeeds");
+    },
+    async getImageJobResults(jobId) {
+      return [{ id: 2, job_id: jobId, result_index: 1, asset_id: 3, asset_url: "/asset/3" }];
+    },
+    async getImageJobItems(jobId) {
+      return [{ id: 7, job_id: jobId, result_index: 1, status: "failed", error_message: "blocked" }];
+    },
+  };
+
+  const completedPromise = waitForImageJobResults(api, 15, {
+    eventSourceFactory: () => source,
+    onItemsUpdate: (items) => itemUpdates.push(items.map((item) => item.status)),
+  });
+  source.emit("item_failed", { id: 15, status: "failed", item_id: 7 });
+  await Promise.resolve();
+  source.emit("job_succeeded", { id: 15, status: "succeeded" });
+  await completedPromise;
+
+  assert.deepEqual(itemUpdates[0], ["failed"]);
+});
+
+test("waitForImageJobResults keeps item started as a job update", async () => {
+  const { waitForImageJobResults } = loadStudioPolling();
+  const source = new FakeEventSource();
+  const jobUpdates = [];
+  const api = {
+    async getImageJob() {
+      throw new Error("polling should not start when SSE succeeds");
+    },
+    async getImageJobResults(jobId) {
+      return [{ id: 2, job_id: jobId, result_index: 1, asset_id: 3, asset_url: "/asset/3" }];
+    },
+    async getImageJobItems(jobId) {
+      return [{ id: 7, job_id: jobId, result_index: 1, status: "running" }];
+    },
+  };
+
+  const completedPromise = waitForImageJobResults(api, 15, {
+    eventSourceFactory: () => source,
+    onJobUpdate: (job) => jobUpdates.push(job.status),
+    onItemsUpdate: () => undefined,
+  });
+  source.emit("item_started", { id: 15, status: "running", item_id: 7 });
+  await Promise.resolve();
+  source.emit("job_succeeded", { id: 15, status: "succeeded" });
+  await completedPromise;
+
+  assert.deepEqual(jobUpdates.slice(0, 2), ["running", "succeeded"]);
+});
+
 class FakeEventSource {
   handlers = new Map();
   closed = false;

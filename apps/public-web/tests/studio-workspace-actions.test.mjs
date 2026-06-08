@@ -16,8 +16,16 @@ const resultsSource = readFileSync(
   new URL("../src/features/studio/studio-results.tsx", import.meta.url),
   "utf8",
 );
+const imageJobSlotsSource = readFileSync(
+  new URL("../src/features/studio/studio-image-job-slots.tsx", import.meta.url),
+  "utf8",
+);
 const studioPollingSource = readFileSync(
   new URL("../src/features/studio/studio-job-polling.ts", import.meta.url),
+  "utf8",
+);
+const studioGalleryEventsSource = readFileSync(
+  new URL("../src/features/studio/studio-gallery-events.ts", import.meta.url),
   "utf8",
 );
 const appShellSource = readFileSync(
@@ -136,6 +144,41 @@ test("studio submission lock is scoped to the active conversation only", () => {
 test("studio starts image polling without blocking new submissions", () => {
   assert.match(pageSource, /void pollSubmittedImageJob/);
   assert.doesNotMatch(pageSource, /await waitForImageJobResults\(publicApi, job\.id/);
+});
+
+test("studio cancel aborts polling and deletes the backend image job", () => {
+  assert.match(pageSource, /const turn = conv\.turns\.find/);
+  assert.match(pageSource, /publicApi\.deleteImageJob\(turn\.taskId\)/);
+  assert.match(pageSource, /status:\s*"cancelled"/);
+});
+
+test("studio applies partial image results while a job is still running", () => {
+  assert.match(studioPollingSource, /onResultsUpdate/);
+  assert.match(pageSource, /onResultsUpdate/);
+  assert.match(pageSource, /imageJobResultsToStoredImages\(results, items\)/);
+});
+
+test("studio publishes generated image results to gallery caches", () => {
+  assert.match(studioGalleryEventsSource, /dispatchImageGalleryItemsAdded/);
+  assert.match(studioGalleryEventsSource, /imageJobResultsToGalleryItems/);
+  assert.match(pageSource, /publishStudioImageJobResultsToGallery/);
+  assert.match(pageSource, /prompt:\s*input\.prompt/);
+  assert.match(pageSource, /visibility:\s*input\.visibility/);
+});
+
+test("studio tracks image job items and exposes per-image actions", () => {
+  assert.match(pageSource, /onItemsUpdate/);
+  assert.match(pageSource, /imageJobItemsToStoredImageJobItems/);
+  assert.match(pageSource, /handleRetryImageJobItem/);
+  assert.match(pageSource, /publicApi\.retryImageJobItem\(itemId\)/);
+  assert.match(pageSource, /handleCancelImageJobItem/);
+  assert.match(pageSource, /publicApi\.cancelImageJobItem\(itemId\)/);
+  assert.match(resultsSource, /getImageResultSlots/);
+  assert.match(resultsSource, /onRetryImageItem/);
+  assert.match(resultsSource, /onCancelImageItem/);
+  assert.match(imageJobSlotsSource, /getImageJobItemSummary/);
+  assert.match(imageJobSlotsSource, /aria-label="重试单张图片"/);
+  assert.match(imageJobSlotsSource, /aria-label="取消单张图片"/);
 });
 
 test("studio queues multiple reference images immediately on selection", () => {

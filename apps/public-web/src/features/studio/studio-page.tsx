@@ -6,10 +6,14 @@ import { createPortal } from "react-dom";
 import { History, MessageSquarePlus, X } from "lucide-react";
 
 import {
-  imageJobResultsToHistoryImages,
   waitForImageJobResults,
   type CompletedImageJob,
 } from "@/features/studio/studio-job-polling";
+import {
+  imageJobItemsToStoredImageJobItems,
+  imageJobResultsToStoredImagesWithItems,
+  mergeImageJobItemUpdate,
+} from "@/features/studio/studio-image-job-items";
 import {
   findModelAspectRatioOption,
   resolveImageModel,
@@ -28,6 +32,7 @@ import {
 } from "@/features/studio/studio-prompt-sources";
 import { StudioResults } from "@/features/studio/studio-results";
 import { StudioSidebar } from "@/features/studio/studio-sidebar";
+import { publishStudioImageJobResultsToGallery } from "@/features/studio/studio-gallery-events";
 import {
   buildImageJobRequest,
   uploadPendingReferenceImages,
@@ -61,7 +66,7 @@ import {
   listenPromptCrafterUsePrompt,
   readGeneratePromptParam,
 } from "@/features/prompt-crafter/use-prompt";
-import { publicApi, type CharacterLibraryItem, type ImageAssetVisibility, type UploadedImageAsset } from "@/lib/public-api";
+import { publicApi, type CharacterLibraryItem, type ImageAssetVisibility, type ImageJobItem, type UploadedImageAsset } from "@/lib/public-api";
 import { cn } from "@/lib/cn";
 import { usePublicModels } from "@/lib/use-public-models";
 import { streamPromptCrafter } from "@/features/prompt-crafter/prompt-crafter-api";
@@ -101,9 +106,13 @@ type PollSubmittedImageJobInput = Readonly<{
   conversationId: string;
   initialMessage?: string;
   jobId: number;
+  prompt: string;
   startTime: number;
   turnId: string;
+  visibility: ImageAssetVisibility;
 }>;
+
+type StudioConversationsApi = Pick<ReturnType<typeof useStudioConversations>, "updateTurn">;
 
 type SubmitExistingTurnInput = Readonly<{
   applyGeneratedTitle?: boolean;
@@ -200,11 +209,41 @@ async function validatePreviewImages(prompts: BananaPrompt[]): Promise<BananaPro
   return results.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
 }
 
-function imageJobResultsToStoredImages(results: CompletedImageJob["results"]): StoredImage[] {
-  return imageJobResultsToHistoryImages(results).map((img) => ({
-    ...img,
-    visibility: img.visibility as ImageAssetVisibility | undefined,
-  }));
+function imageJobResultsToStoredImages(
+  results: CompletedImageJob["results"],
+  items: readonly ImageJobItem[] = [],
+): StoredImage[] {
+  return imageJobResultsToStoredImagesWithItems(results, items);
+}
+
+function applyPartialImageJobResults(
+  conversations: StudioConversationsApi,
+  input: PollSubmittedImageJobInput,
+  results: CompletedImageJob["results"],
+  items: readonly ImageJobItem[],
+) {
+  conversations.updateTurn(input.conversationId, input.turnId, {
+    status: "generating",
+    taskId: input.jobId,
+    taskStatus: "running",
+    images: imageJobResultsToStoredImages(results, items),
+    imageJobItems: imageJobItemsToStoredImageJobItems(items),
+  });
+  publishStudioImageJobResultsToGallery({
+    prompt: input.prompt,
+    visibility: input.visibility,
+  }, results);
+}
+
+function applyImageJobItems(
+  conversations: StudioConversationsApi,
+  input: PollSubmittedImageJobInput,
+  items: readonly ImageJobItem[],
+) {
+  conversations.updateTurn(input.conversationId, input.turnId, {
+    taskId: input.jobId,
+    imageJobItems: imageJobItemsToStoredImageJobItems(items),
+  });
 }
 
 function getImageJobProgressMessage(status: string): string {
@@ -570,6 +609,7 @@ export function StudioPage() {
     }
 
     try {
+      let latestItems: readonly ImageJobItem[] = [];
       const completed = await waitForImageJobResults(publicApi, input.jobId, {
         signal: abortController.signal,
         onJobUpdate: (updatedJob) => {
@@ -588,14 +628,26 @@ export function StudioPage() {
             taskStatus: updatedJob.status,
           });
         },
+        onItemsUpdate: (items) => {
+          latestItems = items;
+          applyImageJobItems(conversations, input, items);
+        },
+        onResultsUpdate: (results) => {
+          applyPartialImageJobResults(conversations, input, results, latestItems);
+        },
       });
 
       conversations.updateTurn(input.conversationId, input.turnId, {
         status: "success",
         taskId: completed.job.id,
         taskStatus: completed.job.status,
-        images: imageJobResultsToStoredImages(completed.results),
+        images: imageJobResultsToStoredImages(completed.results, latestItems),
+        imageJobItems: imageJobItemsToStoredImageJobItems(latestItems),
       });
+      publishStudioImageJobResultsToGallery({
+        prompt: input.prompt,
+        visibility: input.visibility,
+      }, completed.results);
       if (input.applyGeneratedTitle && completed.job.title) {
         conversations.renameConversation(input.conversationId, completed.job.title);
       }
@@ -618,8 +670,10 @@ export function StudioPage() {
       conversationId,
       initialMessage: "恢复任务状态...",
       jobId,
+      prompt: turn.prompt,
       startTime: Number.isNaN(createdAtMs) ? Date.now() : createdAtMs,
       turnId: turn.id,
+      visibility: turn.visibility,
     });
   }, [pollSubmittedImageJob]);
 
@@ -679,8 +733,10 @@ export function StudioPage() {
         applyGeneratedTitle: input.applyGeneratedTitle,
         conversationId: convId,
         jobId: job.id,
+        prompt: draft.prompt,
         startTime: Date.now(),
         turnId,
+        visibility: draft.visibility,
       });
     } catch (error: unknown) {
       if (isAbortError(error)) {
@@ -815,14 +871,63 @@ export function StudioPage() {
   }, [submitPreparedDraft]);
 
   const handleCancelTurn = useCallback((turnId: string) => {
-    const convId = conversations.activeId;
-    if (!convId) return;
-    const key = turnProgressKey(convId, turnId);
+    const conv = conversations.activeConversation;
+    if (!conv) return;
+    const turn = conv.turns.find((item) => item.id === turnId);
+    const key = turnProgressKey(conv.id, turnId);
     const controller = abortControllersRef.current.get(key);
     if (controller) {
       controller.abort();
     }
-    conversations.updateTurn(convId, turnId, { status: "cancelled" });
+    clearTurnProgress(key);
+    if (turn?.taskId) {
+      void publicApi.deleteImageJob(turn.taskId).catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : "取消任务失败";
+        conversations.updateTurn(conv.id, turnId, { status: "error", error: message });
+      });
+    }
+    conversations.updateTurn(conv.id, turnId, { status: "cancelled" });
+  }, [conversations]);
+
+  const handleRetryImageJobItem = useCallback((turnId: string, itemId: number) => {
+    const conv = conversations.activeConversation;
+    const turn = conv?.turns.find((item) => item.id === turnId);
+    if (!conv || !turn?.taskId) return;
+    void publicApi.retryImageJobItem(itemId)
+      .then((item) => {
+        const imageJobItems = mergeImageJobItemUpdate(turn.imageJobItems ?? [], item);
+        conversations.updateTurn(conv.id, turnId, {
+          status: "generating",
+          taskStatus: "queued",
+          error: undefined,
+          imageJobItems,
+        });
+        void resumeImageJobPolling(conv.id, { ...turn, imageJobItems, status: "generating" }, turn.taskId!);
+      })
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : "重试单张图片失败";
+        conversations.updateTurn(conv.id, turnId, { status: "error", error: message });
+      });
+  }, [conversations, resumeImageJobPolling]);
+
+  const handleCancelImageJobItem = useCallback((turnId: string, itemId: number) => {
+    const conv = conversations.activeConversation;
+    const turn = conv?.turns.find((item) => item.id === turnId);
+    if (!conv || !turn) return;
+    void publicApi.cancelImageJobItem(itemId)
+      .then((item) => {
+        const imageJobItems = mergeImageJobItemUpdate(turn.imageJobItems ?? [], item);
+        const allCancelled = imageJobItems.length > 0 && imageJobItems.every((current) => current.status === "cancelled");
+        conversations.updateTurn(conv.id, turnId, {
+          status: allCancelled ? "cancelled" : turn.status,
+          taskStatus: allCancelled ? "cancelled" : turn.taskStatus,
+          imageJobItems,
+        });
+      })
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : "取消单张图片失败";
+        conversations.updateTurn(conv.id, turnId, { status: "error", error: message });
+      });
   }, [conversations]);
 
   const handleDeleteTurn = useCallback((turnId: string) => {
@@ -1057,6 +1162,8 @@ export function StudioPage() {
             onEditPromptRetry={handleEditPromptRetry}
             onEditFromTurn={handleEditFromTurn}
             onCancelTurn={handleCancelTurn}
+            onRetryImageItem={handleRetryImageJobItem}
+            onCancelImageItem={handleCancelImageJobItem}
             onDeleteTurn={handleDeleteTurn}
             onImageVisibilityChange={handleImageVisibilityChange}
             onOpenLightbox={handleOpenLightbox}

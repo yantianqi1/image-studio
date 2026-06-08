@@ -70,6 +70,40 @@ test("waitForImageJobResults uses SSE before polling when event source works", a
   assert.equal(source.closed, true);
 });
 
+test("waitForImageJobResults emits partial results from SSE item success", async () => {
+  const { waitForImageJobResults } = loadPolling();
+  const source = new FakeEventSource();
+  const partialUpdates = [];
+  let resultCall = 0;
+  const api = {
+    async getImageJob() {
+      throw new Error("polling should not start when SSE succeeds");
+    },
+    async getImageJobResults(jobId) {
+      resultCall += 1;
+      if (resultCall === 1) {
+        return [{ id: 9, job_id: jobId, asset_url: "/api/public/image/assets/9" }];
+      }
+      return [
+        { id: 9, job_id: jobId, asset_url: "/api/public/image/assets/9" },
+        { id: 10, job_id: jobId, asset_url: "/api/public/image/assets/10" },
+      ];
+    },
+  };
+
+  const completedPromise = waitForImageJobResults(api, 11, {
+    eventSourceFactory: () => source,
+    onResultsUpdate: (results) => partialUpdates.push(results.map((result) => result.asset_url)),
+  });
+  source.emit("item_succeeded", { id: 11, status: "running", item_id: 6, asset_id: 9 });
+  await Promise.resolve();
+  source.emit("job_succeeded", { id: 11, status: "succeeded" });
+  const completed = await completedPromise;
+
+  assert.deepEqual(partialUpdates[0], ["/api/public/image/assets/9"]);
+  assert.equal(completed.results.length, 2);
+});
+
 test("waitForImageJobResults falls back to polling when SSE errors", async () => {
   const { waitForImageJobResults } = loadPolling();
   const source = new FakeEventSource();

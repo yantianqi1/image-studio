@@ -1,8 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import useSWR from "swr";
 
+import {
+  mergeImageGalleryItems,
+  subscribeImageGalleryItemsAdded,
+} from "@/features/gallery/gallery-events";
 import { GalleryMasonry } from "@/features/gallery/gallery-masonry";
 import { AppShell } from "@/features/shell/app-shell";
 import { ErrorMessage } from "@/features/ui/error-message";
@@ -56,9 +60,17 @@ function useGalleryData(scope: ImageGalleryScope): { galleryState: GalleryState;
     `image-gallery-${scope}`,
     () => publicApi.getImageGallery(scope),
   );
+  useEffect(() => {
+    return subscribeImageGalleryItemsAdded((items) => {
+      void mutate((current = []) => mergeImageGalleryItems(current, items, scope), { revalidate: false });
+    });
+  }, [mutate, scope]);
+  const refreshGallery = () => {
+    void mutate();
+  };
 
   if (data) {
-    return { galleryState: { status: "ready", data }, mutate };
+    return { galleryState: { status: "ready", data }, mutate: refreshGallery };
   }
   if (error) {
     return {
@@ -67,10 +79,10 @@ function useGalleryData(scope: ImageGalleryScope): { galleryState: GalleryState;
         message: error instanceof Error ? error.message : "未知请求错误",
         statusCode: error instanceof ApiError ? error.status : undefined,
       },
-      mutate,
+      mutate: refreshGallery,
     };
   }
-  return { galleryState: { status: "loading" }, mutate };
+  return { galleryState: { status: "loading" }, mutate: refreshGallery };
 }
 
 function GalleryHeader({
